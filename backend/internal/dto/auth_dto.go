@@ -1,0 +1,39 @@
+package dto
+
+type RegisterRequest struct {
+	Username string `json:"username" binding:"required,min=3,max=50"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6,max=72"`
+	Nickname string `json:"nickname" binding:"required,min=1,max=80"`
+}
+
+type LoginRequest struct {
+	Login    string `json:"login" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+type AuthResponse struct {
+	AccessToken  string   `json:"access_token"`
+	RefreshToken string   `json:"refresh_token"`
+	User         UserInfo `json:"user"`
+}
+
+type UserInfo struct {
+	ID        int64  `json:"id"`
+	Username  string `json:"username"`
+	Email     string `json:"email,omitempty"`
+	Nickname  string `json:"nickname"`
+	AvatarURL string `json:"avatar_url"`
+	Bio       string `json:"bio,omitempty"`
+	Role      string `json:"role,omitempty"`
+}
+
+type UpdateProfileRequest struct {
+	Nickname  *string `json:"nickname"`
+	AvatarURL *string `json:"avatar_url"`
+	Bio       *string `json:"bio"`
+}

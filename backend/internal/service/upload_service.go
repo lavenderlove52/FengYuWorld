@@ -1,0 +1,78 @@
+package service
+
+import (
+	"errors"
+	"io"
+	"mime"
+	"path/filepath"
+	"strings"
+
+	"my-blog/backend/internal/domain"
+	"my-blog/backend/internal/dto"
+	"my-blog/backend/internal/repository"
+	"my-blog/backend/internal/storage"
+)
+
+var ErrInvalidUpload = errors.New("invalid upload")
+
+var allowedMimes = map[string]struct{}{
+	"image/jpeg": {},
+	"image/png":  {},
+	"image/webp": {},
+	"image/gif":  {},
+}
+
+type UploadService struct {
+	storage  *storage.LocalStorage
+	uploads  *repository.UploadRepository
+	maxBytes int64
+}
+
+func NewUploadService(storage *storage.LocalStorage, uploads *repository.UploadRepository, maxMB int64) *UploadService {
+	return &UploadService{
+		storage:  storage,
+		uploads:  uploads,
+		maxBytes: maxMB * 1024 * 1024,
+	}
+}
+
+func (s *UploadService) SaveImage(userID int64, filename string, size int64, r io.Reader, maxSize int64) (*dto.UploadResponse, error) {
+	if maxSize <= 0 {
+		maxSize = s.maxBytes
+	}
+	if size > maxSize {
+		return nil, ErrInvalidUpload
+	}
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	if _, ok := allowedMimes[mimeType]; !ok {
+		return nil, ErrInvalidUpload
+	}
+
+	result, err := s.storage.Save(userID, filename, r)
+	if err != nil {
+		return nil, err
+	}
+
+	upload := &domain.Upload{
+		UserID:    userID,
+		Path:      result.Path,
+		URL:       result.URL,
+		Mime:      mimeType,
+		SizeBytes: size,
+	}
+	if err := s.uploads.Create(upload); err != nil {
+		return nil, err
+	}
+
+	return &dto.UploadResponse{URL: result.URL}, nil
+}
+
+func (s *UploadService) SaveAvatar(userID int64, filename string, size int64, r io.Reader) (*dto.UploadResponse, error) {
+	const avatarMax = 2 * 1024 * 1024
+	return s.SaveImage(userID, filename, size, r, avatarMax)
+}

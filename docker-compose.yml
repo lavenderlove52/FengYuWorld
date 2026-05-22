@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: myblog-postgres
+    environment:
+      POSTGRES_USER: myblog
+      POSTGRES_PASSWORD: myblog
+      POSTGRES_DB: myblog
+    ports:
+      - "5432:5432"
+    volumes:
+      # 左边：你电脑上的目录；右边：容器内 PG 数据目录（不要改）
+      - D:\Code\Go\My-Blog\postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U myblog -d myblog"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+# 删掉下面的 volumes: postgres_data（改用本机目录后不需要命名卷） 
