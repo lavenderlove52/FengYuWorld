@@ -6,6 +6,7 @@ export interface UserInfo {
   avatar_url: string
   bio?: string
   role?: string
+  can_site_pin?: boolean
 }
 
 export interface AuthResponse {

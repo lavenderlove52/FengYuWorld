@@ -91,3 +91,27 @@ func (h *UserHandler) GetUserProfile(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, dto.OK(info))
 }
+
+func (h *UserHandler) ListUsers(c *gin.Context) {
+	keyword := c.Query("keyword")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	items, total, err := h.users.ListUsers(keyword, page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(gin.H{
+		"items":     items,
+		"total":     total,
+		"page":      page,
+		"page_size": pageSize,
+	}))
+}

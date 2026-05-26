@@ -18,6 +18,7 @@ func registerRoutes(
 	tags *handler.TagHandler,
 	uploads *handler.UploadHandler,
 	health *handler.HealthHandler,
+	pins *handler.PinHandler,
 ) {
 	api := r.Group("/api")
 	{
@@ -32,6 +33,7 @@ func registerRoutes(
 		}
 
 		api.GET("/posts/public", posts.ListPublic)
+		api.GET("/posts/site-pins", pins.GetSitePins)
 		api.GET("/posts/:id", authMW.Optional(), posts.GetDetail)
 
 		api.GET("/users/:username", users.GetUserProfile)
@@ -67,6 +69,20 @@ func registerRoutes(
 
 			authed.POST("/uploads/image", uploads.UploadImage)
 			authed.POST("/uploads/avatar", uploads.UploadAvatar)
+
+			authed.POST("/pins/site/:post_id", pins.SitePinPost)
+			authed.DELETE("/pins/site/:post_id", pins.SiteUnpinPost)
+			authed.GET("/me/pins", pins.GetMyPins)
+			authed.POST("/me/posts/:post_id/pin", pins.UserPinPost)
+			authed.DELETE("/me/posts/:post_id/pin", pins.UserUnpinPost)
+		}
+
+		adminGroup := api.Group("/admin")
+		adminGroup.Use(authMW.RequireAdmin())
+		{
+			adminGroup.GET("/users", users.ListUsers)
+			adminGroup.POST("/users/:user_id/site-pin", pins.GrantSitePinPermission)
+			adminGroup.DELETE("/users/:user_id/site-pin", pins.RevokeSitePinPermission)
 		}
 	}
 }

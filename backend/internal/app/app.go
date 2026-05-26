@@ -51,6 +51,7 @@ func New(cfg *config.Config) (*App, error) {
 	categoryRepo := repository.NewCategoryRepository(database)
 	tagRepo := repository.NewTagRepository(database)
 	uploadRepo := repository.NewUploadRepository(database)
+	pinRepo := repository.NewPinRepository(database)
 
 	mdRenderer := markdown.NewRenderer()
 	localStorage := storage.NewLocalStorage(cfg.UploadDir, cfg.PublicUploadBaseURL)
@@ -63,6 +64,7 @@ func New(cfg *config.Config) (*App, error) {
 	categorySvc := service.NewCategoryService(categoryRepo)
 	tagSvc := service.NewTagService(tagRepo)
 	uploadSvc := service.NewUploadService(localStorage, uploadRepo, cfg.MaxImageSizeMB)
+	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo)
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	userHandler := handler.NewUserHandler(userSvc, postSvc)
@@ -72,8 +74,9 @@ func New(cfg *config.Config) (*App, error) {
 	tagHandler := handler.NewTagHandler(tagSvc)
 	uploadHandler := handler.NewUploadHandler(uploadSvc)
 	healthHandler := handler.NewHealthHandler()
+	pinHandler := handler.NewPinHandler(pinSvc)
 
-	authMW := middleware.NewAuthMiddleware(jwtManager)
+	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database)
 
 	router := gin.New()
 	router.Use(gin.Logger(), middleware.ErrorRecovery(), middleware.CORS())
@@ -83,7 +86,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler)
+	registerRoutes(router, authMW, authHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler)
 
 	return &App{
 		Config: cfg,

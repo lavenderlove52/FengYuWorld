@@ -30,6 +30,13 @@ export interface PageResult<T> {
   page_size: number
 }
 
+export interface PinnedPost {
+  id: number
+  post_id: number
+  display_order: number
+  post: PostSummary
+}
+
 export type PostVisibility = 'public' | 'private' | 'friends' | 'specified'
 export type PostStatus = 'draft' | 'published'
 

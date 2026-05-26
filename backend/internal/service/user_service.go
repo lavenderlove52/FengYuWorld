@@ -58,3 +58,15 @@ func (s *UserService) GetByUsername(username string) (*domain.User, error) {
 	}
 	return user, nil
 }
+
+func (s *UserService) ListUsers(keyword string, page, pageSize int) ([]dto.UserInfo, int64, error) {
+	users, total, err := s.users.ListUsers(keyword, page, pageSize)
+	if err != nil {
+		return nil, 0, err
+	}
+	infos := make([]dto.UserInfo, len(users))
+	for i, u := range users {
+		infos[i] = toUserInfo(&u, true)
+	}
+	return infos, total, nil
+}

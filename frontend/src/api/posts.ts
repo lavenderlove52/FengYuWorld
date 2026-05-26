@@ -7,6 +7,11 @@ export const listPublicPosts = (page = 1, pageSize = 12) =>
     .get<ApiResponse<PageResult<PostSummary>>>('/posts/public', { params: { page, page_size: pageSize } })
     .then((r) => r.data)
 
+export const searchPublicPosts = (keyword: string, page = 1, pageSize = 20) =>
+  http
+    .get<ApiResponse<PageResult<PostSummary>>>('/posts/public', { params: { page, page_size: pageSize, keyword } })
+    .then((r) => r.data)
+
 export const getPost = (id: number) =>
   http.get<ApiResponse<PostDetail>>(`/posts/${id}`).then((r) => r.data)
 

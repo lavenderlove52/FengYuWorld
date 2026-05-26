@@ -67,3 +67,22 @@ func (r *UserRepository) ExistsByUsernameOrEmail(username, email string) (bool, 
 		Count(&count).Error
 	return count > 0, err
 }
+
+func (r *UserRepository) ListUsers(keyword string, page, pageSize int) ([]domain.User, int64, error) {
+	var users []domain.User
+	var total int64
+
+	query := r.db.Model(&domain.User{})
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		query = query.Where("username LIKE ? OR nickname LIKE ?", like, like)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&users).Error
+	return users, total, err
+}

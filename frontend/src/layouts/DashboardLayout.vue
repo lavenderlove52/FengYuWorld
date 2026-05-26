@@ -8,14 +8,25 @@ const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
-const menuOptions = [
-  { label: () => h(RouterLink, { to: '/dashboard' }, { default: () => '概览' }), key: 'dashboard' },
-  { label: () => h(RouterLink, { to: '/dashboard/posts/new' }, { default: () => '写文章' }), key: 'post-new' },
-  { label: () => h(RouterLink, { to: '/dashboard/posts' }, { default: () => '我的文章' }), key: 'my-posts' },
-  { label: () => h(RouterLink, { to: '/dashboard/drafts' }, { default: () => '草稿箱' }), key: 'drafts' },
-  { label: () => h(RouterLink, { to: '/dashboard/friends' }, { default: () => '好友' }), key: 'friends' },
-  { label: () => h(RouterLink, { to: '/dashboard/settings' }, { default: () => '设置' }), key: 'settings' },
-]
+const menuOptions = computed(() => {
+  const items = [
+    { label: () => h(RouterLink, { to: '/dashboard' }, { default: () => '概览' }), key: 'dashboard' },
+    { label: () => h(RouterLink, { to: '/dashboard/posts/new' }, { default: () => '写文章' }), key: 'post-new' },
+    { label: () => h(RouterLink, { to: '/dashboard/posts' }, { default: () => '我的文章' }), key: 'my-posts' },
+    { label: () => h(RouterLink, { to: '/dashboard/drafts' }, { default: () => '草稿箱' }), key: 'drafts' },
+    { label: () => h(RouterLink, { to: '/dashboard/pins' }, { default: () => '置顶管理' }), key: 'pin-manage' },
+    { label: () => h(RouterLink, { to: '/dashboard/friends' }, { default: () => '好友' }), key: 'friends' },
+    { label: () => h(RouterLink, { to: '/dashboard/settings' }, { default: () => '设置' }), key: 'settings' },
+  ]
+  const isAdmin = auth.user?.role === 'admin' || auth.user?.can_site_pin
+  if (isAdmin) {
+    items.push({
+      label: () => h(RouterLink, { to: '/dashboard/admin/pins' }, { default: () => '🔒 首页置顶' }),
+      key: 'admin-pins',
+    })
+  }
+  return items
+})
 
 const activeKey = computed(() => {
   if (route.name === 'post-edit' || route.name === 'post-new') return 'post-new'
@@ -34,8 +45,7 @@ const logout = async () => {
       <div class="p-4 border-b">
         <RouterLink to="/" class="font-bold text-lg text-indigo-600">My Blog</RouterLink>
       </div>
-      <NMenu :value="activeKey" :options="menuOptions" />
-    </NLayoutSider>
+      <NMenu :value="activeKey" :options="menuOptions" />    </NLayoutSider>
     <NLayout>
       <div class="flex items-center justify-between px-6 py-3 border-b bg-white">
         <div class="font-medium">用户中心</div>

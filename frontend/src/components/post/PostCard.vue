@@ -10,24 +10,41 @@ const visibilityLabel: Record<string, string> = {
   friends: '好友',
   specified: '指定好友',
 }
+
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return ''
+  return dateStr.slice(0, 10)
+}
 </script>
 
 <template>
-  <article class="bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition">
-    <RouterLink :to="`/p/${post.id}`">
-      <div v-if="post.cover_image_url" class="h-44 bg-slate-100 overflow-hidden">
-        <img :src="post.cover_image_url" :alt="post.title" class="w-full h-full object-cover" />
+  <article class="py-7 group">
+    <RouterLink :to="`/p/${post.id}`" class="block">
+      <div v-if="post.cover_image_url" class="h-44 overflow-hidden rounded-lg mb-4 bg-slate-100">
+        <img
+          :src="post.cover_image_url"
+          :alt="post.title"
+          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        />
       </div>
-      <div class="p-5">
-        <h2 class="text-lg font-semibold mb-2">{{ post.title }}</h2>
-        <p class="text-slate-600 text-sm line-clamp-2 mb-3">{{ post.summary }}</p>
-        <div class="flex items-center justify-between text-xs text-slate-500">
-          <span>{{ post.author.nickname }} · {{ post.published_at || post.created_at }}</span>
-          <span>{{ post.view_count }} 阅读</span>
-        </div>
-        <div v-if="post.status !== 'published'" class="mt-2 text-xs text-amber-600">
-          {{ post.status }} / {{ visibilityLabel[post.visibility] || post.visibility }}
-        </div>
+
+      <h2 class="text-xl font-bold text-slate-800 leading-snug mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors duration-200">
+        {{ post.title }}
+      </h2>
+
+      <p class="text-slate-500 text-[15px] leading-relaxed line-clamp-2 mb-4">
+        {{ post.summary }}
+      </p>
+
+      <div class="flex items-center gap-1.5 text-sm text-slate-400 flex-wrap">
+        <span class="text-slate-500 font-medium">{{ post.author.nickname }}</span>
+        <span class="text-slate-300">·</span>
+        <span>{{ formatDate(post.published_at || post.created_at) }}</span>
+        <span class="text-slate-300">·</span>
+        <span>{{ post.view_count }} 阅读</span>
+        <span v-if="post.status !== 'published'" class="ml-1 text-amber-500">
+          {{ visibilityLabel[post.visibility] || post.visibility }}
+        </span>
       </div>
     </RouterLink>
   </article>

@@ -7,7 +7,7 @@ const loggedIn = !!getAccessToken()
 </script>
 
 <template>
-  <header class="bg-white border-b sticky top-0 z-10">
+  <header class="bg-[#f8fafc] sticky top-0 z-10">
     <div class="w-full px-6 h-14 flex items-center justify-between">
       <RouterLink to="/">
         <img src="/logo.png" alt="风雨世界" class="h-9 w-auto object-contain" />

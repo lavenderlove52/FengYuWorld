@@ -36,6 +36,8 @@ const router = createRouter({
         { path: 'posts/:id/edit', name: 'post-edit', component: () => import('@/pages/dashboard/PostEditorPage.vue') },
         { path: 'drafts', name: 'drafts', component: () => import('@/pages/dashboard/DraftsPage.vue') },
         { path: 'friends', name: 'friends', component: () => import('@/pages/dashboard/FriendsPage.vue') },
+        { path: 'pins', name: 'pin-manage', component: () => import('@/pages/dashboard/PinManagePage.vue') },
+        { path: 'admin/pins', name: 'admin-pins', component: () => import('@/pages/dashboard/AdminPinPage.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/pages/dashboard/SettingsPage.vue') },
       ],
     },
