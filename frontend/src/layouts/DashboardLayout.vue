@@ -3,10 +3,12 @@ import { computed, h } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { NLayout, NLayoutSider, NLayoutContent, NMenu, NAvatar, NButton, NSpace } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
+import { useInactivityLogout } from '@/composables/useInactivityLogout'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+useInactivityLogout()
 
 const menuOptions = computed(() => {
   const items = [
@@ -23,6 +25,10 @@ const menuOptions = computed(() => {
     items.push({
       label: () => h(RouterLink, { to: '/dashboard/admin/pins' }, { default: () => '🔒 首页置顶' }),
       key: 'admin-pins',
+    })
+    items.push({
+      label: () => h(RouterLink, { to: '/dashboard/admin/invite-codes' }, { default: () => '🔒 邀请码' }),
+      key: 'admin-invite-codes',
     })
   }
   return items

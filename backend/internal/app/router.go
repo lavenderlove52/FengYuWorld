@@ -19,6 +19,7 @@ func registerRoutes(
 	uploads *handler.UploadHandler,
 	health *handler.HealthHandler,
 	pins *handler.PinHandler,
+	invite *handler.InviteHandler,
 ) {
 	api := r.Group("/api")
 	{
@@ -26,6 +27,7 @@ func registerRoutes(
 
 		authGroup := api.Group("/auth")
 		{
+			authGroup.POST("/send-email-code", auth.SendEmailCode)
 			authGroup.POST("/register", auth.Register)
 			authGroup.POST("/login", auth.Login)
 			authGroup.POST("/refresh", auth.Refresh)
@@ -83,6 +85,10 @@ func registerRoutes(
 			adminGroup.GET("/users", users.ListUsers)
 			adminGroup.POST("/users/:user_id/site-pin", pins.GrantSitePinPermission)
 			adminGroup.DELETE("/users/:user_id/site-pin", pins.RevokeSitePinPermission)
+
+			adminGroup.GET("/invite-codes", invite.ListInviteCodes)
+			adminGroup.POST("/invite-codes", invite.GenerateInviteCodes)
+			adminGroup.DELETE("/invite-codes/:id", invite.DeleteInviteCode)
 		}
 	}
 }

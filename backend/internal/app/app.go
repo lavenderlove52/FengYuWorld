@@ -52,11 +52,19 @@ func New(cfg *config.Config) (*App, error) {
 	tagRepo := repository.NewTagRepository(database)
 	uploadRepo := repository.NewUploadRepository(database)
 	pinRepo := repository.NewPinRepository(database)
+	emailCodeRepo := repository.NewEmailCodeRepository(database)
+	inviteCodeRepo := repository.NewInviteCodeRepository(database)
 
 	mdRenderer := markdown.NewRenderer()
 	localStorage := storage.NewLocalStorage(cfg.UploadDir, cfg.PublicUploadBaseURL)
 
-	authSvc := service.NewAuthService(userRepo, jwtManager)
+	emailSvc := service.NewEmailService(cfg)
+	geetestLoginSvc := service.NewGeetestService(cfg.GeetestLoginCaptchaID, cfg.GeetestLoginCaptchaKey)
+	geetestRegisterSvc := service.NewGeetestService(cfg.GeetestRegisterCaptchaID, cfg.GeetestRegisterCaptchaKey)
+	emailCodeSvc := service.NewEmailCodeService(emailCodeRepo, emailSvc)
+	inviteSvc := service.NewInviteService(inviteCodeRepo)
+
+	authSvc := service.NewAuthService(database, userRepo, jwtManager, emailCodeSvc, inviteSvc)
 	userSvc := service.NewUserService(userRepo)
 	policy := service.NewPostPolicy(friendRepo, postRepo)
 	postSvc := service.NewPostService(postRepo, tagRepo, categoryRepo, friendRepo, policy, mdRenderer)
@@ -66,7 +74,7 @@ func New(cfg *config.Config) (*App, error) {
 	uploadSvc := service.NewUploadService(localStorage, uploadRepo, cfg.MaxImageSizeMB)
 	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo)
 
-	authHandler := handler.NewAuthHandler(authSvc)
+	authHandler := handler.NewAuthHandler(authSvc, emailCodeSvc, geetestLoginSvc, geetestRegisterSvc)
 	userHandler := handler.NewUserHandler(userSvc, postSvc)
 	postHandler := handler.NewPostHandler(postSvc)
 	friendHandler := handler.NewFriendshipHandler(friendSvc)
@@ -75,8 +83,9 @@ func New(cfg *config.Config) (*App, error) {
 	uploadHandler := handler.NewUploadHandler(uploadSvc)
 	healthHandler := handler.NewHealthHandler()
 	pinHandler := handler.NewPinHandler(pinSvc)
+	inviteHandler := handler.NewInviteHandler(inviteSvc)
 
-	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database)
+	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database, middleware.NewUserCache())
 
 	router := gin.New()
 	router.Use(gin.Logger(), middleware.ErrorRecovery(), middleware.CORS())
@@ -86,7 +95,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler)
+	registerRoutes(router, authMW, authHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler)
 
 	return &App{
 		Config: cfg,

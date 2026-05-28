@@ -38,6 +38,7 @@ const router = createRouter({
         { path: 'friends', name: 'friends', component: () => import('@/pages/dashboard/FriendsPage.vue') },
         { path: 'pins', name: 'pin-manage', component: () => import('@/pages/dashboard/PinManagePage.vue') },
         { path: 'admin/pins', name: 'admin-pins', component: () => import('@/pages/dashboard/AdminPinPage.vue') },
+        { path: 'admin/invite-codes', name: 'admin-invite-codes', component: () => import('@/pages/dashboard/InviteCodePage.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/pages/dashboard/SettingsPage.vue') },
       ],
     },

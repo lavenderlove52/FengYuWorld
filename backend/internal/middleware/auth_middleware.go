@@ -16,23 +16,36 @@ const ContextUserIDKey = "userID"
 const ContextUsernameKey = "username"
 
 type AuthMiddleware struct {
-	jwt *util.JWTManager
-	db  *gorm.DB
+	jwt   *util.JWTManager
+	db    *gorm.DB
+	cache *UserCache
 }
 
 func NewAuthMiddleware(jwt *util.JWTManager) *AuthMiddleware {
 	return &AuthMiddleware{jwt: jwt}
 }
 
-func NewAuthMiddlewareWithDB(jwt *util.JWTManager, db *gorm.DB) *AuthMiddleware {
-	return &AuthMiddleware{jwt: jwt, db: db}
+func NewAuthMiddlewareWithDB(jwt *util.JWTManager, db *gorm.DB, cache *UserCache) *AuthMiddleware {
+	return &AuthMiddleware{jwt: jwt, db: db, cache: cache}
 }
 
 func (m *AuthMiddleware) Optional() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if uid, username, ok := m.parseBearer(c); ok {
-			c.Set(ContextUserIDKey, uid)
-			c.Set(ContextUsernameKey, username)
+		uid, username, ok := m.parseBearer(c)
+		if ok {
+			if m.db != nil {
+				cu, err := m.lookupUser(uid)
+				if err == nil && cu.Status == domain.UserStatusActive {
+					c.Set(ContextUserIDKey, uid)
+					c.Set(ContextUsernameKey, username)
+					c.Set("userRole", string(cu.Role))
+					c.Set("userCanSitePin", cu.CanSitePin)
+				}
+				// 用户不存在或已锁定：静默降级为匿名，不 abort
+			} else {
+				c.Set(ContextUserIDKey, uid)
+				c.Set(ContextUsernameKey, username)
+			}
 		}
 		c.Next()
 	}
@@ -47,8 +60,45 @@ func (m *AuthMiddleware) Required() gin.HandlerFunc {
 		}
 		c.Set(ContextUserIDKey, uid)
 		c.Set(ContextUsernameKey, username)
+
+		if m.db != nil {
+			cu, err := m.lookupUser(uid)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, dto.Err(dto.CodeUserRevoked, "会话已失效，请重新登录"))
+				return
+			}
+			if cu.Status == domain.UserStatusLocked {
+				c.AbortWithStatusJSON(http.StatusForbidden, dto.Err(dto.CodeAccountLocked, "账号已被锁定"))
+				return
+			}
+			c.Set("userRole", string(cu.Role))
+			c.Set("userCanSitePin", cu.CanSitePin)
+		}
+
 		c.Next()
 	}
+}
+
+// lookupUser 先查内存缓存，未命中再查 DB 并回填缓存。
+func (m *AuthMiddleware) lookupUser(uid int64) (cachedUser, error) {
+	if m.cache != nil {
+		if cu, ok := m.cache.Get(uid); ok {
+			return cu, nil
+		}
+	}
+	var user domain.User
+	if err := m.db.Select("id, role, status, can_site_pin").First(&user, uid).Error; err != nil {
+		return cachedUser{}, err
+	}
+	cu := cachedUser{
+		Status:     user.Status,
+		Role:       user.Role,
+		CanSitePin: user.CanSitePin,
+	}
+	if m.cache != nil {
+		m.cache.Set(uid, cu)
+	}
+	return cu, nil
 }
 
 func (m *AuthMiddleware) parseBearer(c *gin.Context) (int64, string, bool) {

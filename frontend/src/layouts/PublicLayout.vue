@@ -2,6 +2,9 @@
 import { RouterView } from 'vue-router'
 import AppHeader from '@/components/common/AppHeader.vue'
 import AppFooter from '@/components/common/AppFooter.vue'
+import { useInactivityLogout } from '@/composables/useInactivityLogout'
+
+useInactivityLogout()
 </script>
 
 <template>

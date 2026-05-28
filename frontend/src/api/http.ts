@@ -19,6 +19,21 @@ export const clearTokens = () => {
   localStorage.removeItem(REFRESH_KEY)
 }
 
+// 内联 forceLogout，避免从 utils/auth 导入导致循环依赖
+// （http → utils/auth → stores/auth → api/auth → http）
+async function forceLogout(reason?: 'deleted' | 'locked' | 'inactivity') {
+  clearTokens()
+  try {
+    const { useAuthStore } = await import('@/stores/auth')
+    const auth = useAuthStore()
+    auth.user = null
+  } catch {
+    // Pinia 尚未初始化时忽略
+  }
+  const query = reason ? `?reason=${reason}` : ''
+  router.push(`/login${query}`)
+}
+
 const http = axios.create({
   baseURL: apiBase,
   timeout: 15000,
@@ -44,16 +59,37 @@ http.interceptors.response.use(
   (res) => res,
   async (error: AxiosError<ApiResponse<unknown>>) => {
     const original = error.config
-    if (!original || error.response?.status !== 401) {
+    const status = error.response?.status
+    const code = (error.response?.data as any)?.code
+
+    // JWT 有效但用户已被删除/吊销
+    if (status === 401 && code === 40102) {
+      forceLogout('deleted')
+      return Promise.reject(new Error('会话已失效，请重新登录'))
+    }
+
+    // 账号已被锁定
+    if (status === 403 && code === 40301) {
+      forceLogout('locked')
+      return Promise.reject(new Error('账号已被锁定'))
+    }
+
+    // 非 401 错误：提取后端 message 字段直接抛出，避免前端显示 "Request failed with status code 4xx"
+    if (status !== 401) {
+      const backendMsg = (error.response?.data as any)?.message
+      if (backendMsg) {
+        return Promise.reject(new Error(backendMsg))
+      }
       return Promise.reject(error)
     }
 
+    if (!original) return Promise.reject(error)
+
+    const backendMsg = (error.response?.data as any)?.message
     const refreshToken = getRefreshToken()
-    if (!refreshToken || original.url?.includes('/auth/refresh')) {
-      clearTokens()
-      if (router.currentRoute.value.path.startsWith('/dashboard')) {
-        router.push('/login')
-      }
+    // 登录/注册等 auth 接口本身不需要 token，直接返回后端提示
+    if (!refreshToken || original.url?.includes('/auth/')) {
+      if (backendMsg) return Promise.reject(new Error(backendMsg))
       return Promise.reject(error)
     }
 
@@ -79,8 +115,8 @@ http.interceptors.response.use(
       original.headers.Authorization = `Bearer ${data.data.access_token}`
       return http(original)
     } catch {
-      clearTokens()
-      router.push('/login')
+      forceLogout()
+      if (backendMsg) return Promise.reject(new Error(backendMsg))
       return Promise.reject(error)
     } finally {
       refreshing = false

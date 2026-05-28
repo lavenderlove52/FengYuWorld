@@ -2,11 +2,14 @@ package service
 
 import (
 	"errors"
+	"time"
 
 	"my-blog/backend/internal/domain"
 	"my-blog/backend/internal/dto"
 	"my-blog/backend/internal/repository"
 	"my-blog/backend/internal/util"
+
+	"gorm.io/gorm"
 )
 
 var (
@@ -16,37 +19,92 @@ var (
 )
 
 type AuthService struct {
-	users *repository.UserRepository
-	jwt   *util.JWTManager
+	db           *gorm.DB
+	users        *repository.UserRepository
+	jwt          *util.JWTManager
+	emailCodeSvc *EmailCodeService
+	inviteSvc    *InviteService
 }
 
-func NewAuthService(users *repository.UserRepository, jwt *util.JWTManager) *AuthService {
-	return &AuthService{users: users, jwt: jwt}
+func NewAuthService(db *gorm.DB, users *repository.UserRepository, jwt *util.JWTManager, emailCodeSvc *EmailCodeService, inviteSvc *InviteService) *AuthService {
+	return &AuthService{
+		db:           db,
+		users:        users,
+		jwt:          jwt,
+		emailCodeSvc: emailCodeSvc,
+		inviteSvc:    inviteSvc,
+	}
 }
 
 func (s *AuthService) Register(req dto.RegisterRequest) (*dto.AuthResponse, error) {
-	exists, err := s.users.ExistsByUsernameOrEmail(req.Username, req.Email)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		return nil, ErrDuplicateUser
-	}
+	var user *domain.User
 
-	hash, err := util.HashPassword(req.Password)
-	if err != nil {
-		return nil, err
-	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		txUserRepo := repository.NewUserRepository(tx)
+		txEmailCodeRepo := repository.NewEmailCodeRepository(tx)
+		txInviteCodeRepo := repository.NewInviteCodeRepository(tx)
 
-	user := &domain.User{
-		Username:     req.Username,
-		Email:        req.Email,
-		PasswordHash: hash,
-		Nickname:     req.Nickname,
-		Role:         domain.UserRoleUser,
-		Status:       domain.UserStatusActive,
-	}
-	if err := s.users.Create(user); err != nil {
+		// 1. 检查用户名/邮箱重复
+		exists, err := txUserRepo.ExistsByUsernameOrEmail(req.Username, req.Email)
+		if err != nil {
+			return err
+		}
+		if exists {
+			return ErrDuplicateUser
+		}
+
+		// 2. 原子消费邮箱验证码
+		if err := txEmailCodeRepo.ConsumeByEmailAndCode(req.Email, req.EmailCode); err != nil {
+			if errors.Is(err, repository.ErrCodeInvalid) {
+				return ErrCodeInvalid
+			}
+			return err
+		}
+
+		// 3. 查找邀请码并校验
+		ic, err := txInviteCodeRepo.FindByCode(req.InviteCode)
+		if err != nil {
+			return err
+		}
+		if ic == nil {
+			return ErrInviteCodeInvalid
+		}
+		if ic.IsUsed {
+			return ErrInviteCodeUsed
+		}
+		if ic.ExpiresAt != nil && time.Now().After(*ic.ExpiresAt) {
+			return ErrInviteCodeExpired
+		}
+
+		// 4. 创建用户
+		hash, err := util.HashPassword(req.Password)
+		if err != nil {
+			return err
+		}
+		user = &domain.User{
+			Username:     req.Username,
+			Email:        req.Email,
+			PasswordHash: hash,
+			Nickname:     req.Nickname,
+			Role:         domain.UserRoleUser,
+			Status:       domain.UserStatusActive,
+		}
+		if err := txUserRepo.Create(user); err != nil {
+			return err
+		}
+
+		// 5. 原子标记邀请码已用（WHERE is_used=false，防止并发抢占）
+		if err := txInviteCodeRepo.MarkUsed(ic.ID, user.ID); err != nil {
+			if errors.Is(err, repository.ErrInviteCodeUsed) {
+				return ErrInviteCodeUsed
+			}
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
 		return nil, err
 	}
 

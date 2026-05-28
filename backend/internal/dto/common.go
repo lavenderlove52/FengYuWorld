@@ -6,7 +6,9 @@ const (
 	CodeDuplicateUser     = 40001
 	CodeLoginFailed       = 40002
 	CodeUnauthorized      = 40100
+	CodeUserRevoked       = 40102 // JWT 有效但用户已被删除/吊销
 	CodeForbidden         = 40300
+	CodeAccountLocked     = 40301 // 账号已被锁定
 	CodeNotFound          = 40400
 	CodeConflict          = 40900
 	CodeInternalError     = 50000
