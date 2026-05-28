@@ -27,7 +27,7 @@ const onLoginBlur = () => {
   }
 }
 
-const { init, showCaptcha, verified } = useGeetest('geetest-login', GEETEST_CAPTCHA_ID)
+const { init, showCaptcha } = useGeetest('geetest-login', GEETEST_CAPTCHA_ID)
 
 onMounted(() => {
   init()

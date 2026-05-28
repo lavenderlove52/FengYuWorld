@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
 import { NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
@@ -163,7 +163,8 @@ const submit = async () => {
                 v-model:value="form.email"
                 placeholder="输入你的邮箱地址"
                 size="large"
-                type="email"
+                type="text"
+                inputmode="email"
                 @blur="validateEmail"
                 @keydown.enter="sendCode"
               />
