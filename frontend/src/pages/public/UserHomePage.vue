@@ -5,6 +5,7 @@ import { getUserProfile } from '@/api/users'
 import { listUserPosts } from '@/api/posts'
 import { getMyPins } from '@/api/pins'
 import { useAuthStore } from '@/stores/auth'
+import { useUserTheme } from '@/composables/useUserTheme'
 import type { UserInfo } from '@/types/auth'
 import type { PostSummary, PinnedPost } from '@/types/post'
 import PostList from '@/components/post/PostList.vue'
@@ -22,7 +23,11 @@ const page = ref(1)
 const pageSize = 12
 const total = ref(0)
 
+const containerRef = ref<HTMLElement | null>(null)
+const { theme, load: loadTheme } = useUserTheme(containerRef)
+
 const isOwner = computed(() => auth.user?.username === String(route.params.username))
+const showPins = computed(() => isOwner.value || theme.value.show_pins_public)
 
 const load = async () => {
   loading.value = true
@@ -32,8 +37,7 @@ const load = async () => {
       getUserProfile(username),
       listUserPosts(username, page.value, pageSize),
     ]
-    // 只有本人才能看个人置顶（后端接口是 /me/pins）
-    if (isOwner.value) {
+    if (isOwner.value || theme.value.show_pins_public) {
       requests.push(getMyPins())
     }
     const [profile, list, pinsRes] = await Promise.all(requests)
@@ -50,51 +54,61 @@ const load = async () => {
   }
 }
 
-onMounted(load)
+onMounted(async () => {
+  const username = String(route.params.username)
+  await loadTheme(username)
+  await load()
+})
 </script>
 
 <template>
-  <div>
+  <div ref="containerRef" :data-theme-user="String(route.params.username)" class="min-h-screen transition-colors duration-300" style="color: var(--theme-text)">
     <EmptyState v-if="!loading && !user" message="用户不存在" />
     <template v-else-if="user">
+
+      <!-- Banner -->
+      <div v-if="theme.banner_url" class="w-full h-48 overflow-hidden mb-8 rounded-xl -mx-0">
+        <img :src="theme.banner_url" class="w-full h-full object-cover" alt="banner" />
+      </div>
+
       <!-- 用户信息头 -->
-      <div class="flex items-center gap-5 mb-8 pb-8 border-b border-slate-200">
-        <div class="w-16 h-16 rounded-full overflow-hidden bg-slate-100 flex-shrink-0">
+      <div class="flex items-center gap-5 mb-8 pb-8" style="border-bottom: 1px solid var(--theme-border, #e2e8f0)">
+        <div class="w-16 h-16 rounded-full overflow-hidden flex-shrink-0" style="background: var(--theme-card-bg, #f1f5f9)">
           <img
             v-if="user.avatar_url"
             :src="user.avatar_url"
             class="w-full h-full object-cover"
             :alt="user.nickname"
           />
-          <div v-else class="w-full h-full flex items-center justify-center text-2xl font-bold text-slate-400">
+          <div v-else class="w-full h-full flex items-center justify-center text-2xl font-bold" style="color: var(--theme-accent, #6366f1)">
             {{ user.nickname?.[0]?.toUpperCase() }}
           </div>
         </div>
         <div>
-          <h1 class="text-2xl font-bold text-slate-800">{{ user.nickname }}</h1>
-          <p class="text-slate-400 text-sm mt-0.5">@{{ user.username }}</p>
-          <p v-if="user.bio" class="mt-2 text-slate-500 text-sm leading-relaxed">{{ user.bio }}</p>
+          <h1 class="text-2xl font-bold" style="color: var(--theme-text, #0f172a)">{{ user.nickname }}</h1>
+          <p class="text-sm mt-0.5" style="color: var(--theme-text, #64748b); opacity: 0.6">@{{ user.username }}</p>
+          <p v-if="user.bio" class="mt-2 text-sm leading-relaxed" style="color: var(--theme-text, #64748b); opacity: 0.8">{{ user.bio }}</p>
         </div>
       </div>
 
-      <!-- 个人置顶轮播（仅本人） -->
-      <div v-if="isOwner && pins.length" class="mb-10">
+      <!-- 置顶轮播 -->
+      <div v-if="showPins && pins.length" class="mb-10">
         <div class="flex items-baseline gap-2 mb-3">
-          <span class="text-sm font-semibold text-slate-600">我的置顶</span>
-          <span class="text-xs text-slate-400">{{ pins.length }} 篇</span>
+          <span class="text-sm font-semibold" style="color: var(--theme-text, #475569)">置顶</span>
+          <span class="text-xs" style="color: var(--theme-text, #94a3b8); opacity: 0.7">{{ pins.length }} 篇</span>
         </div>
         <PinCarousel :pins="pins" />
       </div>
 
       <!-- 文章列表 -->
       <div class="flex items-baseline justify-between mb-6">
-        <h2 class="text-xl font-bold text-slate-800">
+        <h2 class="text-xl font-bold" style="color: var(--theme-text, #0f172a)">
           {{ isOwner ? '我的文章' : `${user.nickname} 的文章` }}
         </h2>
-        <span class="text-sm text-slate-400">共 {{ total }} 篇</span>
+        <span class="text-sm" style="color: var(--theme-text, #94a3b8); opacity: 0.7">共 {{ total }} 篇</span>
       </div>
 
-      <PostList :posts="posts" :loading="loading" />
+      <PostList :posts="posts" :loading="loading" :layout="theme.layout" />
       <Pagination
         v-if="total > pageSize"
         :page="page"

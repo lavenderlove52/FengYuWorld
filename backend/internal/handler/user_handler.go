@@ -92,6 +92,50 @@ func (h *UserHandler) GetUserProfile(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.OK(info))
 }
 
+// GrantCustomJS POST /api/admin/users/:user_id/custom-js
+func (h *UserHandler) GrantCustomJS(c *gin.Context) {
+	adminID := middleware.MustUserID(c)
+	targetUserID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "请求参数错误"))
+		return
+	}
+	if err := h.users.GrantCustomJS(adminID, targetUserID); err != nil {
+		switch err {
+		case service.ErrUserNotFound:
+			c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "用户不存在"))
+		case service.ErrAdminForbidden:
+			c.JSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "无权限"))
+		default:
+			c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		}
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(nil))
+}
+
+// RevokeCustomJS DELETE /api/admin/users/:user_id/custom-js
+func (h *UserHandler) RevokeCustomJS(c *gin.Context) {
+	adminID := middleware.MustUserID(c)
+	targetUserID, err := strconv.ParseInt(c.Param("user_id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "请求参数错误"))
+		return
+	}
+	if err := h.users.RevokeCustomJS(adminID, targetUserID); err != nil {
+		switch err {
+		case service.ErrUserNotFound:
+			c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "用户不存在"))
+		case service.ErrAdminForbidden:
+			c.JSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "无权限"))
+		default:
+			c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		}
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(nil))
+}
+
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	keyword := c.Query("keyword")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

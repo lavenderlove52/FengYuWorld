@@ -2,7 +2,7 @@
 import { onMounted, ref, computed } from 'vue'
 import { useMessage } from 'naive-ui'
 import { listPublicPosts } from '@/api/posts'
-import { getSitePins, addSitePin, removeSitePin, grantSitePinPermission, revokeSitePinPermission } from '@/api/pins'
+import { getSitePins, addSitePin, removeSitePin, grantSitePinPermission, revokeSitePinPermission, grantCustomJSPermission, revokeCustomJSPermission } from '@/api/pins'
 import { listUsers } from '@/api/users'
 import type { PostSummary, PinnedPost } from '@/types/post'
 import type { UserInfo } from '@/types/auth'
@@ -118,6 +118,33 @@ const toggleGrant = async (user: UserInfo) => {
     }
   } finally {
     operatingUser.value = null
+  }
+}
+
+const operatingUserJS = ref<number | null>(null)
+
+const toggleCustomJS = async (user: UserInfo) => {
+  operatingUserJS.value = user.id
+  try {
+    if (user.can_custom_js) {
+      const res = await revokeCustomJSPermission(user.id)
+      if (res.code === 0) {
+        user.can_custom_js = false
+        message.success(`已撤销 ${user.nickname} 的自定义 JS 权限`)
+      } else {
+        message.error(res.message || '操作失败')
+      }
+    } else {
+      const res = await grantCustomJSPermission(user.id)
+      if (res.code === 0) {
+        user.can_custom_js = true
+        message.success(`已授权 ${user.nickname} 使用自定义 JS`)
+      } else {
+        message.error(res.message || '操作失败')
+      }
+    }
+  } finally {
+    operatingUserJS.value = null
   }
 }
 
@@ -283,31 +310,46 @@ const formatDate = (d: string) => d?.slice(0, 10) ?? ''
 
             <!-- 用户信息 -->
             <div class="flex-1 min-w-0">
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap">
                 <span class="text-sm font-semibold text-slate-800">{{ user.nickname }}</span>
                 <span v-if="user.role === 'admin'"
                   class="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded-full">admin</span>
-                <span v-else-if="user.can_site_pin"
-                  class="text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-full">已授权</span>
+                <span v-if="user.can_site_pin && user.role !== 'admin'"
+                  class="text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-full">置顶</span>
+                <span v-if="user.can_custom_js && user.role !== 'admin'"
+                  class="text-[10px] px-1.5 py-0.5 bg-orange-50 text-orange-500 border border-orange-100 rounded-full">自定义JS</span>
               </div>
               <div class="text-xs text-slate-400 mt-0.5">@{{ user.username }}</div>
             </div>
 
-            <!-- 授权按钮（admin 不需要授权） -->
+            <!-- 授权按钮 -->
             <div v-if="user.role === 'admin'" class="text-xs text-slate-300">内置权限</div>
-            <button
-              v-else
-              class="flex-shrink-0 text-xs px-3 py-1.5 rounded-lg border transition min-w-[72px] text-center"
-              :class="user.can_site_pin
-                ? 'bg-indigo-50 text-indigo-500 border-indigo-100 hover:bg-red-50 hover:text-red-500 hover:border-red-100'
-                : 'bg-white text-slate-500 border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'"
-              :disabled="operatingUser === user.id"
-              @click="toggleGrant(user)"
-            >
-              <span v-if="operatingUser === user.id">...</span>
-              <span v-else-if="user.can_site_pin">撤销授权</span>
-              <span v-else>授予权限</span>
-            </button>
+            <div v-else class="flex items-center gap-2 flex-shrink-0">
+              <!-- 首页置顶授权 -->
+              <button
+                class="text-xs px-2.5 py-1.5 rounded-lg border transition min-w-[64px] text-center"
+                :class="user.can_site_pin
+                  ? 'bg-indigo-50 text-indigo-500 border-indigo-100 hover:bg-red-50 hover:text-red-500 hover:border-red-100'
+                  : 'bg-white text-slate-500 border-slate-200 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200'"
+                :disabled="operatingUser === user.id"
+                @click="toggleGrant(user)"
+              >
+                <span v-if="operatingUser === user.id">...</span>
+                <span v-else>{{ user.can_site_pin ? '撤销置顶' : '授予置顶' }}</span>
+              </button>
+              <!-- 自定义 JS 授权 -->
+              <button
+                class="text-xs px-2.5 py-1.5 rounded-lg border transition min-w-[64px] text-center"
+                :class="user.can_custom_js
+                  ? 'bg-orange-50 text-orange-500 border-orange-100 hover:bg-red-50 hover:text-red-500 hover:border-red-100'
+                  : 'bg-white text-slate-500 border-slate-200 hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200'"
+                :disabled="operatingUserJS === user.id"
+                @click="toggleCustomJS(user)"
+              >
+                <span v-if="operatingUserJS === user.id">...</span>
+                <span v-else>{{ user.can_custom_js ? '撤销JS' : '授予JS' }}</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>

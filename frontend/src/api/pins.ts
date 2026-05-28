@@ -28,3 +28,9 @@ export const grantSitePinPermission = (userId: number) =>
 
 export const revokeSitePinPermission = (userId: number) =>
   http.delete<ApiResponse<null>>(`/admin/users/${userId}/site-pin`).then((r) => r.data)
+
+export const grantCustomJSPermission = (userId: number) =>
+  http.post<ApiResponse<null>>(`/admin/users/${userId}/custom-js`).then((r) => r.data)
+
+export const revokeCustomJSPermission = (userId: number) =>
+  http.delete<ApiResponse<null>>(`/admin/users/${userId}/custom-js`).then((r) => r.data)

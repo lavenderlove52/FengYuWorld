@@ -35,16 +35,17 @@ type AuthResponse struct {
 }
 
 type UserInfo struct {
-	ID         int64     `json:"id"`
-	Username   string    `json:"username"`
-	Email      string    `json:"email,omitempty"`
-	Nickname   string    `json:"nickname"`
-	AvatarURL  string    `json:"avatar_url"`
-	Bio        string    `json:"bio,omitempty"`
-	Role       string    `json:"role,omitempty"`
-	Status     string    `json:"status,omitempty"`
-	CanSitePin bool      `json:"can_site_pin,omitempty"`
-	CreatedAt  time.Time `json:"created_at,omitempty"`
+	ID          int64     `json:"id"`
+	Username    string    `json:"username"`
+	Email       string    `json:"email,omitempty"`
+	Nickname    string    `json:"nickname"`
+	AvatarURL   string    `json:"avatar_url"`
+	Bio         string    `json:"bio,omitempty"`
+	Role        string    `json:"role,omitempty"`
+	Status      string    `json:"status,omitempty"`
+	CanSitePin  bool      `json:"can_site_pin,omitempty"`
+	CanCustomJS bool      `json:"can_custom_js,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
 }
 
 type UpdateProfileRequest struct {

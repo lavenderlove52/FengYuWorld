@@ -72,6 +72,14 @@ const permissions = computed(() => [
     applyLabel: '首页置顶管理权限',
   },
   {
+    key: 'custom_js',
+    label: '自定义 JS',
+    desc: '在个人主页和文章页注入自定义 JavaScript 脚本（鼠标特效等）',
+    granted: auth.user?.role === 'admin' || !!auth.user?.can_custom_js,
+    applyable: true,
+    applyLabel: '自定义 JS 权限',
+  },
+  {
     key: 'admin',
     label: '管理员',
     desc: '管理全站用户、授权、内容等所有后台功能',

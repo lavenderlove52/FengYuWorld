@@ -68,6 +68,10 @@ func (r *UserRepository) ExistsByUsernameOrEmail(username, email string) (bool, 
 	return count > 0, err
 }
 
+func (r *UserRepository) UpdateCanCustomJS(userID int64, value bool) error {
+	return r.db.Model(&domain.User{}).Where("id = ?", userID).Update("can_custom_js", value).Error
+}
+
 func (r *UserRepository) ListUsers(keyword string, page, pageSize int) ([]domain.User, int64, error) {
 	var users []domain.User
 	var total int64

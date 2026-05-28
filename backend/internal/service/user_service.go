@@ -8,7 +8,10 @@ import (
 	"my-blog/backend/internal/repository"
 )
 
-var ErrUserNotFound = errors.New("user not found")
+var (
+	ErrUserNotFound   = errors.New("user not found")
+	ErrAdminForbidden = errors.New("admin forbidden")
+)
 
 type UserService struct {
 	users *repository.UserRepository
@@ -57,6 +60,36 @@ func (s *UserService) GetByUsername(username string) (*domain.User, error) {
 		return nil, ErrUserNotFound
 	}
 	return user, nil
+}
+
+func (s *UserService) GrantCustomJS(adminID int64, targetUserID int64) error {
+	admin, err := s.users.FindByID(adminID)
+	if err != nil || admin == nil || admin.Role != domain.UserRoleAdmin {
+		return ErrAdminForbidden
+	}
+	target, err := s.users.FindByID(targetUserID)
+	if err != nil {
+		return err
+	}
+	if target == nil {
+		return ErrUserNotFound
+	}
+	return s.users.UpdateCanCustomJS(targetUserID, true)
+}
+
+func (s *UserService) RevokeCustomJS(adminID int64, targetUserID int64) error {
+	admin, err := s.users.FindByID(adminID)
+	if err != nil || admin == nil || admin.Role != domain.UserRoleAdmin {
+		return ErrAdminForbidden
+	}
+	target, err := s.users.FindByID(targetUserID)
+	if err != nil {
+		return err
+	}
+	if target == nil {
+		return ErrUserNotFound
+	}
+	return s.users.UpdateCanCustomJS(targetUserID, false)
 }
 
 func (s *UserService) ListUsers(keyword string, page, pageSize int) ([]dto.UserInfo, int64, error) {

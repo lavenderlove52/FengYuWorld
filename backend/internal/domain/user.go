@@ -27,6 +27,7 @@ type User struct {
 	Role         UserRole   `gorm:"size:20;not null;default:user"`
 	Status       UserStatus `gorm:"size:20;not null;default:active;index"`
 	CanSitePin   bool       `gorm:"not null;default:false"`
+	CanCustomJS  bool       `gorm:"not null;default:false"`
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }

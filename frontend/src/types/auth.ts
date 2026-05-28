@@ -7,6 +7,7 @@ export interface UserInfo {
   bio?: string
   role?: string
   can_site_pin?: boolean
+  can_custom_js?: boolean
 }
 
 export interface AuthResponse {

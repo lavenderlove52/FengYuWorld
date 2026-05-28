@@ -20,6 +20,7 @@ func registerRoutes(
 	health *handler.HealthHandler,
 	pins *handler.PinHandler,
 	invite *handler.InviteHandler,
+	theme *handler.UserThemeHandler,
 ) {
 	api := r.Group("/api")
 	{
@@ -40,12 +41,14 @@ func registerRoutes(
 
 		api.GET("/users/:username", users.GetUserProfile)
 		api.GET("/users/:username/posts", users.GetUserPosts)
+		api.GET("/users/:username/theme", theme.GetTheme)
 
 		authed := api.Group("")
 		authed.Use(authMW.Required())
 		{
 			authed.GET("/users/me", users.GetMe)
 			authed.PUT("/users/me", users.UpdateMe)
+			authed.PUT("/me/theme", theme.UpdateTheme)
 
 			authed.GET("/me/posts", posts.ListMine)
 			authed.POST("/posts", posts.Create)
@@ -85,6 +88,8 @@ func registerRoutes(
 			adminGroup.GET("/users", users.ListUsers)
 			adminGroup.POST("/users/:user_id/site-pin", pins.GrantSitePinPermission)
 			adminGroup.DELETE("/users/:user_id/site-pin", pins.RevokeSitePinPermission)
+			adminGroup.POST("/users/:user_id/custom-js", users.GrantCustomJS)
+			adminGroup.DELETE("/users/:user_id/custom-js", users.RevokeCustomJS)
 
 			adminGroup.GET("/invite-codes", invite.ListInviteCodes)
 			adminGroup.POST("/invite-codes", invite.GenerateInviteCodes)

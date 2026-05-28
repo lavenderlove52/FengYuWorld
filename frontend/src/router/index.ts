@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getAccessToken } from '@/api/http'
+import { setActivePageTheme } from '@/stores/pageTheme'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -37,6 +38,7 @@ const router = createRouter({
         { path: 'drafts', name: 'drafts', component: () => import('@/pages/dashboard/DraftsPage.vue') },
         { path: 'friends', name: 'friends', component: () => import('@/pages/dashboard/FriendsPage.vue') },
         { path: 'pins', name: 'pin-manage', component: () => import('@/pages/dashboard/PinManagePage.vue') },
+        { path: 'theme', name: 'theme-settings', component: () => import('@/pages/dashboard/ThemeSettingsPage.vue') },
         { path: 'admin/pins', name: 'admin-pins', component: () => import('@/pages/dashboard/AdminPinPage.vue') },
         { path: 'admin/invite-codes', name: 'admin-invite-codes', component: () => import('@/pages/dashboard/InviteCodePage.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/pages/dashboard/SettingsPage.vue') },
@@ -45,7 +47,16 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to) => {
+router.beforeEach((to, from) => {
+  // 离开用户主页或文章页时立即重置主题，不等组件卸载
+  const themeRoutes = ['user-home', 'post-detail']
+  if (themeRoutes.includes(String(from.name)) && !themeRoutes.includes(String(to.name))) {
+    setActivePageTheme(null)
+    document.body.style.backgroundColor = ''
+    document.body.style.color = ''
+    document.body.style.fontFamily = ''
+  }
+
   const loggedIn = !!getAccessToken()
   if (to.meta.requiresAuth && !loggedIn) {
     return { name: 'login', query: { redirect: to.fullPath } }

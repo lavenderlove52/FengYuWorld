@@ -162,6 +162,7 @@ func toUserInfo(user *domain.User, full bool) dto.UserInfo {
 		info.Role = string(user.Role)
 		info.Status = string(user.Status)
 		info.CanSitePin = user.CanSitePin
+		info.CanCustomJS = user.CanCustomJS
 		info.CreatedAt = user.CreatedAt
 	}
 	return info

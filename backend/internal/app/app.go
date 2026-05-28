@@ -74,6 +74,9 @@ func New(cfg *config.Config) (*App, error) {
 	uploadSvc := service.NewUploadService(localStorage, uploadRepo, cfg.MaxImageSizeMB)
 	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo)
 
+	userThemeRepo := repository.NewUserThemeRepository(database)
+	userThemeSvc := service.NewUserThemeService(userThemeRepo, userRepo)
+
 	authHandler := handler.NewAuthHandler(authSvc, emailCodeSvc, geetestLoginSvc, geetestRegisterSvc)
 	userHandler := handler.NewUserHandler(userSvc, postSvc)
 	postHandler := handler.NewPostHandler(postSvc)
@@ -84,6 +87,7 @@ func New(cfg *config.Config) (*App, error) {
 	healthHandler := handler.NewHealthHandler()
 	pinHandler := handler.NewPinHandler(pinSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc)
+	userThemeHandler := handler.NewUserThemeHandler(userThemeSvc)
 
 	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database, middleware.NewUserCache())
 
@@ -95,7 +99,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler)
+	registerRoutes(router, authMW, authHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler)
 
 	return &App{
 		Config: cfg,
