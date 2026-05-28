@@ -10,7 +10,9 @@
 ## 快速开始
 
 ### 1. 环境要求
+
 #### go
+
 ```bash
 # 1. 阿里云镜像
 curl -LO https://mirrors.aliyun.com/golang/go1.26.2.linux-amd64.tar.gz
@@ -41,8 +43,9 @@ JWT_REFRESH_SECRET=另一组随机至少32字符
 
 密码里的特殊字符要转成 URL 编码（`%XX`）：
 
-| 字符 | 编码 |
-|------|------|
+
+| 字符  | 编码    |
+| --- | ----- |
 | `@` | `%40` |
 | `%` | `%25` |
 | `#` | `%23` |
@@ -51,9 +54,11 @@ JWT_REFRESH_SECRET=另一组随机至少32字符
 | `?` | `%3F` |
 | `&` | `%26` |
 
+
 后端会从项目根目录或 `backend/` 目录读取 `.env`（通过 godotenv）。
 
 ### 3. 启动数据库
+
 ```bash
 # 第一步：安装编译依赖
 yum install -y gcc gcc-c++ make readline-devel zlib-devel openssl-devel
@@ -198,12 +203,17 @@ systemctl reload nginx
 ```
 
 ### 8. 服务器更新
+
 ```bash
 # 服务器上更新：
 cd /root/project/FengYuWorld
 git pull
-
+cd backend
+go run ./cmd/migrate
+go build -o bin/server ./cmd/server
+systemctl restart myblog
 ```
+
 ## 已实现功能
 
 - 用户注册、登录、JWT（Access + Refresh）、当前用户资料
@@ -234,14 +244,16 @@ make backend-build
 make frontend-build
 ```
 
-前端默认部署在 **`/blog/`** 子路径（见 `frontend/vite.config.ts` 的 `base`）。
+前端默认部署在 `**/blog/**` 子路径（见 `frontend/vite.config.ts` 的 `base`）。
 
-| 路径 | 说明 |
-|------|------|
-| `/blog/` | 前端 SPA |
-| `/blog/api/` | 反代 Go API |
-| `/uploads/` | 上传文件 |
-| `/webdav/` | 其他服务（如坚果云 relay，Nginx 示例见 `deploy/nginx-ip-paths.conf`） |
+
+| 路径           | 说明                                                      |
+| ------------ | ------------------------------------------------------- |
+| `/blog/`     | 前端 SPA                                                  |
+| `/blog/api/` | 反代 Go API                                               |
+| `/uploads/`  | 上传文件                                                    |
+| `/webdav/`   | 其他服务（如坚果云 relay，Nginx 示例见 `deploy/nginx-ip-paths.conf`） |
+
 
 ```bash
 # 本机构建并上传
