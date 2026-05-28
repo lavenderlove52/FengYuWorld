@@ -38,15 +38,19 @@ DATABASE_URL=postgres://myblog:密码@127.0.0.1:5432/myblog?sslmode=disable
 JWT_ACCESS_SECRET=随机至少32字符
 JWT_REFRESH_SECRET=另一组随机至少32字符
 ```
-密码里的特殊字符要转成 %XX：
-字符	编码
-@       %40
-%       %25
-#       %23
-:       %3A
-/       %2F
-?       %3F
-&       %26
+
+密码里的特殊字符要转成 URL 编码（`%XX`）：
+
+| 字符 | 编码 |
+|------|------|
+| `@` | `%40` |
+| `%` | `%25` |
+| `#` | `%23` |
+| `:` | `%3A` |
+| `/` | `%2F` |
+| `?` | `%3F` |
+| `&` | `%26` |
+
 后端会从项目根目录或 `backend/` 目录读取 `.env`（通过 godotenv）。
 
 ### 3. 启动数据库
@@ -166,12 +170,40 @@ API 默认监听 `http://localhost:8080`。
 cd D:\Code\Go\My-Blog\frontend
 npm install
 npm run build
-scp -r dist root@你的服务器IP:/root/project/FengYuWorld/frontend/
+scp -r dist root@你的服务器IP:/var/www/blog
+
+
 # 或: cd frontend && npm install && npm run dev
 ```
 
 前端默认 `http://localhost:5173`，已配置 `/api` 与 `/uploads` 代理到后端。
 
+### 7. 配置nginx
+
+```bash
+mkdir -p /var/www/myblog /etc/nginx/conf.d/disabled
+# 上传或复制 deploy/nginx-ip-paths.conf
+cp /root/project/FengYuWorld/deploy/nginx-ip-paths.conf /etc/nginx/conf.d/myblog.conf
+# 禁用旧的 relay 配置（避免冲突）
+mv /etc/nginx/conf.d/jian-guo-yun-relay.conf /etc/nginx/conf.d/disabled/
+nginx -t
+systemctl reload nginx
+# 以后加新服务
+# 在 deploy/nginx-ip-paths.conf 里加新的 location，例如：
+
+ location /other-service/ {
+     proxy_pass http://127.0.0.1:端口/;
+     }
+# 原则： 每个服务占一个路径前缀，不要两个服务同时抢 /。
+```
+
+### 8. 服务器更新
+```bash
+# 服务器上更新：
+cd /root/project/FengYuWorld
+git pull
+
+```
 ## 已实现功能
 
 - 用户注册、登录、JWT（Access + Refresh）、当前用户资料
@@ -214,7 +246,7 @@ make frontend-build
 ```bash
 # 本机构建并上传
 cd frontend && npm run build
-scp -r dist/* root@YOUR_IP:/var/www/myblog/
+scp -r dist/* root@YOUR_IP:/var/www/blog/
 
 # 服务器 Nginx
 cp deploy/nginx-ip-paths.conf /etc/nginx/conf.d/myblog.conf
