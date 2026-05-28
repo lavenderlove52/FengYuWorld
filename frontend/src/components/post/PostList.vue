@@ -35,7 +35,7 @@ const rows = computed(() => {
   <!-- list 布局：图文横排 -->
   <div v-else-if="currentLayout === 'list'" class="space-y-0">
     <div
-      v-for="(post, i) in posts"
+      v-for="post in posts"
       :key="post.id"
       class="border-b py-5"
       style="border-color: var(--theme-border, #e2e8f0)"

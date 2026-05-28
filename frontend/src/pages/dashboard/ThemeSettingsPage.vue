@@ -24,9 +24,6 @@ const form = ref<UserTheme>({ ...DEFAULT_THEME })
 const saving = ref(false)
 const uploadingBanner = ref(false)
 
-// 预览容器
-const previewRef = ref<HTMLElement | null>(null)
-
 const selectedPreset = computed(() => PRESETS.find((p) => p.id === form.value.preset) ?? PRESETS[0])
 
 const previewStyle = computed(() => {

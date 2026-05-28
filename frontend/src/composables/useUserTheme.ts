@@ -46,6 +46,10 @@ function injectCustomCss(username: string, css: string) {
   el.textContent = scoped
 }
 
+function removeCustomCss(username: string) {
+  document.getElementById(STYLE_ID_PREFIX + username)?.remove()
+}
+
 const JS_SCRIPT_ID_PREFIX = 'user-theme-js-'
 
 function injectCustomJS(username: string, js: string) {
