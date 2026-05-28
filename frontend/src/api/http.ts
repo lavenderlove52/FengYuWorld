@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig } from 'axios'
 import type { ApiResponse, AuthResponse } from '@/types/auth'
+import { apiBase } from '@/config/app'
 import router from '@/router'
 
 const ACCESS_KEY = 'access_token'
@@ -19,7 +20,7 @@ export const clearTokens = () => {
 }
 
 const http = axios.create({
-  baseURL: '/api',
+  baseURL: apiBase,
   timeout: 15000,
 })
 
@@ -67,7 +68,7 @@ http.interceptors.response.use(
 
     refreshing = true
     try {
-      const { data } = await axios.post<ApiResponse<AuthResponse>>('/api/auth/refresh', {
+      const { data } = await axios.post<ApiResponse<AuthResponse>>(`${apiBase}/auth/refresh`, {
         refresh_token: refreshToken,
       })
       if (data.code !== 0 || !data.data) {

@@ -1,16 +1,18 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-import { NButton, NSpace } from 'naive-ui'
+import { NButton } from 'naive-ui'
 import { getAccessToken } from '@/api/http'
+import { appBase } from '@/config/app'
 
 const loggedIn = !!getAccessToken()
+const logoUrl = `${appBase}logo.png`
 </script>
 
 <template>
   <header class="bg-[#f8fafc] sticky top-0 z-10">
     <div class="w-full px-6 h-14 flex items-center justify-between">
       <RouterLink to="/">
-        <img src="/logo.png" alt="风雨世界" class="h-9 w-auto object-contain" />
+        <img :src="logoUrl" alt="风雨世界" class="h-9 w-auto object-contain" />
       </RouterLink>
       <div class="flex items-center gap-2">
         <RouterLink v-if="loggedIn" to="/dashboard">

@@ -43,8 +43,6 @@ const onPageChange = (p: number) => {
   page.value = p
   load()
 }
-
-const formatDate = (d: string) => d?.slice(0, 10) ?? ''
 </script>
 
 <template>

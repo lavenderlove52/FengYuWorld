@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { NButton, NSpace, useMessage, useDialog } from 'naive-ui'
+import { NButton, useMessage } from 'naive-ui'
 import { listMyPosts } from '@/api/posts'
 import { getMyPins, addUserPin, removeUserPin } from '@/api/pins'
 import type { PostSummary, PinnedPost } from '@/types/post'
 
 const message = useMessage()
-const dialog = useDialog()
 
 const posts = ref<PostSummary[]>([])
 const pins = ref<PinnedPost[]>([])

@@ -10,45 +10,151 @@
 ## 快速开始
 
 ### 1. 环境要求
-
-- Go 1.22+
-- Node.js 18+
-- Docker（用于 PostgreSQL，或本地已有 PostgreSQL）
+#### go
+```bash
+# 1. 阿里云镜像
+curl -LO https://mirrors.aliyun.com/golang/go1.26.2.linux-amd64.tar.gz
+rm -rf /usr/local/go
+tar -C /usr/local -xzf go1.26.2.linux-amd64.tar.gz
+cat > /etc/profile.d/go.sh <<'EOF'
+export PATH=$PATH:/usr/local/go/bin
+export GOPATH=/root/go
+export PATH=$PATH:$GOPATH/bin
+EOF
+source /etc/profile.d/go.sh
+go version
 
 ### 2. 配置
 
 ```bash
-cp .env.example .env
+cd /root/project/FengYuWorld
+cp .env.example backend/.env
+vim backend/.env
 # 按需修改 DATABASE_URL、JWT 密钥等
+#至少改这些：
+APP_ENV=production
+APP_PORT=8080
+DATABASE_URL=postgres://myblog:密码@127.0.0.1:5432/myblog?sslmode=disable
+JWT_ACCESS_SECRET=随机至少32字符
+JWT_REFRESH_SECRET=另一组随机至少32字符
 ```
-
+密码里的特殊字符要转成 %XX：
+字符	编码
+@       %40
+%       %25
+#       %23
+:       %3A
+/       %2F
+?       %3F
+&       %26
 后端会从项目根目录或 `backend/` 目录读取 `.env`（通过 godotenv）。
 
 ### 3. 启动数据库
-
-任选一种方式（详见 `docs/`）：
-
-- **Windows 本机安装（推荐，不依赖 Docker/WSL）**： [docs/INSTALL_POSTGRESQL_WINDOWS.md](docs/INSTALL_POSTGRESQL_WINDOWS.md)
-- **CentOS 7 服务器**： [docs/INSTALL_POSTGRESQL_CENTOS7.md](docs/INSTALL_POSTGRESQL_CENTOS7.md)
-- **Docker**： [docs/INSTALL_POSTGRESQL_DOCKER.md](docs/INSTALL_POSTGRESQL_DOCKER.md)
-
 ```bash
-make db-up
-# 或: docker compose up -d postgres
+# 第一步：安装编译依赖
+yum install -y gcc gcc-c++ make readline-devel zlib-devel openssl-devel
+yum install -y libicu-devel
+# 第二步：下载源码（用清华镜像）
+cd /tmp
+wget https://mirrors.tuna.tsinghua.edu.cn/postgresql/source/v16.3/postgresql-16.3.tar.gz
+
+# 第三步：解压编译安装
+tar -xzf postgresql-16.3.tar.gz
+cd postgresql-16.3
+./configure --prefix=/usr/local/pgsql
+make -j$(nproc)
+make install
+
+# 第四步：创建用户和数据目录
+useradd postgres
+mkdir -p /data/pgdata
+chown postgres:postgres /data/pgdata
+
+# 第五步：初始化数据库
+su - postgres -c "/usr/local/pgsql/bin/initdb -D /data/pgdata"
+
+# 第六步：启动数据库
+su - postgres -c "/usr/local/pgsql/bin/pg_ctl -D /data/pgdata -l /data/pgdata/logfile start"
+
+# 第七步：验证
+su - postgres -c "/usr/local/pgsql/bin/psql -c 'SELECT version();'"
+
+
+# 第八步 把 '请改成强密码' 换成你的强密码（与后面 .env 一致）：
+su - postgres -c "/usr/local/pgsql/bin/psql" <<'EOF'
+CREATE USER myblog WITH PASSWORD '请改成强密码';
+CREATE DATABASE myblog OWNER myblog ENCODING 'UTF8';
+GRANT ALL PRIVILEGES ON DATABASE myblog TO myblog;
+\c myblog
+GRANT ALL ON SCHEMA public TO myblog;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO myblog;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO myblog;
+EOF
+# 测试连接：
+PGPASSWORD='请改成强密码' /usr/local/pgsql/bin/psql -h 127.0.0.1 -U myblog -d myblog -c "SELECT 1;"
 ```
 
 ### 4. 数据库迁移
 
 ```bash
-make migrate
+
+cd /root/project/FengYuWorld/backend
+go env -w GOPROXY=https://goproxy.cn,direct
+go mod download
+go run ./cmd/migrate
+# 看到 migrations completed 表示表结构 OK。
 # 或: cd backend && go run ./cmd/migrate
 ```
 
 ### 5. 启动后端
 
 ```bash
+# 临时启动
 make backend-run
 # 或: cd backend && go run ./cmd/server
+cd /root/project/FengYuWorld/backend
+go run ./cmd/server
+# 另开终端验证：
+curl http://127.0.0.1:8080/api/health
+
+
+# 用 systemd 后台跑
+cat > /etc/systemd/system/myblog.service <<'EOF'
+[Unit]
+Description=My-Blog API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/project/FengYuWorld/backend
+EnvironmentFile=/root/project/FengYuWorld/backend/.env
+ExecStart=/root/project/FengYuWorld/backend/bin/server
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now myblog
+
+
+systemctl status myblog    # 看状态
+journalctl -u myblog -f    # 看日志
+systemctl restart myblog   # 重启
+systemctl stop myblog      # 停止
+
+# 临时方案：nohup（不想配 systemd 时）
+cd /root/project/FengYuWorld/backend
+nohup ./bin/server > server.log 2>&1 &
+
+# 查看是否在跑：
+ps aux | grep bin/server
+tail -f server.log
+
+# 停止：
+kill $(pgrep -f bin/server)
 ```
 
 API 默认监听 `http://localhost:8080`。
@@ -56,8 +162,11 @@ API 默认监听 `http://localhost:8080`。
 ### 6. 启动前端
 
 ```bash
-make frontend-install
-make frontend-dev
+# 在你 Windows 开发机
+cd D:\Code\Go\My-Blog\frontend
+npm install
+npm run build
+scp -r dist root@你的服务器IP:/root/project/FengYuWorld/frontend/
 # 或: cd frontend && npm install && npm run dev
 ```
 
@@ -93,4 +202,24 @@ make backend-build
 make frontend-build
 ```
 
-前端产物在 `frontend/dist`，可由 Nginx 托管；`/api/*` 反代到 Go 服务，`/uploads/*` 指向 `backend/uploads`。
+前端默认部署在 **`/blog/`** 子路径（见 `frontend/vite.config.ts` 的 `base`）。
+
+| 路径 | 说明 |
+|------|------|
+| `/blog/` | 前端 SPA |
+| `/blog/api/` | 反代 Go API |
+| `/uploads/` | 上传文件 |
+| `/webdav/` | 其他服务（如坚果云 relay，Nginx 示例见 `deploy/nginx-ip-paths.conf`） |
+
+```bash
+# 本机构建并上传
+cd frontend && npm run build
+scp -r dist/* root@YOUR_IP:/var/www/myblog/
+
+# 服务器 Nginx
+cp deploy/nginx-ip-paths.conf /etc/nginx/conf.d/myblog.conf
+nginx -t && systemctl reload nginx
+```
+
+访问：`http://YOUR_IP/blog/`  
+本地开发：`http://localhost:5173/blog/`
