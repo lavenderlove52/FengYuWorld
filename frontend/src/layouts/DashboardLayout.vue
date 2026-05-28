@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, h } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { NLayout, NLayoutSider, NLayoutContent, NMenu, NAvatar, NButton, NSpace } from 'naive-ui'
+import { NLayout, NLayoutSider, NLayoutContent, NMenu, NButton, NSpace } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { useInactivityLogout } from '@/composables/useInactivityLogout'
 
@@ -56,9 +56,15 @@ const logout = async () => {
       <div class="flex items-center justify-between px-6 py-3 border-b bg-white">
         <div class="font-medium">用户中心</div>
         <NSpace align="center">
-          <NAvatar round size="small" :src="auth.user?.avatar_url || undefined">
-            {{ auth.user?.nickname?.[0] || 'U' }}
-          </NAvatar>
+          <div class="w-8 h-8 rounded-full overflow-hidden bg-slate-200 flex-shrink-0 flex items-center justify-center text-sm font-bold text-slate-500">
+            <img
+              v-if="auth.user?.avatar_url"
+              :src="auth.user.avatar_url"
+              :alt="auth.user?.nickname"
+              class="w-full h-full object-cover"
+            />
+            <span v-else>{{ auth.user?.nickname?.[0]?.toUpperCase() || 'U' }}</span>
+          </div>
           <span>{{ auth.user?.nickname }}</span>
           <NButton size="small" @click="logout">退出</NButton>
         </NSpace>

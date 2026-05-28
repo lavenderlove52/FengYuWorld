@@ -1,11 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import { NButton } from 'naive-ui'
-import { getAccessToken } from '@/api/http'
+import { useAuthStore } from '@/stores/auth'
 import { appBase } from '@/config/app'
 
-const loggedIn = !!getAccessToken()
+const auth = useAuthStore()
 const logoUrl = `${appBase}logo.png`
+
+// 使用 auth store 中的响应式 tokenExists，确保登录/登出后能立即更新
+const hasToken = computed(() => auth.tokenExists)
+// avatar_url 为空字符串时视为无头像，显示首字母占位
+const avatarUrl = computed(() => auth.user?.avatar_url || '')
+const avatarInitial = computed(() => auth.user?.nickname?.[0]?.toUpperCase() || 'U')
 </script>
 
 <template>
@@ -15,12 +22,20 @@ const logoUrl = `${appBase}logo.png`
         <img :src="logoUrl" alt="风雨世界" class="h-9 w-auto object-contain" />
       </RouterLink>
       <div class="flex items-center gap-2">
-        <RouterLink v-if="loggedIn" to="/dashboard">
-          <button class="w-9 h-9 rounded-full border border-gray-300 bg-white flex items-center justify-center hover:bg-gray-100 transition-colors">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#333" width="20" height="20">
-              <path d="M12 12c2.7 0 4.8-2.1 4.8-4.8S14.7 2.4 12 2.4 7.2 4.5 7.2 7.2 9.3 12 12 12zm0 2.4c-3.2 0-9.6 1.6-9.6 4.8v2.4h19.2v-2.4c0-3.2-6.4-4.8-9.6-4.8z"/>
-            </svg>
-          </button>
+        <RouterLink v-if="hasToken" to="/dashboard">
+          <div
+            class="w-9 h-9 rounded-full overflow-hidden border border-gray-300 bg-gray-200 flex items-center justify-center hover:opacity-80 transition-opacity cursor-pointer"
+          >
+            <img
+              v-if="avatarUrl"
+              :src="avatarUrl"
+              :alt="auth.user?.nickname"
+              class="w-full h-full object-cover"
+            />
+            <span v-else class="text-sm font-semibold text-gray-600 select-none">
+              {{ avatarInitial }}
+            </span>
+          </div>
         </RouterLink>
         <template v-else>
           <RouterLink to="/login"><NButton size="small">登录</NButton></RouterLink>

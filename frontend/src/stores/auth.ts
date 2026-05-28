@@ -7,8 +7,10 @@ import type { UserInfo } from '@/types/auth'
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<UserInfo | null>(null)
   const loading = ref(false)
+  // 响应式追踪 token 是否存在，确保 computed/watch 可感知登录/登出状态变化
+  const tokenExists = ref<boolean>(!!getAccessToken())
 
-  const isLoggedIn = computed(() => !!getAccessToken() && !!user.value)
+  const isLoggedIn = computed(() => tokenExists.value && !!user.value)
 
   const fetchMe = async () => {
     if (!getAccessToken()) return
@@ -29,6 +31,7 @@ export const useAuthStore = defineStore('auth', () => {
       throw new Error(res.message || '登录失败')
     }
     setTokens(res.data.access_token, res.data.refresh_token)
+    tokenExists.value = true
     user.value = res.data.user
     return res.data
   }
@@ -50,6 +53,7 @@ export const useAuthStore = defineStore('auth', () => {
       throw new Error(res.message || '注册失败')
     }
     setTokens(res.data.access_token, res.data.refresh_token)
+    tokenExists.value = true
     user.value = res.data.user
     return res.data
   }
@@ -59,6 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
       await authApi.logout()
     } finally {
       clearTokens()
+      tokenExists.value = false
       user.value = null
     }
   }
@@ -71,5 +76,5 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = res.data
   }
 
-  return { user, loading, isLoggedIn, fetchMe, login, register, logout, updateProfile }
+  return { user, loading, isLoggedIn, tokenExists, fetchMe, login, register, logout, updateProfile }
 })
