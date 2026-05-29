@@ -212,6 +212,8 @@ cd backend
 go run ./cmd/migrate
 go build -o bin/server ./cmd/server
 systemctl restart myblog
+
+#前端传到 /var/www/blog/ 目录下
 ```
 
 ## 已实现功能

@@ -32,7 +32,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
     setTokens(res.data.access_token, res.data.refresh_token)
     tokenExists.value = true
-    user.value = res.data.user
+    // 登录接口返回的 user 可能缺少 role 等字段，直接请求 /users/me 获取完整数据
+    await fetchMe()
     return res.data
   }
 
@@ -54,7 +55,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
     setTokens(res.data.access_token, res.data.refresh_token)
     tokenExists.value = true
-    user.value = res.data.user
+    // 注册接口返回的 user 可能缺少 role 等字段，直接请求 /users/me 获取完整数据
+    await fetchMe()
     return res.data
   }
 

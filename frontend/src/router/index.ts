@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { getAccessToken } from '@/api/http'
 import { setActivePageTheme } from '@/stores/pageTheme'
+import { useAuthStore } from '@/stores/auth'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -47,7 +48,7 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from) => {
+router.beforeEach(async (to, from) => {
   // 离开用户主页或文章页时立即重置主题，不等组件卸载
   const themeRoutes = ['user-home', 'post-detail']
   if (themeRoutes.includes(String(from.name)) && !themeRoutes.includes(String(to.name))) {
@@ -63,6 +64,11 @@ router.beforeEach((to, from) => {
   }
   if (to.meta.guest && loggedIn) {
     return { name: 'dashboard' }
+  }
+
+  // 已登录但用户数据尚未加载（如刷新后），等待获取完整信息后再放行路由
+  if (loggedIn && !useAuthStore().user) {
+    await useAuthStore().fetchMe()
   }
 })
 
