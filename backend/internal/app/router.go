@@ -40,7 +40,8 @@ func registerRoutes(
 		api.GET("/posts/:id", authMW.Optional(), posts.GetDetail)
 
 		api.GET("/users/:username", users.GetUserProfile)
-		api.GET("/users/:username/posts", users.GetUserPosts)
+		api.GET("/users/:username/posts", authMW.Optional(), users.GetUserPosts)
+		api.GET("/users/:username/pins", authMW.Optional(), pins.GetPublicUserPins)
 		api.GET("/users/:username/theme", theme.GetTheme)
 
 		authed := api.Group("")

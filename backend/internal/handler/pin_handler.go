@@ -84,6 +84,21 @@ func (h *PinHandler) GetMyPins(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.OK(pins))
 }
 
+func (h *PinHandler) GetPublicUserPins(c *gin.Context) {
+	username := c.Param("username")
+	viewerID, _ := middleware.GetUserID(c)
+	pins, err := h.pins.GetPublicUserPins(username, viewerID)
+	if err == service.ErrUserNotFound {
+		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "用户不存在"))
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(pins))
+}
+
 func (h *PinHandler) UserPinPost(c *gin.Context) {
 	userID := middleware.MustUserID(c)
 	postID, err := strconv.ParseInt(c.Param("post_id"), 10, 64)
@@ -99,6 +114,8 @@ func (h *PinHandler) UserPinPost(c *gin.Context) {
 			c.JSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "只能置顶自己的文章"))
 		case service.ErrAlreadyPinned:
 			c.JSON(http.StatusConflict, dto.Err(dto.CodeConflict, "该文章已置顶"))
+		case service.ErrUserPinLimitExceeded:
+			c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "个人置顶数量已达上限"))
 		default:
 			c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
 		}

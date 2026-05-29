@@ -35,18 +35,23 @@ const formatDate = (dateStr: string) => {
       <p class="text-slate-500 text-[15px] leading-relaxed line-clamp-2 mb-4">
         {{ post.summary }}
       </p>
-
-      <div class="flex items-center gap-1.5 text-sm text-slate-400 flex-wrap">
-        <span class="text-slate-500 font-medium">{{ post.author.nickname }}</span>
-        <span class="text-slate-300">·</span>
-        <span>{{ formatDate(post.published_at || post.created_at) }}</span>
-        <span class="text-slate-300">·</span>
-        <span>{{ post.view_count }} 阅读</span>
-        <span v-if="post.status !== 'published'" class="ml-1 text-amber-500">
-          {{ visibilityLabel[post.visibility] || post.visibility }}
-        </span>
-      </div>
     </RouterLink>
+
+    <div class="flex items-center gap-1.5 text-sm text-slate-400 flex-wrap">
+      <RouterLink
+        v-if="post.author.username"
+        :to="`/u/${post.author.username}`"
+        class="text-slate-500 font-medium hover:text-indigo-500 transition-colors duration-200"
+      >{{ post.author.nickname || post.author.username }}</RouterLink>
+      <span v-else class="text-slate-500 font-medium">{{ post.author.nickname }}</span>
+      <span class="text-slate-300">·</span>
+      <span>{{ formatDate(post.published_at || post.created_at) }}</span>
+      <span class="text-slate-300">·</span>
+      <span>{{ post.view_count }} 阅读</span>
+      <span v-if="post.status !== 'published'" class="ml-1 text-amber-500">
+        {{ visibilityLabel[post.visibility] || post.visibility }}
+      </span>
+    </div>
   </article>
 </template>
 

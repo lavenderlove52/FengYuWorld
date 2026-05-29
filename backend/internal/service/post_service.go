@@ -262,9 +262,9 @@ func (s *PostService) ListMine(userID int64, status, visibility string, page, pa
 	}, nil
 }
 
-func (s *PostService) ListByUsername(username string, page, pageSize int) (*util.PageResult[dto.PostSummary], error) {
+func (s *PostService) ListByUsername(viewerID *int64, username string, page, pageSize int) (*util.PageResult[dto.PostSummary], error) {
 	p := util.NormalizePageParams(page, pageSize)
-	posts, total, err := s.posts.ListPublicByUsername(username, p)
+	posts, total, err := s.posts.ListByUsernameWithViewer(username, viewerID, p)
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func (s *PostService) toSummary(post *domain.Post) dto.PostSummary {
 		summary.PublishedAt = &t
 	}
 	if post.Author != nil {
-		summary.Author = toUserInfo(post.Author, false)
+		summary.Author = toPublicUserInfo(post.Author)
 	}
 	if len(post.Tags) > 0 {
 		summary.Tags = make([]string, 0, len(post.Tags))

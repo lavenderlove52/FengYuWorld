@@ -27,26 +27,26 @@ type UpdatePostRequest struct {
 }
 
 type PostSummary struct {
-	ID            int64    `json:"id"`
-	Title         string   `json:"title"`
-	Slug          string   `json:"slug"`
-	CoverImageURL string   `json:"cover_image_url"`
-	Summary       string   `json:"summary"`
-	Status        string   `json:"status"`
-	Visibility    string   `json:"visibility"`
-	ViewCount     int64    `json:"view_count"`
-	PublishedAt   *string  `json:"published_at"`
-	CreatedAt     string   `json:"created_at"`
-	Author        UserInfo `json:"author"`
-	Tags          []string `json:"tags,omitempty"`
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	Slug          string         `json:"slug"`
+	CoverImageURL string         `json:"cover_image_url"`
+	Summary       string         `json:"summary"`
+	Status        string         `json:"status"`
+	Visibility    string         `json:"visibility"`
+	ViewCount     int64          `json:"view_count"`
+	PublishedAt   *string        `json:"published_at"`
+	CreatedAt     string         `json:"created_at"`
+	Author        PublicUserInfo `json:"author"`
+	Tags          []string       `json:"tags,omitempty"`
 }
 
 type PostDetail struct {
 	PostSummary
-	ContentMD   string   `json:"content_md,omitempty"`
-	ContentHTML string   `json:"content_html"`
-	CategoryID  *int64   `json:"category_id"`
-	AllowComment bool    `json:"allow_comment"`
+	ContentMD      string  `json:"content_md,omitempty"`
+	ContentHTML    string  `json:"content_html"`
+	CategoryID     *int64  `json:"category_id"`
+	AllowComment   bool    `json:"allow_comment"`
 	VisibleUserIDs []int64 `json:"visible_user_ids,omitempty"`
 }
 

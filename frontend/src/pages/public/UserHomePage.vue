@@ -3,10 +3,10 @@ import { onMounted, ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { getUserProfile } from '@/api/users'
 import { listUserPosts } from '@/api/posts'
-import { getMyPins } from '@/api/pins'
+import { getMyPins, getUserPins } from '@/api/pins'
 import { useAuthStore } from '@/stores/auth'
 import { useUserTheme } from '@/composables/useUserTheme'
-import type { UserInfo } from '@/types/auth'
+import type { PublicUserInfo } from '@/types/auth'
 import type { PostSummary, PinnedPost } from '@/types/post'
 import PostList from '@/components/post/PostList.vue'
 import PinCarousel from '@/components/post/PinCarousel.vue'
@@ -15,7 +15,7 @@ import EmptyState from '@/components/common/EmptyState.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
-const user = ref<UserInfo | null>(null)
+const user = ref<PublicUserInfo | null>(null)
 const posts = ref<PostSummary[]>([])
 const pins = ref<PinnedPost[]>([])
 const loading = ref(true)
@@ -38,7 +38,7 @@ const load = async () => {
       listUserPosts(username, page.value, pageSize),
     ]
     if (isOwner.value || theme.value.show_pins_public) {
-      requests.push(getMyPins())
+      requests.push(isOwner.value ? getMyPins() : getUserPins(username))
     }
     const [profile, list, pinsRes] = await Promise.all(requests)
     if (profile.code === 0) user.value = profile.data || null

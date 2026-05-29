@@ -30,6 +30,11 @@ func (p *PostPolicy) CanReadPost(viewerID *int64, post *domain.Post) (bool, erro
 		return true, nil
 	}
 
+	// 非作者只能看已发布且未删除的文章
+	if post.Status != domain.PostStatusPublished || post.IsDeleted {
+		return false, nil
+	}
+
 	switch post.Visibility {
 	case domain.PostVisibilityPublic:
 		return true, nil

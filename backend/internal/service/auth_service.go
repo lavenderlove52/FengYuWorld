@@ -167,3 +167,12 @@ func toUserInfo(user *domain.User, full bool) dto.UserInfo {
 	}
 	return info
 }
+
+// toPublicUserInfo 构建仅含公开字段的用户信息（用于文章 Author 等公开场景）
+func toPublicUserInfo(user *domain.User) dto.PublicUserInfo {
+	return dto.PublicUserInfo{
+		Username:  user.Username,
+		Nickname:  user.Nickname,
+		AvatarURL: user.AvatarURL,
+	}
+}

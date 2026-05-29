@@ -67,8 +67,16 @@ router.beforeEach(async (to, from) => {
   }
 
   // 已登录但用户数据尚未加载（如刷新后），等待获取完整信息后再放行路由
+  // 使用 try/catch 保护：若 access token 过期且无 refresh token，fetchMe 会 reject，
+  // 不加保护时 Vue Router 会中止初始导航并渲染空白页
   if (loggedIn && !useAuthStore().user) {
-    await useAuthStore().fetchMe()
+    try {
+      await useAuthStore().fetchMe()
+    } catch {
+      // token 已失效且无法刷新，清除本地令牌后继续导航（允许访问公开页面）
+      const { clearTokens } = await import('@/api/http')
+      clearTokens()
+    }
   }
 })
 

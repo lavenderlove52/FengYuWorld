@@ -1,3 +1,10 @@
+export interface PublicUserInfo {
+  username: string
+  nickname: string
+  avatar_url: string
+  bio?: string
+}
+
 export interface UserInfo {
   id: number
   username: string

@@ -16,6 +16,9 @@ export const removeSitePin = (postId: number) =>
 export const getMyPins = () =>
   http.get<ApiResponse<PinnedPost[]>>('/me/pins').then((r) => r.data)
 
+export const getUserPins = (username: string) =>
+  http.get<ApiResponse<PinnedPost[]>>(`/users/${username}/pins`).then((r) => r.data)
+
 export const addUserPin = (postId: number) =>
   http.post<ApiResponse<null>>(`/me/posts/${postId}/pin`).then((r) => r.data)
 
