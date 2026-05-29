@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"mime"
@@ -11,6 +12,7 @@ import (
 	"my-blog/backend/internal/dto"
 	"my-blog/backend/internal/repository"
 	"my-blog/backend/internal/storage"
+	"my-blog/backend/internal/util"
 )
 
 var ErrInvalidUpload = errors.New("invalid upload")
@@ -53,7 +55,21 @@ func (s *UploadService) SaveImage(userID int64, filename string, size int64, r i
 		return nil, ErrInvalidUpload
 	}
 
-	result, err := s.storage.Save(userID, filename, r)
+	processed, newExt, err := util.ProcessImage(r, ext)
+	if err != nil {
+		return nil, err
+	}
+
+	// 若扩展名发生变化（如 WebP → .jpg），同步更新 filename 和 mimeType
+	if newExt != ext {
+		base := strings.TrimSuffix(filename, filepath.Ext(filename))
+		filename = base + newExt
+		if m := mime.TypeByExtension(newExt); m != "" {
+			mimeType = m
+		}
+	}
+
+	result, err := s.storage.Save(userID, filename, bytes.NewReader(processed))
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +79,7 @@ func (s *UploadService) SaveImage(userID int64, filename string, size int64, r i
 		Path:      result.Path,
 		URL:       result.URL,
 		Mime:      mimeType,
-		SizeBytes: size,
+		SizeBytes: int64(len(processed)),
 	}
 	if err := s.uploads.Create(upload); err != nil {
 		return nil, err
