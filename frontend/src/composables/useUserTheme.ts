@@ -158,13 +158,14 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
       theme.value = { ...DEFAULT_THEME }
     } finally {
       loading.value = false
-      applyToBody(theme.value)
-      applyToContainer(theme.value)
+      // 用 try/catch 包裹所有 DOM 操作：若任意步骤抛出，不应影响页面内容显示
+      try { applyToBody(theme.value) } catch (e) { console.warn('[useUserTheme] applyToBody failed', e) }
+      try { applyToContainer(theme.value) } catch (e) { console.warn('[useUserTheme] applyToContainer failed', e) }
       if (theme.value.custom_css) {
-        injectCustomCss(username, theme.value.custom_css)
+        try { injectCustomCss(username, theme.value.custom_css) } catch (e) { console.warn('[useUserTheme] injectCustomCss failed', e) }
       }
       if (theme.value.custom_js) {
-        injectCustomJS(username, theme.value.custom_js)
+        try { injectCustomJS(username, theme.value.custom_js) } catch (e) { console.warn('[useUserTheme] injectCustomJS failed', e) }
       }
     }
   }

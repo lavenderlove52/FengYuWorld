@@ -63,7 +63,8 @@ func (h *UserHandler) GetUserPosts(c *gin.Context) {
 		return
 	}
 
-	result, err := h.posts.ListByUsername(username, page, pageSize)
+	viewerID, _ := middleware.GetUserID(c)
+	result, err := h.posts.ListByUsername(viewerID, username, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
 		return
@@ -82,8 +83,7 @@ func (h *UserHandler) GetUserProfile(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
 		return
 	}
-	info := dto.UserInfo{
-		ID:        user.ID,
+	info := dto.PublicUserInfo{
 		Username:  user.Username,
 		Nickname:  user.Nickname,
 		AvatarURL: user.AvatarURL,

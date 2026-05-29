@@ -48,6 +48,15 @@ type UserInfo struct {
 	CreatedAt   time.Time `json:"created_at,omitempty"`
 }
 
+// PublicUserInfo 仅含公开字段，用于公开接口（公开主页、文章作者等）
+type PublicUserInfo struct {
+	ID        int64  `json:"id,omitempty"`
+	Username  string `json:"username"`
+	Nickname  string `json:"nickname"`
+	AvatarURL string `json:"avatar_url"`
+	Bio       string `json:"bio,omitempty"`
+}
+
 type UpdateProfileRequest struct {
 	Nickname  *string `json:"nickname"`
 	AvatarURL *string `json:"avatar_url"`

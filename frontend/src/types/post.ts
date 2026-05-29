@@ -1,4 +1,4 @@
-import type { UserInfo } from './auth'
+import type { PublicUserInfo } from './auth'
 
 export interface PostSummary {
   id: number
@@ -11,7 +11,7 @@ export interface PostSummary {
   view_count: number
   published_at?: string
   created_at: string
-  author: UserInfo
+  author: PublicUserInfo
   tags?: string[]
 }
 

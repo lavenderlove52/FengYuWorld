@@ -72,7 +72,7 @@ func New(cfg *config.Config) (*App, error) {
 	categorySvc := service.NewCategoryService(categoryRepo)
 	tagSvc := service.NewTagService(tagRepo)
 	uploadSvc := service.NewUploadService(localStorage, uploadRepo, cfg.MaxImageSizeMB)
-	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo)
+	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo, friendRepo, policy)
 
 	userThemeRepo := repository.NewUserThemeRepository(database)
 	userThemeSvc := service.NewUserThemeService(userThemeRepo, userRepo)

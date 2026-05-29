@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onMounted, nextTick, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { getPost } from '@/api/posts'
 import { useUserTheme } from '@/composables/useUserTheme'
@@ -17,19 +17,31 @@ const { load: loadTheme } = useUserTheme(containerRef)
 
 onMounted(async () => {
   const id = Number(route.params.id)
+
+  // 第一阶段：加载文章内容，加载结果决定是否显示文章
   try {
     const res = await getPost(id)
     if (res.code === 0 && res.data) {
       post.value = res.data
-      // 加载文章作者的主题
-      await loadTheme(res.data.author.username)
     } else {
       notFound.value = true
     }
   } catch {
     notFound.value = true
   } finally {
+    // 立即结束 loading，让文章内容先渲染出来
     loading.value = false
+  }
+
+  // 第二阶段：文章渲染完毕后再加载主题（containerRef 此时已指向真实 DOM）
+  // 主题加载失败不影响文章内容的展示
+  if (post.value) {
+    await nextTick()
+    try {
+      await loadTheme(post.value.author.username)
+    } catch {
+      // 主题加载失败属于非致命错误，静默忽略
+    }
   }
 })
 </script>

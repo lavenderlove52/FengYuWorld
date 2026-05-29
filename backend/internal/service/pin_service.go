@@ -10,14 +10,18 @@ import (
 	"my-blog/backend/internal/util"
 )
 
-const maxSitePins = 20
+const (
+	maxSitePins = 20
+	maxUserPins = 30
+)
 
 var (
-	ErrPinNotFound      = errors.New("pin not found")
-	ErrPinForbidden     = errors.New("no permission to pin")
-	ErrPinLimitExceeded = errors.New("site pin limit exceeded")
-	ErrAlreadyPinned    = errors.New("already pinned")
-	ErrPinNotOwner      = errors.New("can only pin your own posts")
+	ErrPinNotFound          = errors.New("pin not found")
+	ErrPinForbidden         = errors.New("no permission to pin")
+	ErrPinLimitExceeded     = errors.New("site pin limit exceeded")
+	ErrUserPinLimitExceeded = errors.New("user pin limit exceeded")
+	ErrAlreadyPinned        = errors.New("already pinned")
+	ErrPinNotOwner          = errors.New("can only pin your own posts")
 )
 
 type PinSummary struct {
@@ -27,17 +31,21 @@ type PinSummary struct {
 }
 
 type PinService struct {
-	pins  *repository.PinRepository
-	posts *repository.PostRepository
-	users *repository.UserRepository
+	pins        *repository.PinRepository
+	posts       *repository.PostRepository
+	users       *repository.UserRepository
+	friendships *repository.FriendshipRepository
+	policy      *PostPolicy
 }
 
 func NewPinService(
 	pins *repository.PinRepository,
 	posts *repository.PostRepository,
 	users *repository.UserRepository,
+	friendships *repository.FriendshipRepository,
+	policy *PostPolicy,
 ) *PinService {
-	return &PinService{pins: pins, posts: posts, users: users}
+	return &PinService{pins: pins, posts: posts, users: users, friendships: friendships, policy: policy}
 }
 
 func (s *PinService) GetSitePins() ([]PinSummary, error) {
@@ -122,6 +130,67 @@ func (s *PinService) GetUserPins(userID int64) ([]PinSummary, error) {
 	return result, nil
 }
 
+// GetPublicUserPins 返回指定用户的置顶文章，按 viewerID 的权限过滤不可见文章。
+func (s *PinService) GetPublicUserPins(username string, viewerID *int64) ([]PinSummary, error) {
+	user, err := s.users.FindByUsername(username)
+	if err != nil || user == nil {
+		return nil, ErrUserNotFound
+	}
+	// M4: 锁定账号的置顶对外隐藏，返回空列表而非错误
+	if user.Status == domain.UserStatusLocked {
+		return []PinSummary{}, nil
+	}
+	pins, err := s.pins.GetUserPins(user.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// M3: 预查一次好友关系，避免对每条 post 重复查库
+	var isFriend bool
+	if viewerID != nil && *viewerID != user.ID {
+		isFriend, err = s.friendships.AreFriends(user.ID, *viewerID)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	result := make([]PinSummary, 0, len(pins))
+	for i := range pins {
+		if pins[i].Post == nil {
+			continue
+		}
+		post := pins[i].Post
+
+		// 作者本人可以看到自己所有置顶
+		if viewerID != nil && *viewerID == post.AuthorID {
+			result = append(result, userPinToSummary(&pins[i]))
+			continue
+		}
+
+		// 非作者：只能看已发布且未删除的文章
+		if post.IsDeleted || post.Status != domain.PostStatusPublished {
+			continue
+		}
+
+		switch post.Visibility {
+		case domain.PostVisibilityPublic:
+			result = append(result, userPinToSummary(&pins[i]))
+		case domain.PostVisibilityFriends:
+			if viewerID != nil && isFriend {
+				result = append(result, userPinToSummary(&pins[i]))
+			}
+		case domain.PostVisibilitySpecified:
+			if viewerID != nil {
+				visible, verr := s.posts.IsVisibleToUser(post.ID, *viewerID)
+				if verr == nil && visible {
+					result = append(result, userPinToSummary(&pins[i]))
+				}
+			}
+		}
+	}
+	return result, nil
+}
+
 func (s *PinService) UserPinPost(userID int64, postID int64) error {
 	post, err := s.posts.FindByID(postID)
 	if err != nil || post == nil || post.IsDeleted {
@@ -142,6 +211,9 @@ func (s *PinService) UserPinPost(userID int64, postID int64) error {
 	count, err := s.pins.CountUserPins(userID)
 	if err != nil {
 		return err
+	}
+	if count >= maxUserPins {
+		return ErrUserPinLimitExceeded
 	}
 	return s.pins.AddUserPin(userID, postID, int(count)+1)
 }
@@ -228,7 +300,7 @@ func postToSummaryForPin(post *domain.Post) dto.PostSummary {
 		summary.PublishedAt = &t
 	}
 	if post.Author != nil {
-		summary.Author = toUserInfo(post.Author, false)
+		summary.Author = toPublicUserInfo(post.Author)
 	}
 	return summary
 }

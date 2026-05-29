@@ -102,6 +102,53 @@ func (r *PostRepository) ListPublicByUsername(username string, page util.PagePar
 	return posts, total, err
 }
 
+// ListByUsernameWithViewer 返回指定用户的文章，根据 viewerID 过滤可见性。
+// viewerID == nil：只返回 public；viewerID != nil：返回 public + 好友可见（如果是好友）+ 指定可见（如果在列表中）+ 作者自己的所有 published。
+func (r *PostRepository) ListByUsernameWithViewer(username string, viewerID *int64, page util.PageParams) ([]domain.Post, int64, error) {
+	var posts []domain.Post
+	var total int64
+	q := r.db.Model(&domain.Post{}).
+		Joins("JOIN users ON users.id = posts.author_id").
+		Where("users.username = ?", username).
+		Where("posts.status = ? AND posts.is_deleted = ?", domain.PostStatusPublished, false)
+
+	if viewerID != nil {
+		// 作者本人可看自己所有文章；其他人只能看 active 账号的文章
+		q = q.Where(`(
+			posts.author_id = ? OR
+			(users.status = ? AND (
+				posts.visibility = ? OR
+				(posts.visibility = ? AND EXISTS (
+					SELECT 1 FROM friendships
+					WHERE status = ?
+					AND ((user_id = posts.author_id AND friend_id = ?) OR (user_id = ? AND friend_id = posts.author_id))
+				)) OR
+				(posts.visibility = ? AND EXISTS (
+					SELECT 1 FROM post_visible_users
+					WHERE post_id = posts.id AND user_id = ?
+				))
+			))
+		)`,
+			*viewerID,
+			domain.UserStatusActive,
+			domain.PostVisibilityPublic,
+			domain.PostVisibilityFriends, string(domain.FriendshipStatusAccepted), *viewerID, *viewerID,
+			domain.PostVisibilitySpecified, *viewerID,
+		)
+	} else {
+		q = q.Where("posts.visibility = ? AND users.status = ?", domain.PostVisibilityPublic, domain.UserStatusActive)
+	}
+
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := q.Preload("Author").Preload("Tags").
+		Order("posts.published_at DESC NULLS LAST, posts.id DESC").
+		Offset(util.Offset(page)).Limit(page.PageSize).
+		Find(&posts).Error
+	return posts, total, err
+}
+
 func (r *PostRepository) IncrementViewCount(id int64) error {
 	return r.db.Model(&domain.Post{}).Where("id = ?", id).
 		UpdateColumn("view_count", gorm.Expr("view_count + 1")).Error

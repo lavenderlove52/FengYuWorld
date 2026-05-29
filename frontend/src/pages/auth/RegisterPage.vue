@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, RouterLink } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, useMessage, type FormRules, type FormInst } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { sendEmailCode } from '@/api/auth'
 import { useGeetest } from '@/composables/useGeetest'
@@ -19,6 +19,8 @@ const sending = ref(false)
 const countdown = ref(0)
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
+const formRef = ref<FormInst | null>(null)
+
 const form = ref({
   email: '',
   email_code: '',
@@ -27,6 +29,24 @@ const form = ref({
   password: '',
   invite_code: '',
 })
+
+const formRules: FormRules = {
+  email_code: [{ required: true, message: '请填写邮箱验证码', trigger: ['blur', 'input'] }],
+  username: [
+    { required: true, message: '请填写用户名', trigger: ['blur', 'input'] },
+    { min: 3, max: 50, message: '用户名为 3-50 个字符', trigger: ['blur', 'input'] },
+    { pattern: /^[a-zA-Z0-9_]+$/, message: '仅允许字母、数字和下划线', trigger: ['blur', 'input'] },
+  ],
+  nickname: [
+    { required: true, message: '请填写昵称', trigger: ['blur', 'input'] },
+    { min: 1, max: 80, message: '昵称不能为空且不超过 80 个字符', trigger: ['blur', 'input'] },
+  ],
+  password: [
+    { required: true, message: '请填写密码', trigger: ['blur', 'input'] },
+    { min: 6, message: '密码至少 6 位', trigger: ['blur', 'input'] },
+  ],
+  invite_code: [{ required: true, message: '请填写邀请码', trigger: ['blur', 'input'] }],
+}
 
 const { init, showCaptcha } = useGeetest('geetest-register', GEETEST_CAPTCHA_ID)
 
@@ -107,11 +127,12 @@ const resendCode = async () => {
 }
 
 const submit = async () => {
-  const { email, email_code, username, nickname, password, invite_code } = form.value
-  if (!email_code || !username || !nickname || !password || !invite_code) {
-    message.warning('请填写所有必填项')
+  try {
+    await formRef.value?.validate()
+  } catch {
     return
   }
+  const { email, email_code, username, nickname, password, invite_code } = form.value
   loading.value = true
   try {
     const gt = await showCaptcha()
@@ -187,7 +208,7 @@ const submit = async () => {
 
         <!-- Step 2：完整表单 -->
         <div v-else>
-          <NForm @submit.prevent="submit">
+          <NForm ref="formRef" :model="form" :rules="formRules" @submit.prevent="submit">
 
             <!-- 邮箱（只读展示） -->
             <NFormItem label="邮箱">
@@ -210,7 +231,7 @@ const submit = async () => {
             </NFormItem>
 
             <!-- 邮箱验证码 -->
-            <NFormItem label="邮箱验证码">
+            <NFormItem label="邮箱验证码" path="email_code">
               <div class="flex items-center gap-2 w-full">
                 <NInput
                   v-model:value="form.email_code"
@@ -233,15 +254,15 @@ const submit = async () => {
               </div>
             </NFormItem>
 
-            <NFormItem label="用户名">
+            <NFormItem label="用户名" path="username">
               <NInput v-model:value="form.username" placeholder="3-50 个字符，仅字母数字下划线" size="large" />
             </NFormItem>
 
-            <NFormItem label="昵称">
-              <NInput v-model:value="form.nickname" placeholder="显示给其他用户的名字" size="large" />
+            <NFormItem label="昵称" path="nickname">
+              <NInput v-model:value="form.nickname" placeholder="显示给其他用户的名字（必填）" size="large" />
             </NFormItem>
 
-            <NFormItem label="密码">
+            <NFormItem label="密码" path="password">
               <NInput
                 v-model:value="form.password"
                 type="password"
@@ -251,7 +272,7 @@ const submit = async () => {
               />
             </NFormItem>
 
-            <NFormItem label="邀请码">
+            <NFormItem label="邀请码" path="invite_code">
               <NInput v-model:value="form.invite_code" placeholder="8位邀请码，联系管理员获取" size="large" />
             </NFormItem>
 
