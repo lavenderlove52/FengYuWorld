@@ -11,30 +11,21 @@ import (
 )
 
 type AuthHandler struct {
-	auth            *service.AuthService
-	emailCode       *service.EmailCodeService
-	geetestLogin    *service.GeetestService
-	geetestRegister *service.GeetestService
+	auth      *service.AuthService
+	emailCode *service.EmailCodeService
+	captcha   *service.CaptchaService
 }
 
-func NewAuthHandler(auth *service.AuthService, emailCode *service.EmailCodeService, geetestLogin, geetestRegister *service.GeetestService) *AuthHandler {
-	return &AuthHandler{auth: auth, emailCode: emailCode, geetestLogin: geetestLogin, geetestRegister: geetestRegister}
+func NewAuthHandler(auth *service.AuthService, emailCode *service.EmailCodeService, captcha *service.CaptchaService) *AuthHandler {
+	return &AuthHandler{auth: auth, emailCode: emailCode, captcha: captcha}
 }
 
 func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 	var req struct {
-		Email         string `json:"email" binding:"required,email"`
-		LotNumber     string `json:"lot_number"`
-		CaptchaOutput string `json:"captcha_output"`
-		PassToken     string `json:"pass_token"`
-		GenTime       string `json:"gen_time"`
+		Email string `json:"email" binding:"required,email"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "请求参数错误"))
-		return
-	}
-	if err := h.geetestRegister.Verify(req.LotNumber, req.CaptchaOutput, req.PassToken, req.GenTime); err != nil {
-		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "人机验证失败"))
 		return
 	}
 	if err := h.emailCode.SendCode(req.Email); err != nil {
@@ -55,9 +46,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// GeeTest 验证（注册场景）
-	if err := h.geetestRegister.Verify(req.LotNumber, req.CaptchaOutput, req.PassToken, req.GenTime); err != nil {
-		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "人机验证失败"))
+	if err := h.captcha.Verify(req.CaptchaID, req.CaptchaAnswer); err != nil {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "验证码错误或已过期"))
 		return
 	}
 
@@ -89,9 +79,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	// GeeTest 验证（登录场景）
-	if err := h.geetestLogin.Verify(req.LotNumber, req.CaptchaOutput, req.PassToken, req.GenTime); err != nil {
-		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "人机验证失败"))
+	if err := h.captcha.Verify(req.CaptchaID, req.CaptchaAnswer); err != nil {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "验证码错误或已过期"))
 		return
 	}
 

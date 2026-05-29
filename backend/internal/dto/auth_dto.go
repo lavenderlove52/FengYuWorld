@@ -9,19 +9,15 @@ type RegisterRequest struct {
 	Nickname      string `json:"nickname" binding:"required,min=1,max=80"`
 	EmailCode     string `json:"email_code" binding:"required"`
 	InviteCode    string `json:"invite_code" binding:"required"`
-	LotNumber     string `json:"lot_number"`
-	CaptchaOutput string `json:"captcha_output"`
-	PassToken     string `json:"pass_token"`
-	GenTime       string `json:"gen_time"`
+	CaptchaID     string `json:"captcha_id" binding:"required"`
+	CaptchaAnswer string `json:"captcha_answer" binding:"required"`
 }
 
 type LoginRequest struct {
 	Login         string `json:"login" binding:"required"`
 	Password      string `json:"password" binding:"required"`
-	LotNumber     string `json:"lot_number"`
-	CaptchaOutput string `json:"captcha_output"`
-	PassToken     string `json:"pass_token"`
-	GenTime       string `json:"gen_time"`
+	CaptchaID     string `json:"captcha_id" binding:"required"`
+	CaptchaAnswer string `json:"captcha_answer" binding:"required"`
 }
 
 type RefreshRequest struct {

@@ -4,13 +4,11 @@ import { useRouter, RouterLink } from 'vue-router'
 import { NForm, NFormItem, NInput, NButton, useMessage, type FormRules, type FormInst } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { sendEmailCode } from '@/api/auth'
-import { useGeetest } from '@/composables/useGeetest'
+import { useCaptcha } from '@/composables/useCaptcha'
 
 const router = useRouter()
 const auth = useAuthStore()
 const message = useMessage()
-
-const GEETEST_CAPTCHA_ID = import.meta.env.VITE_GEETEST_REGISTER_CAPTCHA_ID || ''
 
 // 步骤：1 = 邮箱+发验证码，2 = 完整表单
 const step = ref(1)
@@ -30,6 +28,8 @@ const form = ref({
   invite_code: '',
 })
 
+const captchaAnswer = ref('')
+
 const formRules: FormRules = {
   email_code: [{ required: true, message: '请填写邮箱验证码', trigger: ['blur', 'input'] }],
   username: [
@@ -48,9 +48,9 @@ const formRules: FormRules = {
   invite_code: [{ required: true, message: '请填写邀请码', trigger: ['blur', 'input'] }],
 }
 
-const { init, showCaptcha } = useGeetest('geetest-register', GEETEST_CAPTCHA_ID)
+const { captchaId, captchaImage, loading: captchaLoading, refresh: refreshCaptcha } = useCaptcha()
 
-onMounted(() => init())
+onMounted(() => refreshCaptcha())
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const emailError = ref('')
@@ -85,11 +85,7 @@ const sendCode = async () => {
   if (countdown.value > 0) return
   sending.value = true
   try {
-    let gt: import('@/composables/useGeetest').GeetestResult | undefined
-    if (GEETEST_CAPTCHA_ID) {
-      gt = await showCaptcha()
-    }
-    const res = await sendEmailCode(form.value.email, gt)
+    const res = await sendEmailCode(form.value.email)
     if (res.code === 0) {
       message.success('验证码已发送，请查收邮件')
       step.value = 2
@@ -108,11 +104,7 @@ const resendCode = async () => {
   if (countdown.value > 0 || sending.value) return
   sending.value = true
   try {
-    let gt: import('@/composables/useGeetest').GeetestResult | undefined
-    if (GEETEST_CAPTCHA_ID) {
-      gt = await showCaptcha()
-    }
-    const res = await sendEmailCode(form.value.email, gt)
+    const res = await sendEmailCode(form.value.email)
     if (res.code === 0) {
       message.success('验证码已重新发送')
       startCountdown()
@@ -132,15 +124,29 @@ const submit = async () => {
   } catch {
     return
   }
+  if (!captchaAnswer.value) {
+    message.warning('请输入验证码')
+    return
+  }
   const { email, email_code, username, nickname, password, invite_code } = form.value
   loading.value = true
   try {
-    const gt = await showCaptcha()
-    await auth.register({ email, email_code, username, nickname, password, invite_code, ...gt })
+    await auth.register({
+      email,
+      email_code,
+      username,
+      nickname,
+      password,
+      invite_code,
+      captcha_id: captchaId.value,
+      captcha_answer: captchaAnswer.value,
+    })
     message.success('注册成功，欢迎加入！')
     router.push('/dashboard')
   } catch (e: any) {
     message.error(e.message || '注册失败')
+    captchaAnswer.value = ''
+    await refreshCaptcha()
   } finally {
     loading.value = false
   }
@@ -276,8 +282,33 @@ const submit = async () => {
               <NInput v-model:value="form.invite_code" placeholder="8位邀请码，联系管理员获取" size="large" />
             </NFormItem>
 
-            <!-- GeeTest 容器 -->
-            <div id="geetest-register" class="mb-4" />
+            <!-- 图形验证码 -->
+            <NFormItem label="验证码">
+              <div class="flex items-center gap-3 w-full">
+                <NInput
+                  v-model:value="captchaAnswer"
+                  placeholder="输入图中字符"
+                  size="large"
+                  style="flex: 1"
+                />
+                <div
+                  class="flex-shrink-0 cursor-pointer rounded-lg overflow-hidden border border-slate-200 hover:border-indigo-300 transition"
+                  style="height: 40px; width: 120px"
+                  :title="captchaLoading ? '加载中...' : '点击刷新验证码'"
+                  @click="refreshCaptcha"
+                >
+                  <img
+                    v-if="captchaImage"
+                    :src="captchaImage"
+                    alt="验证码"
+                    class="w-full h-full object-cover"
+                  />
+                  <div v-else class="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                    加载中...
+                  </div>
+                </div>
+              </div>
+            </NFormItem>
 
             <NButton
               type="primary"

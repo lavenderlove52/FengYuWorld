@@ -20,15 +20,11 @@ type Config struct {
 	UploadDir           string
 	PublicUploadBaseURL string
 	MaxImageSizeMB      int64
-	SMTPHost                  string
-	SMTPPort                  string
-	SMTPUser                  string
-	SMTPPass                  string
-	SMTPFrom                  string
-	GeetestLoginCaptchaID     string
-	GeetestLoginCaptchaKey    string
-	GeetestRegisterCaptchaID  string
-	GeetestRegisterCaptchaKey string
+	SMTPHost            string
+	SMTPPort            string
+	SMTPUser            string
+	SMTPPass            string
+	SMTPFrom            string
 }
 
 func Load() (*Config, error) {
@@ -43,15 +39,11 @@ func Load() (*Config, error) {
 		UploadDir:           getEnv("UPLOAD_DIR", "./uploads"),
 		PublicUploadBaseURL: getEnv("PUBLIC_UPLOAD_BASE_URL", "/uploads"),
 		MaxImageSizeMB:      getEnvInt64("MAX_IMAGE_SIZE_MB", 5),
-		SMTPHost:                  getEnv("SMTP_HOST", ""),
-		SMTPPort:                  getEnv("SMTP_PORT", "587"),
-		SMTPUser:                  getEnv("SMTP_USER", ""),
-		SMTPPass:                  getEnv("SMTP_PASS", ""),
-		SMTPFrom:                  getEnv("SMTP_FROM", ""),
-		GeetestLoginCaptchaID:     getEnv("GEETEST_LOGIN_CAPTCHA_ID", ""),
-		GeetestLoginCaptchaKey:    getEnv("GEETEST_LOGIN_CAPTCHA_KEY", ""),
-		GeetestRegisterCaptchaID:  getEnv("GEETEST_REGISTER_CAPTCHA_ID", ""),
-		GeetestRegisterCaptchaKey: getEnv("GEETEST_REGISTER_CAPTCHA_KEY", ""),
+		SMTPHost:            getEnv("SMTP_HOST", ""),
+		SMTPPort:            getEnv("SMTP_PORT", "587"),
+		SMTPUser:            getEnv("SMTP_USER", ""),
+		SMTPPass:            getEnv("SMTP_PASS", ""),
+		SMTPFrom:            getEnv("SMTP_FROM", ""),
 	}
 
 	var err error

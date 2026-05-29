@@ -3,16 +3,15 @@ import { ref, onMounted } from 'vue'
 import { useRouter, useRoute, RouterLink } from 'vue-router'
 import { NForm, NFormItem, NInput, NButton, useMessage } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
-import { useGeetest } from '@/composables/useGeetest'
+import { useCaptcha } from '@/composables/useCaptcha'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const message = useMessage()
 
-const GEETEST_CAPTCHA_ID = import.meta.env.VITE_GEETEST_LOGIN_CAPTCHA_ID || ''
-
 const form = ref({ login: '', password: '' })
+const captchaAnswer = ref('')
 const loading = ref(false)
 const loginEmailError = ref('')
 
@@ -27,10 +26,10 @@ const onLoginBlur = () => {
   }
 }
 
-const { init, showCaptcha } = useGeetest('geetest-login', GEETEST_CAPTCHA_ID)
+const { captchaId, captchaImage, loading: captchaLoading, refresh: refreshCaptcha } = useCaptcha()
 
-onMounted(() => {
-  init()
+onMounted(async () => {
+  await refreshCaptcha()
   const reason = route.query.reason
   if (reason === 'inactivity') {
     message.warning('长时间未操作，已自动退出登录')
@@ -48,16 +47,21 @@ const submit = async () => {
     message.warning('请填写完整信息')
     return
   }
+  if (!captchaAnswer.value) {
+    message.warning('请输入验证码')
+    return
+  }
   loading.value = true
   try {
-    const gt = await showCaptcha()
-    await auth.login(form.value.login, form.value.password, gt)
+    await auth.login(form.value.login, form.value.password, captchaId.value, captchaAnswer.value)
     message.success('登录成功')
     const raw = (route.query.redirect as string) || ''
     const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard'
     router.push(redirect)
   } catch (e: any) {
     message.error(e.message || '登录失败')
+    captchaAnswer.value = ''
+    await refreshCaptcha()
   } finally {
     loading.value = false
   }
@@ -98,8 +102,34 @@ const submit = async () => {
             />
           </NFormItem>
 
-          <!-- GeeTest 容器（bind 模式下隐藏，点提交时弹出） -->
-          <div id="geetest-login" class="mb-4" />
+          <!-- 图形验证码 -->
+          <NFormItem label="验证码">
+            <div class="flex items-center gap-3 w-full">
+              <NInput
+                v-model:value="captchaAnswer"
+                placeholder="输入图中字符"
+                size="large"
+                style="flex: 1"
+                @keydown.enter="submit"
+              />
+              <div
+                class="flex-shrink-0 cursor-pointer rounded-lg overflow-hidden border border-slate-200 hover:border-indigo-300 transition"
+                style="height: 40px; width: 120px"
+                :title="captchaLoading ? '加载中...' : '点击刷新验证码'"
+                @click="refreshCaptcha"
+              >
+                <img
+                  v-if="captchaImage"
+                  :src="captchaImage"
+                  alt="验证码"
+                  class="w-full h-full object-cover"
+                />
+                <div v-else class="w-full h-full flex items-center justify-center text-xs text-slate-400">
+                  加载中...
+                </div>
+              </div>
+            </div>
+          </NFormItem>
 
           <NButton
             type="primary"

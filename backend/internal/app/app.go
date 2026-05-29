@@ -59,8 +59,7 @@ func New(cfg *config.Config) (*App, error) {
 	localStorage := storage.NewLocalStorage(cfg.UploadDir, cfg.PublicUploadBaseURL)
 
 	emailSvc := service.NewEmailService(cfg)
-	geetestLoginSvc := service.NewGeetestService(cfg.GeetestLoginCaptchaID, cfg.GeetestLoginCaptchaKey)
-	geetestRegisterSvc := service.NewGeetestService(cfg.GeetestRegisterCaptchaID, cfg.GeetestRegisterCaptchaKey)
+	captchaSvc := service.NewCaptchaService()
 	emailCodeSvc := service.NewEmailCodeService(emailCodeRepo, emailSvc)
 	inviteSvc := service.NewInviteService(inviteCodeRepo)
 
@@ -77,7 +76,8 @@ func New(cfg *config.Config) (*App, error) {
 	userThemeRepo := repository.NewUserThemeRepository(database)
 	userThemeSvc := service.NewUserThemeService(userThemeRepo, userRepo)
 
-	authHandler := handler.NewAuthHandler(authSvc, emailCodeSvc, geetestLoginSvc, geetestRegisterSvc)
+	authHandler := handler.NewAuthHandler(authSvc, emailCodeSvc, captchaSvc)
+	captchaHandler := handler.NewCaptchaHandler(captchaSvc)
 	userHandler := handler.NewUserHandler(userSvc, postSvc)
 	postHandler := handler.NewPostHandler(postSvc)
 	friendHandler := handler.NewFriendshipHandler(friendSvc)
@@ -99,7 +99,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler)
+	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler)
 
 	return &App{
 		Config: cfg,

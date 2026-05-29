@@ -1,8 +1,7 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_GEETEST_LOGIN_CAPTCHA_ID: string
-  readonly VITE_GEETEST_REGISTER_CAPTCHA_ID: string
+  // 可在此声明自定义环境变量
 }
 
 interface ImportMeta {

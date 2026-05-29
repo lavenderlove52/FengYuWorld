@@ -1,6 +1,5 @@
 import http from './http'
 import type { ApiResponse, AuthResponse, UserInfo } from '@/types/auth'
-import type { GeetestResult } from '@/composables/useGeetest'
 
 export interface RegisterPayload {
   username: string
@@ -9,19 +8,20 @@ export interface RegisterPayload {
   nickname: string
   email_code: string
   invite_code: string
-  lot_number: string
-  captcha_output: string
-  pass_token: string
-  gen_time: string
+  captcha_id: string
+  captcha_answer: string
 }
 
 export interface LoginPayload {
   login: string
   password: string
-  lot_number: string
-  captcha_output: string
-  pass_token: string
-  gen_time: string
+  captcha_id: string
+  captcha_answer: string
+}
+
+export interface CaptchaData {
+  id: string
+  image: string
 }
 
 export const register = (payload: RegisterPayload) =>
@@ -30,10 +30,11 @@ export const register = (payload: RegisterPayload) =>
 export const login = (payload: LoginPayload) =>
   http.post<ApiResponse<AuthResponse>>('/auth/login', payload).then((r) => r.data)
 
-export const sendEmailCode = (email: string, geetest?: Partial<GeetestResult>) =>
-  http
-    .post<ApiResponse<null>>('/auth/send-email-code', { email, ...geetest })
-    .then((r) => r.data)
+export const sendEmailCode = (email: string) =>
+  http.post<ApiResponse<null>>('/auth/send-email-code', { email }).then((r) => r.data)
+
+export const getCaptcha = () =>
+  http.get<ApiResponse<CaptchaData>>('/auth/captcha').then((r) => r.data)
 
 export const logout = () => http.post<ApiResponse<null>>('/auth/logout').then((r) => r.data)
 

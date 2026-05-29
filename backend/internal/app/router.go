@@ -11,6 +11,7 @@ func registerRoutes(
 	r *gin.Engine,
 	authMW *middleware.AuthMiddleware,
 	auth *handler.AuthHandler,
+	captcha *handler.CaptchaHandler,
 	users *handler.UserHandler,
 	posts *handler.PostHandler,
 	friends *handler.FriendshipHandler,
@@ -28,6 +29,7 @@ func registerRoutes(
 
 		authGroup := api.Group("/auth")
 		{
+			authGroup.GET("/captcha", captcha.GetCaptcha)
 			authGroup.POST("/send-email-code", auth.SendEmailCode)
 			authGroup.POST("/register", auth.Register)
 			authGroup.POST("/login", auth.Login)

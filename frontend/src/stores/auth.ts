@@ -25,8 +25,8 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const login = async (login: string, password: string, geetest: { lot_number: string; captcha_output: string; pass_token: string; gen_time: string }) => {
-    const res = await authApi.login({ login, password, ...geetest })
+  const login = async (login: string, password: string, captchaId: string, captchaAnswer: string) => {
+    const res = await authApi.login({ login, password, captcha_id: captchaId, captcha_answer: captchaAnswer })
     if (res.code !== 0 || !res.data) {
       throw new Error(res.message || '登录失败')
     }
@@ -44,10 +44,8 @@ export const useAuthStore = defineStore('auth', () => {
     nickname: string
     email_code: string
     invite_code: string
-    lot_number: string
-    captcha_output: string
-    pass_token: string
-    gen_time: string
+    captcha_id: string
+    captcha_answer: string
   }) => {
     const res = await authApi.register(payload)
     if (res.code !== 0 || !res.data) {
