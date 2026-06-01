@@ -102,11 +102,16 @@ func (m *AuthMiddleware) lookupUser(uid int64) (cachedUser, error) {
 }
 
 func (m *AuthMiddleware) parseBearer(c *gin.Context) (int64, string, bool) {
+	var token string
 	auth := c.GetHeader("Authorization")
-	if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
+	if auth != "" && strings.HasPrefix(auth, "Bearer ") {
+		token = strings.TrimPrefix(auth, "Bearer ")
+	} else if q := c.Query("token"); q != "" {
+		// WebSocket 握手时浏览器无法设置自定义 Header，退而通过 ?token= query param 传递
+		token = q
+	} else {
 		return 0, "", false
 	}
-	token := strings.TrimPrefix(auth, "Bearer ")
 	claims, err := m.jwt.ParseAccessToken(token)
 	if err != nil {
 		return 0, "", false

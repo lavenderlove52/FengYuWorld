@@ -13,10 +13,10 @@ import (
 )
 
 var (
-	ErrInviteCodeInvalid   = errors.New("invite code invalid")
-	ErrInviteCodeUsed      = errors.New("invite code already used")
-	ErrInviteCodeExpired   = errors.New("invite code expired")
-	ErrInviteCodeNotFound  = errors.New("invite code not found or already used")
+	ErrInviteCodeInvalid  = errors.New("invite code invalid")
+	ErrInviteCodeUsed     = errors.New("invite code already used")
+	ErrInviteCodeExpired  = errors.New("invite code expired")
+	ErrInviteCodeNotFound = errors.New("invite code not found or already used")
 )
 
 const inviteCodeCharset = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

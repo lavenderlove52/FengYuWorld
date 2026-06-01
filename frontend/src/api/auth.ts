@@ -36,6 +36,17 @@ export const sendEmailCode = (email: string) =>
 export const getCaptcha = () =>
   http.get<ApiResponse<CaptchaData>>('/auth/captcha').then((r) => r.data)
 
+export interface ResetPasswordPayload {
+  email: string
+  email_code: string
+  new_password: string
+  captcha_id: string
+  captcha_answer: string
+}
+
+export const resetPassword = (payload: ResetPasswordPayload) =>
+  http.post<ApiResponse<null>>('/auth/reset-password', payload).then((r) => r.data)
+
 export const logout = () => http.post<ApiResponse<null>>('/auth/logout').then((r) => r.data)
 
 export const getMe = () => http.get<ApiResponse<UserInfo>>('/users/me').then((r) => r.data)

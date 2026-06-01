@@ -137,6 +137,22 @@ func (s *AuthService) Refresh(refreshToken string) (*dto.AuthResponse, error) {
 	return s.buildAuthResponse(user)
 }
 
+// ResetPassword 用邮箱验证码重置密码
+func (s *AuthService) ResetPassword(email, emailCode, newPassword string) error {
+	user, err := s.users.FindByEmail(email)
+	if err != nil || user == nil {
+		return ErrUserNotFound
+	}
+	if err := s.emailCodeSvc.VerifyAndConsume(email, emailCode); err != nil {
+		return ErrCodeInvalid
+	}
+	hash, err := util.HashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+	return s.users.UpdatePassword(user.ID, hash)
+}
+
 func (s *AuthService) buildAuthResponse(user *domain.User) (*dto.AuthResponse, error) {
 	tokens, err := s.jwt.GenerateTokenPair(user.ID, user.Username)
 	if err != nil {

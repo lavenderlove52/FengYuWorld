@@ -117,3 +117,28 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.OK(nil))
 }
+
+// ResetPassword POST /api/auth/reset-password
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req dto.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "请求参数错误"))
+		return
+	}
+	if err := h.captcha.Verify(req.CaptchaID, req.CaptchaAnswer); err != nil {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "验证码错误或已过期"))
+		return
+	}
+	if err := h.auth.ResetPassword(req.Email, req.EmailCode, req.NewPassword); err != nil {
+		switch {
+		case errors.Is(err, service.ErrUserNotFound):
+			c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "该邮箱未注册"))
+		case errors.Is(err, service.ErrCodeInvalid):
+			c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "邮箱验证码错误或已过期"))
+		default:
+			c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		}
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(nil))
+}

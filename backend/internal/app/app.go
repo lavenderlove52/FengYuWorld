@@ -16,6 +16,7 @@ import (
 	"my-blog/backend/internal/service"
 	"my-blog/backend/internal/storage"
 	"my-blog/backend/internal/util"
+	"my-blog/backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -91,6 +92,11 @@ func New(cfg *config.Config) (*App, error) {
 
 	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database, middleware.NewUserCache())
 
+	hub := ws.NewHub()
+	msgRepo := repository.NewMessageRepository(database)
+	wsHandler := handler.NewWSHandler(hub, msgRepo, friendRepo)
+	chatHandler := handler.NewChatHandler(msgRepo, friendRepo)
+
 	router := gin.New()
 	router.Use(gin.Logger(), middleware.ErrorRecovery(), middleware.CORS())
 
@@ -99,7 +105,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler)
+	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, wsHandler, chatHandler)
 
 	return &App{
 		Config: cfg,

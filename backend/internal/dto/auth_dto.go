@@ -53,6 +53,14 @@ type PublicUserInfo struct {
 	Bio       string `json:"bio,omitempty"`
 }
 
+type ResetPasswordRequest struct {
+	Email         string `json:"email" binding:"required,email"`
+	EmailCode     string `json:"email_code" binding:"required"`
+	NewPassword   string `json:"new_password" binding:"required,min=6,max=72"`
+	CaptchaID     string `json:"captcha_id" binding:"required"`
+	CaptchaAnswer string `json:"captcha_answer" binding:"required"`
+}
+
 type UpdateProfileRequest struct {
 	Nickname  *string `json:"nickname"`
 	AvatarURL *string `json:"avatar_url"`

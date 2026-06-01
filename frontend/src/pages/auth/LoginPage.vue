@@ -142,10 +142,11 @@ const submit = async () => {
           </NButton>
         </NForm>
 
-        <p class="mt-5 text-sm text-center text-slate-400">
-          还没有账号？
-          <RouterLink to="/register" class="text-indigo-500 hover:text-indigo-600 font-medium">立即注册</RouterLink>
-        </p>
+        <div class="mt-5 flex items-center justify-center gap-4 text-sm text-slate-400">
+          <RouterLink to="/forgot-password" class="hover:text-indigo-500 transition-colors">忘记密码？</RouterLink>
+          <span class="text-slate-200">|</span>
+          <span>还没有账号？<RouterLink to="/register" class="text-indigo-500 hover:text-indigo-600 font-medium">立即注册</RouterLink></span>
+        </div>
       </div>
     </div>
   </div>

@@ -68,6 +68,10 @@ func (r *UserRepository) ExistsByUsernameOrEmail(username, email string) (bool, 
 	return count > 0, err
 }
 
+func (r *UserRepository) UpdatePassword(userID int64, hash string) error {
+	return r.db.Model(&domain.User{}).Where("id = ?", userID).Update("password_hash", hash).Error
+}
+
 func (r *UserRepository) UpdateCanCustomJS(userID int64, value bool) error {
 	return r.db.Model(&domain.User{}).Where("id = ?", userID).Update("can_custom_js", value).Error
 }

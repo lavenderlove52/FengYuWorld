@@ -22,6 +22,8 @@ func registerRoutes(
 	pins *handler.PinHandler,
 	invite *handler.InviteHandler,
 	theme *handler.UserThemeHandler,
+	wsHandler *handler.WSHandler,
+	chat *handler.ChatHandler,
 ) {
 	api := r.Group("/api")
 	{
@@ -35,6 +37,7 @@ func registerRoutes(
 			authGroup.POST("/login", auth.Login)
 			authGroup.POST("/refresh", auth.Refresh)
 			authGroup.POST("/logout", auth.Logout)
+			authGroup.POST("/reset-password", auth.ResetPassword)
 		}
 
 		api.GET("/posts/public", posts.ListPublic)
@@ -77,6 +80,11 @@ func registerRoutes(
 
 			authed.POST("/uploads/image", uploads.UploadImage)
 			authed.POST("/uploads/avatar", uploads.UploadAvatar)
+
+			authed.GET("/ws/chat", wsHandler.HandleWS)
+			authed.GET("/chat/unread", chat.GetUnreadCounts)
+			authed.GET("/chat/:friend_id", chat.GetHistory)
+			authed.POST("/chat/:friend_id/read", chat.MarkRead)
 
 			authed.POST("/pins/site/:post_id", pins.SitePinPost)
 			authed.DELETE("/pins/site/:post_id", pins.SiteUnpinPost)
