@@ -50,7 +50,7 @@ const logout = async () => {
   <NLayout has-sider class="min-h-screen">
     <NLayoutSider bordered width="220" class="bg-white">
       <div class="p-4 border-b">
-        <RouterLink to="/" class="font-bold text-lg text-indigo-600">My Blog</RouterLink>
+        <RouterLink to="/" class="font-bold text-lg text-indigo-600">首页</RouterLink>
       </div>
       <NMenu :value="activeKey" :options="menuOptions" />    </NLayoutSider>
     <NLayout>
