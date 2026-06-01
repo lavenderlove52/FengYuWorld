@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, NSpace, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NSpace, NSelect, NCollapse, NCollapseItem, useMessage } from 'naive-ui'
 import { createPost, getPost, updatePost } from '@/api/posts'
-import { listCategories } from '@/api/categories'
+import { listCategories, createCategory } from '@/api/categories'
 import type { Category } from '@/types/category'
 import type { CreatePostPayload, PostVisibility } from '@/types/post'
 import MarkdownEditor from '@/components/post/MarkdownEditor.vue'
@@ -34,6 +34,55 @@ const tagInput = ref('')
 const categories = ref<Category[]>([])
 const loading = ref(false)
 
+// 新建分类
+const showNewCat = ref(false)
+const newCatName = ref('')
+const addingCat = ref(false)
+
+const openNewCat = () => {
+  newCatName.value = ''
+  showNewCat.value = true
+}
+
+const cancelNewCat = () => {
+  showNewCat.value = false
+  newCatName.value = ''
+}
+
+const submitNewCat = async () => {
+  const name = newCatName.value.trim()
+  if (!name) {
+    message.warning('分类名称不能为空')
+    return
+  }
+  addingCat.value = true
+  try {
+    const res = await createCategory({ name })
+    if (res.code === 0 && res.data) {
+      categories.value.push(res.data)
+      form.value.category_id = res.data.id
+      message.success(`分类「${res.data.name}」已创建`)
+      showNewCat.value = false
+      newCatName.value = ''
+    } else {
+      message.error(res.message || '创建失败')
+    }
+  } finally {
+    addingCat.value = false
+  }
+}
+
+const categoryOptions = computed(() => [
+  { label: '无分类', value: undefined as number | undefined },
+  ...categories.value.map((c) => ({ label: c.name, value: c.id as number | undefined })),
+])
+const slugWarning = computed(() => {
+  const s = form.value.slug?.trim()
+  if (!s) return ''
+  if (!/^[a-z0-9-]+$/.test(s)) return '只允许小写字母、数字和连字符'
+  return ''
+})
+
 onMounted(async () => {
   const catRes = await listCategories()
   if (catRes.code === 0 && catRes.data) categories.value = catRes.data
@@ -59,14 +108,21 @@ onMounted(async () => {
   }
 })
 
-const buildPayload = (status: 'draft' | 'published'): CreatePostPayload => ({
-  ...form.value,
-  status,
-  tag_names: tagInput.value
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean),
-})
+const buildPayload = (status: 'draft' | 'published'): CreatePostPayload => {
+  const payload: CreatePostPayload = {
+    ...form.value,
+    status,
+    tag_names: tagInput.value
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+  }
+  // 未填 slug 则不传，由后端自动生成
+  if (!payload.slug?.trim()) {
+    delete payload.slug
+  }
+  return payload
+}
 
 const validate = () => {
   if (!form.value.title.trim()) {
@@ -111,17 +167,38 @@ const save = async (status: 'draft' | 'published') => {
       <NFormItem label="标题">
         <NInput v-model:value="form.title" placeholder="文章标题" />
       </NFormItem>
-      <NFormItem label="Slug（可选）">
-        <NInput v-model:value="form.slug" placeholder="url-slug" />
-      </NFormItem>
       <NFormItem label="封面">
         <ImageUploader v-model="form.cover_image_url" />
       </NFormItem>
       <NFormItem label="分类">
-        <select v-model="form.category_id" class="border rounded px-3 py-2 w-full">
-          <option :value="undefined">无分类</option>
-          <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-        </select>
+        <div class="w-full flex items-center gap-2">
+          <NSelect
+            v-model:value="form.category_id"
+            :options="categoryOptions"
+            placeholder="无分类"
+            clearable
+            class="flex-1"
+          />
+          <button
+            type="button"
+            title="新建分类"
+            class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded border border-dashed border-slate-400 text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-colors text-lg leading-none"
+            @click="openNewCat"
+          >+</button>
+        </div>
+        <!-- 内联新建分类 -->
+        <div v-if="showNewCat" class="flex items-center gap-2 mt-2 w-full">
+          <NInput
+            v-model:value="newCatName"
+            placeholder="输入分类名称"
+            size="small"
+            class="flex-1"
+            @keyup.enter="submitNewCat"
+            @keyup.esc="cancelNewCat"
+          />
+          <NButton size="small" type="primary" :loading="addingCat" @click="submitNewCat">确认</NButton>
+          <NButton size="small" @click="cancelNewCat">取消</NButton>
+        </div>
       </NFormItem>
       <NFormItem label="标签（逗号分隔）">
         <NInput v-model:value="tagInput" placeholder="生活, 随笔" />
@@ -135,6 +212,18 @@ const save = async (status: 'draft' | 'published') => {
       <NFormItem label="正文">
         <MarkdownEditor v-model="form.content_md" />
       </NFormItem>
+      <!-- 高级选项（折叠） -->
+      <NCollapse class="mb-4">
+        <NCollapseItem title="高级选项" name="advanced">
+          <NFormItem label="链接标识（Slug）" style="margin-bottom:0">
+            <div class="w-full">
+              <NInput v-model:value="form.slug" placeholder="留空则自动根据标题生成" />
+              <p v-if="slugWarning" class="mt-1 text-xs text-red-400">{{ slugWarning }}</p>
+              <p v-else class="mt-1 text-xs text-slate-400">可选，留空则自动生成；只允许小写字母、数字和连字符</p>
+            </div>
+          </NFormItem>
+        </NCollapseItem>
+      </NCollapse>
       <NSpace>
         <NButton :loading="loading" @click="save('draft')">保存草稿</NButton>
         <NButton type="primary" :loading="loading" @click="save('published')">发布</NButton>

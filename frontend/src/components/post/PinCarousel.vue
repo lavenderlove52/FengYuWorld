@@ -45,11 +45,30 @@ onUnmounted(stopTimer)
   >
     <RouterLink :to="`/p/${post?.id}`" class="block">
       <transition name="content-fade" mode="out-in">
-        <div :key="current" class="flex items-stretch min-h-[220px]">
+        <div :key="current" class="flex flex-col sm:flex-row sm:items-stretch">
 
-          <!-- 左侧：文字内容 -->
-          <div class="flex-1 flex flex-col justify-center px-10 py-8 min-w-0">
-            <div class="flex items-center gap-2 mb-4">
+          <!-- 移动端封面图（顶部） / 桌面端右侧 -->
+          <div class="sm:hidden h-40 relative overflow-hidden">
+            <img
+              v-if="post?.cover_image_url"
+              :src="post.cover_image_url"
+              :alt="post?.title"
+              class="absolute inset-0 w-full h-full object-cover"
+            />
+            <div
+              v-else
+              class="absolute inset-0 flex flex-col items-center justify-center bg-slate-200 gap-2"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" class="w-8 h-8 text-slate-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+              </svg>
+              <span class="text-xs text-slate-300">暂无封面</span>
+            </div>
+          </div>
+
+          <!-- 文字内容 -->
+          <div class="flex-1 flex flex-col justify-center px-5 py-5 sm:px-10 sm:py-8 min-w-0">
+            <div class="flex items-center gap-2 mb-3 sm:mb-4">
               <span class="text-[11px] font-semibold tracking-widest text-slate-400 uppercase">置顶</span>
               <span class="w-4 h-px bg-slate-300" />
               <span class="text-[11px] text-slate-400">{{ post?.author?.nickname }}</span>
@@ -57,11 +76,11 @@ onUnmounted(stopTimer)
               <span class="text-[11px] text-slate-400">{{ formatDate(post?.published_at || post?.created_at || '') }}</span>
             </div>
 
-            <h2 class="text-2xl font-bold text-slate-800 leading-snug mb-3 line-clamp-2">
+            <h2 class="text-lg sm:text-2xl font-bold text-slate-800 leading-snug mb-2 sm:mb-3 line-clamp-2">
               {{ post?.title }}
             </h2>
 
-            <p class="text-slate-500 text-sm leading-relaxed line-clamp-2 mb-5 max-w-lg">
+            <p class="text-slate-500 text-sm leading-relaxed line-clamp-2 mb-4 sm:mb-5 sm:max-w-lg">
               {{ post?.summary }}
             </p>
 
@@ -82,8 +101,8 @@ onUnmounted(stopTimer)
             </div>
           </div>
 
-          <!-- 右侧：封面图 -->
-          <div class="w-72 flex-shrink-0 relative overflow-hidden">
+          <!-- 桌面端右侧封面图（sm 以上显示） -->
+          <div class="hidden sm:block w-72 flex-shrink-0 relative overflow-hidden">
             <img
               v-if="post?.cover_image_url"
               :src="post.cover_image_url"

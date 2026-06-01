@@ -2,6 +2,8 @@ package service
 
 import (
 	"errors"
+	"fmt"
+	"regexp"
 	"time"
 
 	"my-blog/backend/internal/domain"
@@ -16,6 +18,8 @@ var (
 	ErrPostForbidden   = errors.New("post forbidden")
 	ErrInvalidPostData = errors.New("invalid post data")
 )
+
+var slugValidRe = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 type PostService struct {
 	posts       *repository.PostRepository
@@ -54,9 +58,15 @@ func (s *PostService) Create(authorID int64, req dto.CreatePostRequest) (*dto.Po
 		return nil, err
 	}
 
-	slug := req.Slug
-	if slug == "" {
-		slug = util.Slugify(req.Title)
+	baseSlug := req.Slug
+	if baseSlug == "" {
+		baseSlug = util.Slugify(req.Title)
+	} else if !slugValidRe.MatchString(baseSlug) {
+		return nil, ErrInvalidPostData
+	}
+	slug, needPostID, err := s.resolveUniqueSlug(baseSlug, 0)
+	if err != nil {
+		return nil, err
 	}
 
 	allowComment := true
@@ -85,6 +95,14 @@ func (s *PostService) Create(authorID int64, req dto.CreatePostRequest) (*dto.Po
 	if err := s.posts.Create(tx, post); err != nil {
 		tx.Rollback()
 		return nil, err
+	}
+	// 所有候选 slug 均被占用时，用 slug-{postID} 作为最终回退
+	if needPostID {
+		post.Slug = fmt.Sprintf("%s-%d", baseSlug, post.ID)
+		if err := tx.Model(&domain.Post{}).Where("id = ?", post.ID).Update("slug", post.Slug).Error; err != nil {
+			tx.Rollback()
+			return nil, err
+		}
 	}
 
 	tags, err := s.tags.FindOrCreateByNames(tx, authorID, req.TagNames)
@@ -133,9 +151,18 @@ func (s *PostService) Update(authorID, postID int64, req dto.UpdatePostRequest) 
 		return nil, err
 	}
 
-	slug := req.Slug
-	if slug == "" {
-		slug = util.Slugify(req.Title)
+	baseSlug := req.Slug
+	if baseSlug == "" {
+		baseSlug = util.Slugify(req.Title)
+	} else if !slugValidRe.MatchString(baseSlug) {
+		return nil, ErrInvalidPostData
+	}
+	slug, needPostID, err := s.resolveUniqueSlug(baseSlug, post.ID)
+	if err != nil {
+		return nil, err
+	}
+	if needPostID {
+		slug = fmt.Sprintf("%s-%d", baseSlug, post.ID)
 	}
 
 	allowComment := post.AllowComment
@@ -356,4 +383,54 @@ func deref(id *int64) int64 {
 		return 0
 	}
 	return *id
+}
+
+// GetBySlug 通过 slug 查询文章（校验可见性）
+func (s *PostService) GetBySlug(slug string, viewerID *int64) (*dto.PostDetail, error) {
+	post, err := s.posts.FindBySlug(slug)
+	if err != nil || post == nil {
+		return nil, ErrPostNotFound
+	}
+
+	canRead, err := s.policy.CanReadPost(viewerID, post)
+	if err != nil {
+		return nil, err
+	}
+	if !canRead {
+		return nil, ErrPostNotFound
+	}
+
+	isAuthor := viewerID != nil && *viewerID == post.AuthorID
+	if post.Status == domain.PostStatusPublished && !post.IsDeleted {
+		_ = s.posts.IncrementViewCount(post.ID)
+		post.ViewCount++
+	}
+	return s.toDetail(post, deref(viewerID), isAuthor), nil
+}
+
+// resolveUniqueSlug 找到 base 的第一个可用候选 slug（排除 excludeID 自身）。
+// 依次尝试 base、base-2 … base-10；若全部被占用则返回 (base, true, nil)，
+// 调用方应在知道 postID 后拼接 base-{postID}。
+func (s *PostService) resolveUniqueSlug(base string, excludeID int64) (string, bool, error) {
+	if base == "" {
+		return "", false, nil
+	}
+	exists, err := s.posts.SlugExists(base, excludeID)
+	if err != nil {
+		return "", false, err
+	}
+	if !exists {
+		return base, false, nil
+	}
+	for i := 2; i <= 10; i++ {
+		candidate := fmt.Sprintf("%s-%d", base, i)
+		exists, err = s.posts.SlugExists(candidate, excludeID)
+		if err != nil {
+			return "", false, err
+		}
+		if !exists {
+			return candidate, false, nil
+		}
+	}
+	return base, true, nil
 }

@@ -154,9 +154,9 @@ const submit = async () => {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-[#f8fafc]">
+  <div class="min-h-screen flex items-center justify-center bg-[#f8fafc] px-4 sm:px-6">
     <div class="w-full max-w-md">
-      <div class="text-center mb-8">
+      <div class="text-center mb-6 sm:mb-8">
         <h1 class="text-2xl font-bold text-slate-800">创建账号</h1>
         <p class="text-slate-400 text-sm mt-1">加入风雨世界，开始记录你的故事</p>
       </div>
@@ -176,7 +176,7 @@ const submit = async () => {
         </div>
       </div>
 
-      <div class="bg-white rounded-2xl border border-slate-100 p-8">
+      <div class="bg-white rounded-2xl border border-slate-100 p-6 sm:p-8">
 
         <!-- Step 1：邮箱 -->
         <div v-if="step === 1">

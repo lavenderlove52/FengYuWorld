@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { PostSummary } from '@/types/post'
 
-defineProps<{ post: PostSummary }>()
+const props = defineProps<{ post: PostSummary }>()
 
 const visibilityLabel: Record<string, string> = {
   public: '公开',
@@ -15,12 +16,16 @@ const formatDate = (dateStr: string) => {
   if (!dateStr) return ''
   return dateStr.slice(0, 10)
 }
+
+const postPath = computed(() =>
+  props.post.slug ? `/p/${props.post.slug}` : `/p/${props.post.id}`
+)
 </script>
 
 <template>
   <article class="py-7 group">
-    <RouterLink :to="`/p/${post.id}`" class="block">
-      <div v-if="post.cover_image_url" class="h-44 overflow-hidden rounded-lg mb-4 bg-slate-100">
+    <RouterLink :to="postPath" class="block">
+      <div v-if="post.cover_image_url" class="h-36 sm:h-44 overflow-hidden rounded-lg mb-4 bg-slate-100">
         <img
           :src="post.cover_image_url"
           :alt="post.title"
@@ -28,7 +33,7 @@ const formatDate = (dateStr: string) => {
         />
       </div>
 
-      <h2 class="text-xl font-bold text-slate-800 leading-snug mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors duration-200">
+      <h2 class="text-lg sm:text-xl font-bold text-slate-800 leading-snug mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors duration-200">
         {{ post.title }}
       </h2>
 

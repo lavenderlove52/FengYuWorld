@@ -123,6 +123,28 @@ func (h *PostHandler) Delete(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.OK(nil))
 }
 
+func (h *PostHandler) GetBySlug(c *gin.Context) {
+	slug := c.Param("slug")
+	if slug == "" {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "请求参数错误"))
+		return
+	}
+	var viewerID *int64
+	if uid, ok := middleware.GetUserID(c); ok {
+		viewerID = uid
+	}
+	post, err := h.posts.GetBySlug(slug, viewerID)
+	if err == service.ErrPostNotFound {
+		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "资源不存在"))
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(post))
+}
+
 func (h *PostHandler) ListMine(c *gin.Context) {
 	userID := middleware.MustUserID(c)
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))

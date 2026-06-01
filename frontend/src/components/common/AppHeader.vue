@@ -27,12 +27,12 @@ const headerText = computed(() => activePageTheme.enabled ? activePageTheme.text
       color: headerText,
     }"
   >
-    <div class="w-full px-6 h-14 flex items-center justify-between">
+    <div class="w-full px-4 sm:px-6 h-14 flex items-center justify-between">
       <RouterLink to="/">
         <img :src="logoUrl" alt="风雨世界" class="h-9 w-auto object-contain" />
       </RouterLink>
-      <div class="flex items-center gap-2">
-        <RouterLink v-if="hasToken" to="/dashboard">
+      <div class="flex items-center gap-1 sm:gap-2">
+        <RouterLink v-if="hasToken" to="/dashboard" class="p-1.5 rounded-full">
           <div
             class="w-9 h-9 rounded-full overflow-hidden border flex items-center justify-center hover:opacity-80 transition-opacity cursor-pointer"
             :style="{ borderColor: headerBorder || '#d1d5db', backgroundColor: '#e5e7eb' }"

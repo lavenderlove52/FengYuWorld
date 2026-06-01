@@ -67,25 +67,25 @@ onMounted(async () => {
     <template v-else-if="user">
 
       <!-- Banner -->
-      <div v-if="theme.banner_url" class="w-full h-48 overflow-hidden mb-8 rounded-xl -mx-0">
+      <div v-if="theme.banner_url" class="w-full h-36 sm:h-48 overflow-hidden mb-6 sm:mb-8 rounded-xl -mx-0">
         <img :src="theme.banner_url" class="w-full h-full object-cover" alt="banner" />
       </div>
 
       <!-- 用户信息头 -->
-      <div class="flex items-center gap-5 mb-8 pb-8" style="border-bottom: 1px solid var(--theme-border, #e2e8f0)">
-        <div class="w-16 h-16 rounded-full overflow-hidden flex-shrink-0" style="background: var(--theme-card-bg, #f1f5f9)">
+      <div class="flex items-center gap-4 sm:gap-5 mb-6 sm:mb-8 pb-6 sm:pb-8" style="border-bottom: 1px solid var(--theme-border, #e2e8f0)">
+        <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden flex-shrink-0" style="background: var(--theme-card-bg, #f1f5f9)">
           <img
             v-if="user.avatar_url"
             :src="user.avatar_url"
             class="w-full h-full object-cover"
             :alt="user.nickname"
           />
-          <div v-else class="w-full h-full flex items-center justify-center text-2xl font-bold" style="color: var(--theme-accent, #6366f1)">
+          <div v-else class="w-full h-full flex items-center justify-center text-xl sm:text-2xl font-bold" style="color: var(--theme-accent, #6366f1)">
             {{ user.nickname?.[0]?.toUpperCase() }}
           </div>
         </div>
         <div>
-          <h1 class="text-2xl font-bold" style="color: var(--theme-text, #0f172a)">{{ user.nickname }}</h1>
+          <h1 class="text-xl sm:text-2xl font-bold" style="color: var(--theme-text, #0f172a)">{{ user.nickname }}</h1>
           <p class="text-sm mt-0.5" style="color: var(--theme-text, #64748b); opacity: 0.6">@{{ user.username }}</p>
           <p v-if="user.bio" class="mt-2 text-sm leading-relaxed" style="color: var(--theme-text, #64748b); opacity: 0.8">{{ user.bio }}</p>
         </div>
@@ -102,7 +102,7 @@ onMounted(async () => {
 
       <!-- 文章列表 -->
       <div class="flex items-baseline justify-between mb-6">
-        <h2 class="text-xl font-bold" style="color: var(--theme-text, #0f172a)">
+        <h2 class="text-lg sm:text-xl font-bold" style="color: var(--theme-text, #0f172a)">
           {{ isOwner ? '我的文章' : `${user.nickname} 的文章` }}
         </h2>
         <span class="text-sm" style="color: var(--theme-text, #94a3b8); opacity: 0.7">共 {{ total }} 篇</span>

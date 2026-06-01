@@ -15,6 +15,9 @@ export const searchPublicPosts = (keyword: string, page = 1, pageSize = 20) =>
 export const getPost = (id: number) =>
   http.get<ApiResponse<PostDetail>>(`/posts/${id}`).then((r) => r.data)
 
+export const getPostBySlug = (slug: string) =>
+  http.get<ApiResponse<PostDetail>>(`/posts/slug/${slug}`).then((r) => r.data)
+
 export const createPost = (payload: CreatePostPayload) =>
   http.post<ApiResponse<PostDetail>>('/posts', payload).then((r) => r.data)
 

@@ -22,11 +22,11 @@ const rows = computed(() => {
   <div v-if="loading" class="text-center py-12 text-slate-500">加载中...</div>
   <EmptyState v-else-if="!posts.length" />
 
-  <!-- grid 布局：4列 -->
+  <!-- grid 布局：移动 1 列 → 平板 2 列 → 桌面 4 列 -->
   <div v-else-if="currentLayout === 'grid'">
     <template v-for="(row, rowIndex) in rows" :key="rowIndex">
       <hr v-if="rowIndex > 0" class="border-0 border-t" style="border-color: var(--theme-border, #e2e8f0)" />
-      <div class="grid grid-cols-4 gap-x-10">
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-8 lg:gap-x-10">
         <PostCard v-for="post in row" :key="post.id" :post="post" />
       </div>
     </template>
@@ -40,8 +40,8 @@ const rows = computed(() => {
       class="border-b py-5"
       style="border-color: var(--theme-border, #e2e8f0)"
     >
-      <a :href="`/p/${post.id}`" class="flex gap-5 items-start group">
-        <div v-if="post.cover_image_url" class="w-32 h-24 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100">
+      <a :href="`/p/${post.id}`" class="flex gap-4 items-start group">
+        <div v-if="post.cover_image_url" class="w-24 h-18 sm:w-32 sm:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100">
           <img :src="post.cover_image_url" :alt="post.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         </div>
         <div class="flex-1 min-w-0">
@@ -59,8 +59,8 @@ const rows = computed(() => {
     </div>
   </div>
 
-  <!-- magazine 布局：杂志双栏 -->
-  <div v-else-if="currentLayout === 'magazine'" class="grid grid-cols-2 gap-8">
+  <!-- magazine 布局：移动 1 列 → 桌面 2 列 -->
+  <div v-else-if="currentLayout === 'magazine'" class="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
     <a
       v-for="post in posts"
       :key="post.id"

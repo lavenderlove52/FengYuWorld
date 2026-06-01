@@ -190,6 +190,27 @@ func (r *PostRepository) IsVisibleToUser(postID, userID int64) (bool, error) {
 	return count > 0, err
 }
 
+func (r *PostRepository) FindBySlug(slug string) (*domain.Post, error) {
+	var post domain.Post
+	err := r.db.Preload("Author").Preload("Category").Preload("Tags").
+		Where("slug = ? AND is_deleted = ?", slug, false).
+		First(&post).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &post, err
+}
+
+func (r *PostRepository) SlugExists(slug string, excludeID int64) (bool, error) {
+	var count int64
+	q := r.db.Model(&domain.Post{}).Where("slug = ? AND is_deleted = ?", slug, false)
+	if excludeID > 0 {
+		q = q.Where("id != ?", excludeID)
+	}
+	err := q.Count(&count).Error
+	return count > 0, err
+}
+
 func (r *PostRepository) DB() *gorm.DB {
 	return r.db
 }

@@ -42,6 +42,7 @@ func registerRoutes(
 
 		api.GET("/posts/public", posts.ListPublic)
 		api.GET("/posts/site-pins", pins.GetSitePins)
+		api.GET("/posts/slug/:slug", authMW.Optional(), posts.GetBySlug)
 		api.GET("/posts/:id", authMW.Optional(), posts.GetDetail)
 
 		api.GET("/users/:username", users.GetUserProfile)

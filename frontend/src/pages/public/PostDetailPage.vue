@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, nextTick, ref } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
-import { getPost } from '@/api/posts'
+import { getPost, getPostBySlug } from '@/api/posts'
 import { useUserTheme } from '@/composables/useUserTheme'
 import type { PostDetail } from '@/types/post'
 import MarkdownViewer from '@/components/post/MarkdownViewer.vue'
@@ -16,11 +16,14 @@ const containerRef = ref<HTMLElement | null>(null)
 const { load: loadTheme } = useUserTheme(containerRef)
 
 onMounted(async () => {
-  const id = Number(route.params.id)
+  const param = String(route.params.id)
+  const isNumericId = /^\d+$/.test(param)
 
   // 第一阶段：加载文章内容，加载结果决定是否显示文章
   try {
-    const res = await getPost(id)
+    const res = isNumericId
+      ? await getPost(Number(param))
+      : await getPostBySlug(param)
     if (res.code === 0 && res.data) {
       post.value = res.data
     } else {
@@ -55,9 +58,9 @@ onMounted(async () => {
     :data-theme-user="post.author.username"
     class="transition-colors duration-300"
   >
-    <article class="rounded-xl border p-8" style="background: var(--theme-card-bg, #fff); border-color: var(--theme-border, #e2e8f0)">
-      <h1 class="text-3xl font-bold mb-4" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h1>
-      <div class="text-sm mb-6 flex gap-4" style="color: var(--theme-text, #64748b); opacity: 0.7">
+    <article class="rounded-xl border px-4 py-5 sm:px-6 sm:py-7 md:px-8 md:py-10" style="background: var(--theme-card-bg, #fff); border-color: var(--theme-border, #e2e8f0)">
+      <h1 class="text-2xl sm:text-3xl font-bold mb-4" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h1>
+      <div class="text-sm mb-5 sm:mb-6 flex flex-wrap gap-2 sm:gap-4" style="color: var(--theme-text, #64748b); opacity: 0.7">
         <RouterLink
           :to="`/u/${post.author.username}`"
           class="font-medium hover:opacity-100 transition-opacity"

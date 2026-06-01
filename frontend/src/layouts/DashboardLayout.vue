@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { computed, h } from 'vue'
+import { computed, h, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { NLayout, NLayoutSider, NLayoutContent, NMenu, NButton, NSpace } from 'naive-ui'
+import { NMenu, NButton, NSpace } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { useInactivityLogout } from '@/composables/useInactivityLogout'
+import { setActivePageTheme } from '@/stores/pageTheme'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 useInactivityLogout()
+
+const sidebarOpen = ref(false)
 
 const menuOptions = computed(() => {
   const items = [
@@ -44,19 +47,79 @@ const logout = async () => {
   await auth.logout()
   router.push('/login')
 }
+
+// 路由变化时关闭移动端侧边栏
+watch(() => route.path, () => {
+  sidebarOpen.value = false
+})
+
+// 进入 dashboard 时强制清除个人主页可能遗留的深色主题
+onMounted(() => {
+  setActivePageTheme(null)
+  document.body.style.backgroundColor = ''
+  document.body.style.color = ''
+  document.body.style.fontFamily = ''
+})
 </script>
 
 <template>
-  <NLayout has-sider class="min-h-screen">
-    <NLayoutSider bordered width="220" class="bg-white">
-      <div class="p-4 border-b">
+  <div class="min-h-screen flex bg-[#f8fafc]">
+
+    <!-- 移动端遮罩层 -->
+    <div
+      v-if="sidebarOpen"
+      class="fixed inset-0 bg-black/40 z-40 md:hidden"
+      @click="sidebarOpen = false"
+    />
+
+    <!-- 侧边栏：移动端固定定位，桌面端静态 -->
+    <aside
+      class="fixed md:static inset-y-0 left-0 z-50 w-[220px] flex-shrink-0 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 md:translate-x-0"
+      :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+    >
+      <div class="p-4 border-b border-slate-200 flex items-center justify-between">
         <RouterLink to="/" class="font-bold text-lg text-indigo-600">首页</RouterLink>
+        <!-- 移动端关闭按钮 -->
+        <button
+          class="md:hidden w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-700 rounded"
+          @click="sidebarOpen = false"
+        >
+          ✕
+        </button>
       </div>
-      <NMenu :value="activeKey" :options="menuOptions" />    </NLayoutSider>
-    <NLayout>
-      <div class="flex items-center justify-between px-6 py-3 border-b bg-white">
-        <div class="font-medium">用户中心</div>
+      <div class="flex-1 overflow-y-auto">
+        <NMenu :value="activeKey" :options="menuOptions" />
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <div class="flex-1 flex flex-col min-w-0">
+      <!-- 顶部栏 -->
+      <div class="flex items-center justify-between px-4 md:px-6 py-3 border-b bg-white sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+          <!-- 移动端汉堡菜单按钮 -->
+          <button
+            class="md:hidden w-11 h-11 flex items-center justify-center text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+            aria-label="打开菜单"
+            @click="sidebarOpen = true"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="w-6 h-6">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
+            </svg>
+          </button>
+          <div class="font-medium text-slate-700">用户中心</div>
+        </div>
         <NSpace align="center">
+          <RouterLink
+            v-if="auth.user?.username"
+            :to="`/u/${auth.user.username}`"
+            class="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:bg-slate-100 transition-colors"
+            title="我的主页"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+              <path d="M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.465 14.493a1.23 1.23 0 0 0 .41 1.412A9.957 9.957 0 0 0 10 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 0 0-13.074.003Z" />
+            </svg>
+          </RouterLink>
           <div class="w-8 h-8 rounded-full overflow-hidden bg-slate-200 flex-shrink-0 flex items-center justify-center text-sm font-bold text-slate-500">
             <img
               v-if="auth.user?.avatar_url"
@@ -66,13 +129,15 @@ const logout = async () => {
             />
             <span v-else>{{ auth.user?.nickname?.[0]?.toUpperCase() || 'U' }}</span>
           </div>
-          <span>{{ auth.user?.nickname }}</span>
+          <span class="hidden sm:inline text-sm text-slate-600">{{ auth.user?.nickname }}</span>
           <NButton size="small" @click="logout">退出</NButton>
         </NSpace>
       </div>
-      <NLayoutContent class="p-6">
+
+      <!-- 页面内容 -->
+      <div class="flex-1 p-4 md:p-6">
         <RouterView />
-      </NLayoutContent>
-    </NLayout>
-  </NLayout>
+      </div>
+    </div>
+  </div>
 </template>

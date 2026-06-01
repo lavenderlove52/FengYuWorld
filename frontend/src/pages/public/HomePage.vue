@@ -71,8 +71,8 @@ const onPageChange = (p: number) => {
 
     <!-- 文章列表 -->
     <div class="flex items-baseline justify-between mb-6">
-      <h1 class="text-2xl font-bold text-slate-800">公开文章</h1>
-      <span class="text-sm text-slate-400">全站用户公开发布的博客与日记</span>
+      <h1 class="text-xl sm:text-2xl font-bold text-slate-800">公开文章</h1>
+      <span class="hidden sm:inline text-sm text-slate-400">全站用户公开发布的博客与日记</span>
     </div>
 
     <PostList :posts="posts" :loading="loading" />
