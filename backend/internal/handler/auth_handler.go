@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"my-blog/backend/internal/dto"
@@ -33,7 +34,13 @@ func (h *AuthHandler) SendEmailCode(c *gin.Context) {
 			c.JSON(http.StatusTooManyRequests, dto.Err(dto.CodeBadRequest, "发送过于频繁，请60秒后重试"))
 			return
 		}
-		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "发送失败"))
+		if errors.Is(err, service.ErrSMTPNotConfigured) {
+			slog.Error("send email code: smtp not configured")
+			c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "邮件服务未配置，请联系管理员"))
+			return
+		}
+		slog.Error("send email code failed", "email", req.Email, "err", err)
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "发送失败，请稍后重试"))
 		return
 	}
 	c.JSON(http.StatusOK, dto.OK(nil))

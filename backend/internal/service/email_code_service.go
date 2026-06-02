@@ -60,7 +60,10 @@ func (s *EmailCodeService) SendCode(emailAddr string) error {
 		return err
 	}
 
-	return s.email.SendVerifyCode(emailAddr, code)
+	if err := s.email.SendVerifyCode(emailAddr, code); err != nil {
+		return fmt.Errorf("send verify email: %w", err)
+	}
+	return nil
 }
 
 // VerifyAndConsume 原子校验并消费验证码

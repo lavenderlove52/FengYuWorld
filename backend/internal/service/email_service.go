@@ -2,12 +2,15 @@ package service
 
 import (
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
 
 	"my-blog/backend/internal/config"
 )
+
+var ErrSMTPNotConfigured = errors.New("smtp not configured")
 
 type EmailService struct {
 	cfg *config.Config
@@ -17,7 +20,18 @@ func NewEmailService(cfg *config.Config) *EmailService {
 	return &EmailService{cfg: cfg}
 }
 
+func (s *EmailService) IsConfigured() bool {
+	return s.cfg.SMTPHost != "" &&
+		s.cfg.SMTPUser != "" &&
+		s.cfg.SMTPPass != "" &&
+		s.cfg.SMTPFrom != ""
+}
+
 func (s *EmailService) SendVerifyCode(toEmail, code string) error {
+	if !s.IsConfigured() {
+		return ErrSMTPNotConfigured
+	}
+
 	subject := "【风雨世界】邮箱验证码"
 	body := fmt.Sprintf("您的注册验证码为：%s，10分钟内有效，请勿泄露。", code)
 	msg := fmt.Sprintf(
@@ -36,45 +50,100 @@ func (s *EmailService) SendVerifyCode(toEmail, code string) error {
 func (s *EmailService) sendWithTLS(toEmail, msg string) error {
 	addr := fmt.Sprintf("%s:%s", s.cfg.SMTPHost, s.cfg.SMTPPort)
 	tlsCfg := &tls.Config{
-		InsecureSkipVerify: false,
-		ServerName:         s.cfg.SMTPHost,
+		ServerName: s.cfg.SMTPHost,
 	}
 
 	conn, err := tls.Dial("tcp", addr, tlsCfg)
 	if err != nil {
-		return fmt.Errorf("tls dial: %w", err)
+		return fmt.Errorf("连接邮件服务器失败(%s): %w", addr, err)
 	}
 	defer conn.Close()
 
 	client, err := smtp.NewClient(conn, s.cfg.SMTPHost)
 	if err != nil {
-		return fmt.Errorf("smtp new client: %w", err)
+		return fmt.Errorf("smtp client: %w", err)
 	}
 	defer client.Close()
 
+	if err = client.Hello("localhost"); err != nil {
+		return fmt.Errorf("smtp hello: %w", err)
+	}
+
 	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPass, s.cfg.SMTPHost)
 	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("smtp auth: %w", err)
+		return fmt.Errorf("smtp 认证失败(请检查 SMTP_USER/SMTP_PASS 授权码): %w", err)
 	}
 	if err = client.Mail(s.cfg.SMTPFrom); err != nil {
 		return fmt.Errorf("smtp mail from: %w", err)
 	}
 	if err = client.Rcpt(toEmail); err != nil {
-		return fmt.Errorf("smtp rcpt to: %w", err)
+		return fmt.Errorf("smtp rcpt to %s: %w", toEmail, err)
 	}
 	wc, err := client.Data()
 	if err != nil {
 		return fmt.Errorf("smtp data: %w", err)
 	}
-	defer wc.Close()
-	_, err = fmt.Fprint(wc, msg)
-	return err
+	if _, err = fmt.Fprint(wc, msg); err != nil {
+		_ = wc.Close()
+		return fmt.Errorf("smtp write: %w", err)
+	}
+	if err = wc.Close(); err != nil {
+		return fmt.Errorf("smtp data close: %w", err)
+	}
+	return client.Quit()
 }
 
-// sendWithStartTLS 用于 587 端口（Gmail 等）
+// sendWithStartTLS 用于 587 端口（Gmail、QQ 备用端口等）
 func (s *EmailService) sendWithStartTLS(toEmail, msg string) error {
 	addr := fmt.Sprintf("%s:%s", s.cfg.SMTPHost, s.cfg.SMTPPort)
-	host, _, _ := net.SplitHostPort(addr)
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		host = s.cfg.SMTPHost
+	}
+
+	conn, err := net.Dial("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("连接邮件服务器失败(%s): %w", addr, err)
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return fmt.Errorf("smtp client: %w", err)
+	}
+	defer client.Close()
+
+	if err = client.Hello("localhost"); err != nil {
+		return fmt.Errorf("smtp hello: %w", err)
+	}
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsCfg := &tls.Config{ServerName: host}
+		if err = client.StartTLS(tlsCfg); err != nil {
+			return fmt.Errorf("starttls: %w", err)
+		}
+	}
+
 	auth := smtp.PlainAuth("", s.cfg.SMTPUser, s.cfg.SMTPPass, host)
-	return smtp.SendMail(addr, auth, s.cfg.SMTPFrom, []string{toEmail}, []byte(msg))
+	if err = client.Auth(auth); err != nil {
+		return fmt.Errorf("smtp 认证失败(请检查 SMTP_USER/SMTP_PASS 授权码): %w", err)
+	}
+	if err = client.Mail(s.cfg.SMTPFrom); err != nil {
+		return fmt.Errorf("smtp mail from: %w", err)
+	}
+	if err = client.Rcpt(toEmail); err != nil {
+		return fmt.Errorf("smtp rcpt to %s: %w", toEmail, err)
+	}
+	wc, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data: %w", err)
+	}
+	if _, err = fmt.Fprint(wc, msg); err != nil {
+		_ = wc.Close()
+		return fmt.Errorf("smtp write: %w", err)
+	}
+	if err = wc.Close(); err != nil {
+		return fmt.Errorf("smtp data close: %w", err)
+	}
+	return client.Quit()
 }

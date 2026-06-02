@@ -60,6 +60,11 @@ func New(cfg *config.Config) (*App, error) {
 	localStorage := storage.NewLocalStorage(cfg.UploadDir, cfg.PublicUploadBaseURL)
 
 	emailSvc := service.NewEmailService(cfg)
+	if !emailSvc.IsConfigured() {
+		slog.Warn("SMTP not configured: register email verification will fail until SMTP_* env vars are set")
+	} else {
+		slog.Info("SMTP configured", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "from", cfg.SMTPFrom)
+	}
 	captchaSvc := service.NewCaptchaService()
 	emailCodeSvc := service.NewEmailCodeService(emailCodeRepo, emailSvc)
 	inviteSvc := service.NewInviteService(inviteCodeRepo)

@@ -3,6 +3,7 @@ import { onMounted, ref, computed } from 'vue'
 import { NButton, NInputNumber, NDatePicker, useMessage, useDialog } from 'naive-ui'
 import { listInviteCodes, generateInviteCodes, deleteInviteCode } from '@/api/invite'
 import type { InviteCode } from '@/api/invite'
+import { copyToClipboard } from '@/utils/clipboard'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -52,6 +53,9 @@ const generate = async () => {
   }
 }
 
+const formatDate = (d?: string) => d?.slice(0, 10) ?? '—'
+const isExpired = (c: InviteCode) => !!c.expires_at && new Date(c.expires_at) < new Date()
+
 const remove = (code: InviteCode) => {
   dialog.warning({
     title: '确认作废',
@@ -70,20 +74,35 @@ const remove = (code: InviteCode) => {
   })
 }
 
-const copyCode = (code: string) => {
-  navigator.clipboard.writeText(code)
-  message.success(`已复制：${code}`)
+const copyCode = async (code: string) => {
+  if (!code) {
+    message.warning('邀请码为空，无法复制')
+    return
+  }
+  try {
+    await copyToClipboard(code)
+    message.success(`已复制：${code}`)
+  } catch {
+    message.error('复制失败，请手动选择邀请码复制')
+  }
 }
 
-const copyAll = () => {
-  const unused = codes.value.filter((c) => !c.is_used).map((c) => c.code)
-  if (!unused.length) { message.warning('没有未使用的邀请码'); return }
-  navigator.clipboard.writeText(unused.join('\n'))
-  message.success(`已复制 ${unused.length} 个未使用的邀请码`)
+const copyAll = async () => {
+  const unused = codes.value
+    .filter((c) => !c.is_used && !isExpired(c))
+    .map((c) => c.code)
+    .filter(Boolean)
+  if (!unused.length) {
+    message.warning('没有可用的邀请码')
+    return
+  }
+  try {
+    await copyToClipboard(unused.join('\n'))
+    message.success(`已复制 ${unused.length} 个可用邀请码`)
+  } catch {
+    message.error('复制失败，请手动选择邀请码复制')
+  }
 }
-
-const formatDate = (d?: string) => d?.slice(0, 10) ?? '—'
-const isExpired = (c: InviteCode) => !!c.expires_at && new Date(c.expires_at) < new Date()
 
 const stats = computed(() => ({
   total: codes.value.length,
