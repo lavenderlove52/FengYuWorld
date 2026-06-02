@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { NForm, NFormItem, NInput, NButton, NUpload, useMessage, NModal } from 'naive-ui'
+import { ref, computed, watch } from 'vue'
+import { NForm, NFormItem, NInput, NButton, useMessage, NModal } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { uploadAvatar } from '@/api/uploads'
+import AvatarCropperModal from '@/components/upload/AvatarCropperModal.vue'
 
 const auth = useAuthStore()
 const message = useMessage()
@@ -13,8 +14,12 @@ const form = ref({
   avatar_url: auth.user?.avatar_url || '',
 })
 const loading = ref(false)
+const avatarUploading = ref(false)
 const showApplyModal = ref(false)
 const applyingFor = ref('')
+const avatarInput = ref<HTMLInputElement | null>(null)
+const showAvatarCropModal = ref(false)
+const avatarCropFile = ref<File | null>(null)
 
 const save = async () => {
   loading.value = true
@@ -28,15 +33,46 @@ const save = async () => {
   }
 }
 
-const onAvatarUpload = async ({ file, onFinish, onError }: any) => {
+watch(showAvatarCropModal, (show) => {
+  if (!show) {
+    avatarCropFile.value = null
+  }
+})
+
+const openAvatarPicker = () => {
+  avatarInput.value?.click()
+}
+
+const onAvatarSelected = (event: Event) => {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    message.warning('请选择图片文件')
+    return
+  }
+  avatarCropFile.value = file
+  showAvatarCropModal.value = true
+  if (avatarInput.value) {
+    avatarInput.value.value = ''
+  }
+}
+
+const onAvatarCropConfirm = async (blob: Blob) => {
+  avatarUploading.value = true
   try {
-    const res = await uploadAvatar(file.file as File)
+    const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' })
+    const res = await uploadAvatar(file)
     if (res.code === 0 && res.data) {
       form.value.avatar_url = res.data.url
-      onFinish()
-    } else onError()
-  } catch {
-    onError()
+      showAvatarCropModal.value = false
+      message.success('头像已裁剪上传，请点击“保存修改”生效')
+    } else {
+      message.error(res.message || '头像上传失败')
+    }
+  } catch (e: any) {
+    message.error(e?.message || '头像上传失败')
+  } finally {
+    avatarUploading.value = false
   }
 }
 
@@ -192,9 +228,17 @@ const copyApplyText = () => {
               </div>
             </div>
           </div>
-          <NUpload :show-file-list="false" accept="image/*" :custom-request="onAvatarUpload">
-            <NButton size="small">更换头像</NButton>
-          </NUpload>
+          <div class="space-y-2">
+            <input
+              ref="avatarInput"
+              type="file"
+              accept="image/*"
+              class="hidden"
+              @change="onAvatarSelected"
+            />
+            <NButton size="small" :loading="avatarUploading" @click="openAvatarPicker">更换头像</NButton>
+            <p class="text-xs text-slate-400">上传时可拖动裁剪，并固定保存为 200 × 200</p>
+          </div>
         </div>
         <NForm label-placement="top">
           <NFormItem label="邮箱">
@@ -247,5 +291,11 @@ const copyApplyText = () => {
         </div>
       </div>
     </NModal>
+
+    <AvatarCropperModal
+      v-model:show="showAvatarCropModal"
+      :file="avatarCropFile"
+      @confirm="onAvatarCropConfirm"
+    />
   </div>
 </template>

@@ -17,6 +17,7 @@ import (
 const (
 	MaxImageBytes  = 1 * 1024 * 1024 // 1MB
 	MaxShortSidePx = 1000
+	AvatarSizePx   = 200
 )
 
 // ProcessImage 对上传的图片进行缩放和压缩，返回处理后的字节和推荐扩展名（".jpg" 或 ".png"）。
@@ -52,6 +53,25 @@ func ProcessImage(r io.Reader, originalExt string) ([]byte, string, error) {
 	return encodeJPEGAdaptive(img)
 }
 
+// ProcessAvatar 将头像处理为固定 200x200 的 JPEG。
+func ProcessAvatar(r io.Reader) ([]byte, string, error) {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, "", err
+	}
+
+	img, _, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, "", err
+	}
+
+	img = cropToSquare(img)
+
+	dst := image.NewRGBA(image.Rect(0, 0, AvatarSizePx, AvatarSizePx))
+	draw.BiLinear.Scale(dst, dst.Bounds(), img, img.Bounds(), draw.Over, nil)
+	return encodeJPEG(dst, 90)
+}
+
 // resizeIfNeeded 若图片短边超过 MaxShortSidePx，则等比缩放。
 func resizeIfNeeded(src image.Image) image.Image {
 	bounds := src.Bounds()
@@ -78,6 +98,25 @@ func resizeIfNeeded(src image.Image) image.Image {
 
 	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
 	draw.BiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+	return dst
+}
+
+func cropToSquare(src image.Image) image.Image {
+	bounds := src.Bounds()
+	w := bounds.Dx()
+	h := bounds.Dy()
+	side := w
+	if h < w {
+		side = h
+	}
+	x0 := bounds.Min.X + (w-side)/2
+	y0 := bounds.Min.Y + (h-side)/2
+	return cropImage(src, image.Rect(x0, y0, x0+side, y0+side))
+}
+
+func cropImage(src image.Image, rect image.Rectangle) image.Image {
+	dst := image.NewRGBA(image.Rect(0, 0, rect.Dx(), rect.Dy()))
+	draw.Draw(dst, dst.Bounds(), src, rect.Min, draw.Src)
 	return dst
 }
 

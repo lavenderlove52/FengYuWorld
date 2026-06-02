@@ -39,22 +39,10 @@ func NewUploadService(storage *storage.LocalStorage, uploads *repository.UploadR
 }
 
 func (s *UploadService) SaveImage(userID int64, filename string, size int64, r io.Reader, maxSize int64) (*dto.UploadResponse, error) {
-	if maxSize <= 0 {
-		maxSize = s.maxBytes
+	ext, mimeType, err := s.validateImage(filename, size, maxSize)
+	if err != nil {
+		return nil, err
 	}
-	if size > maxSize {
-		return nil, ErrInvalidUpload
-	}
-
-	ext := strings.ToLower(filepath.Ext(filename))
-	mimeType := mime.TypeByExtension(ext)
-	if mimeType == "" {
-		mimeType = "application/octet-stream"
-	}
-	if _, ok := allowedMimes[mimeType]; !ok {
-		return nil, ErrInvalidUpload
-	}
-
 	processed, newExt, err := util.ProcessImage(r, ext)
 	if err != nil {
 		return nil, err
@@ -69,6 +57,43 @@ func (s *UploadService) SaveImage(userID int64, filename string, size int64, r i
 		}
 	}
 
+	return s.saveProcessed(userID, filename, mimeType, processed)
+}
+
+func (s *UploadService) SaveAvatar(userID int64, filename string, size int64, r io.Reader) (*dto.UploadResponse, error) {
+	const avatarMax = 2 * 1024 * 1024
+	if _, _, err := s.validateImage(filename, size, avatarMax); err != nil {
+		return nil, err
+	}
+	processed, newExt, err := util.ProcessAvatar(r)
+	if err != nil {
+		return nil, ErrInvalidUpload
+	}
+	base := strings.TrimSuffix(filename, filepath.Ext(filename))
+	filename = base + newExt
+	return s.saveProcessed(userID, filename, "image/jpeg", processed)
+}
+
+func (s *UploadService) validateImage(filename string, size int64, maxSize int64) (string, string, error) {
+	if maxSize <= 0 {
+		maxSize = s.maxBytes
+	}
+	if size > maxSize {
+		return "", "", ErrInvalidUpload
+	}
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	mimeType := mime.TypeByExtension(ext)
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	if _, ok := allowedMimes[mimeType]; !ok {
+		return "", "", ErrInvalidUpload
+	}
+	return ext, mimeType, nil
+}
+
+func (s *UploadService) saveProcessed(userID int64, filename, mimeType string, processed []byte) (*dto.UploadResponse, error) {
 	result, err := s.storage.Save(userID, filename, bytes.NewReader(processed))
 	if err != nil {
 		return nil, err
@@ -86,9 +111,4 @@ func (s *UploadService) SaveImage(userID int64, filename string, size int64, r i
 	}
 
 	return &dto.UploadResponse{URL: result.URL}, nil
-}
-
-func (s *UploadService) SaveAvatar(userID int64, filename string, size int64, r io.Reader) (*dto.UploadResponse, error) {
-	const avatarMax = 2 * 1024 * 1024
-	return s.SaveImage(userID, filename, size, r, avatarMax)
 }
