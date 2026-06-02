@@ -43,6 +43,8 @@ onMounted(async () => {
 })
 
 const submit = async () => {
+  // 防止重复提交（Enter 键可能绕过按钮 disabled 状态）
+  if (loading.value) return
   if (!form.value.login || !form.value.password) {
     message.warning('请填写完整信息')
     return
@@ -57,7 +59,9 @@ const submit = async () => {
     message.success('登录成功')
     const raw = (route.query.redirect as string) || ''
     const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard'
-    router.push(redirect)
+    // await router.push 确保 loading 状态在导航完成前保持，
+    // 避免「登录成功 → spinner 消失 → 表单重现 → 用户以为卡住」的体验问题
+    await router.push(redirect)
   } catch (e: any) {
     message.error(e.message || '登录失败')
     captchaAnswer.value = ''

@@ -27,11 +27,18 @@ async function forceLogout(reason?: 'deleted' | 'locked' | 'inactivity') {
     const { useAuthStore } = await import('@/stores/auth')
     const auth = useAuthStore()
     auth.user = null
+    auth.tokenExists = false
   } catch {
     // Pinia 尚未初始化时忽略
   }
   const query = reason ? `?reason=${reason}` : ''
-  router.push(`/login${query}`)
+  // deleted/locked 属于账号级别异常，任意页面都需要跳转登录；
+  // 其他情况（如 refresh token 失效）只在受保护路由上才跳转，
+  // 避免在公开页面因过期 token 触发强制重定向（手机白屏根因）
+  const alwaysRedirect = reason === 'deleted' || reason === 'locked'
+  if (alwaysRedirect || router.currentRoute.value.meta.requiresAuth) {
+    router.push(`/login${query}`)
+  }
 }
 
 const http = axios.create({

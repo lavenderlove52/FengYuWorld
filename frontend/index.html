@@ -8,7 +8,17 @@
     <title>风雨世界</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+    <!-- 非阻塞字体加载：先以 media=print 加载（不阻塞渲染），加载完成后切回 all -->
+    <!-- 避免 Google Fonts 在弱网或中国大陆网络下阻塞页面首屏渲染 -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+      rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
+    />
+    <noscript>
+      <link href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC&family=Lora:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet" />
+    </noscript>
   </head>
   <body>
     <div id="app"></div>

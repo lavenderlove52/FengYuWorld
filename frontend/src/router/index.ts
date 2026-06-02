@@ -84,6 +84,12 @@ router.beforeEach(async (to, from) => {
         clearTokens()
         return { name: 'login', query: { redirect: to.fullPath } }
       }
+      // fetchMe 未抛出但仍未能设置 user（如服务端返回非 0 code），同样视为鉴权失败
+      if (!useAuthStore().user) {
+        const { clearTokens } = await import('@/api/http')
+        clearTokens()
+        return { name: 'login', query: { redirect: to.fullPath } }
+      }
     } else {
       // 公开路由：后台静默加载用户信息，不阻塞导航
       // 避免手机等弱网环境因等待 fetchMe 导致白屏（RouterView 在导航完成前不渲染）
