@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { PostSummary } from '@/types/post'
+import { getPostPath } from '@/utils/postPath'
 
 const props = defineProps<{ post: PostSummary }>()
 
@@ -17,9 +18,7 @@ const formatDate = (dateStr: string) => {
   return dateStr.slice(0, 10)
 }
 
-const postPath = computed(() =>
-  props.post.slug ? `/p/${props.post.slug}` : `/p/${props.post.id}`
-)
+const postPath = computed(() => getPostPath(props.post))
 </script>
 
 <template>

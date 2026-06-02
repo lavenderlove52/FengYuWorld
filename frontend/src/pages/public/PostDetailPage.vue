@@ -15,17 +15,29 @@ const notFound = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 const { load: loadTheme } = useUserTheme(containerRef)
 
+async function loadPost(param: string) {
+  // 纯数字路径既可能是 ID，也可能是 slug（如 slug=123 的旧链接 /p/123）
+  if (/^\d+$/.test(param)) {
+    const byId = await getPost(Number(param))
+    if (byId.code === 0 && byId.data) return byId.data
+
+    const bySlug = await getPostBySlug(param)
+    if (bySlug.code === 0 && bySlug.data) return bySlug.data
+    return null
+  }
+
+  const bySlug = await getPostBySlug(param)
+  if (bySlug.code === 0 && bySlug.data) return bySlug.data
+  return null
+}
+
 onMounted(async () => {
   const param = String(route.params.id)
-  const isNumericId = /^\d+$/.test(param)
 
-  // 第一阶段：加载文章内容，加载结果决定是否显示文章
   try {
-    const res = isNumericId
-      ? await getPost(Number(param))
-      : await getPostBySlug(param)
-    if (res.code === 0 && res.data) {
-      post.value = res.data
+    const data = await loadPost(param)
+    if (data) {
+      post.value = data
     } else {
       notFound.value = true
     }
