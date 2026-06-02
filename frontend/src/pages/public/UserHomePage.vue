@@ -63,7 +63,8 @@ onMounted(async () => {
 
 <template>
   <div ref="containerRef" :data-theme-user="String(route.params.username)" class="min-h-screen transition-colors duration-300" style="color: var(--theme-text)">
-    <EmptyState v-if="!loading && !user" message="用户不存在" />
+    <div v-if="loading && !user" class="text-center py-20 text-slate-400">加载中...</div>
+    <EmptyState v-else-if="!loading && !user" message="用户不存在" />
     <template v-else-if="user">
 
       <!-- Banner -->

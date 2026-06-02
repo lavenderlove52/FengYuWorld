@@ -72,16 +72,22 @@ router.beforeEach(async (to, from) => {
     return { name: 'dashboard' }
   }
 
-  // 已登录但用户数据尚未加载（如刷新后），等待获取完整信息后再放行路由
-  // 使用 try/catch 保护：若 access token 过期且无 refresh token，fetchMe 会 reject，
-  // 不加保护时 Vue Router 会中止初始导航并渲染空白页
+  // 已登录但用户数据尚未加载（如刷新后），需要获取完整的用户信息
   if (loggedIn && !useAuthStore().user) {
-    try {
-      await useAuthStore().fetchMe()
-    } catch {
-      // token 已失效且无法刷新，清除本地令牌后继续导航（允许访问公开页面）
-      const { clearTokens } = await import('@/api/http')
-      clearTokens()
+    if (to.meta.requiresAuth) {
+      // 受保护路由：必须等待用户数据加载完成后再放行，失败则跳转登录
+      // 使用 try/catch 保护：若 access token 过期且无 refresh token，fetchMe 会 reject
+      try {
+        await useAuthStore().fetchMe()
+      } catch {
+        const { clearTokens } = await import('@/api/http')
+        clearTokens()
+        return { name: 'login', query: { redirect: to.fullPath } }
+      }
+    } else {
+      // 公开路由：后台静默加载用户信息，不阻塞导航
+      // 避免手机等弱网环境因等待 fetchMe 导致白屏（RouterView 在导航完成前不渲染）
+      useAuthStore().fetchMe().catch(() => {})
     }
   }
 })
