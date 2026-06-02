@@ -1,43 +1,50 @@
 <script setup lang="ts">
 import { RouterLink } from 'vue-router'
-import { NButton, NBadge } from 'naive-ui'
+import { NButton, NBadge, NDropdown } from 'naive-ui'
+import type { DropdownOption } from 'naive-ui'
 import type { FriendListItem } from '@/types/friend'
 import type { UnreadCounts } from '@/types/chat'
 
 defineProps<{
   items: FriendListItem[]
-  selectedId?: number
   unreadCounts?: UnreadCounts
 }>()
 
 const emit = defineEmits<{
   remove: [id: number]
-  select: [friend: FriendListItem]
+  chat: [friend: FriendListItem]
 }>()
 
-const formatDate = (d: string) => d?.slice(0, 10) ?? ''
+const moreMenuOptions: DropdownOption[] = [
+  { label: '删除好友', key: 'delete' },
+]
+
+function onMoreSelect(key: string | number, item: FriendListItem) {
+  if (key === 'delete') emit('remove', item.id)
+}
 </script>
 
 <template>
-  <div v-if="!items.length" class="py-8 text-center text-sm text-slate-400">
-    <div class="text-3xl mb-2">👥</div>
-    暂无好友，快去添加吧！
+  <div v-if="!items.length" class="py-12 text-center text-sm text-slate-400">
+    <div class="text-4xl mb-3">👥</div>
+    <p>暂无好友</p>
+    <p class="text-xs mt-1">在上方输入用户名添加好友吧</p>
   </div>
-  <div v-else class="space-y-1.5">
-    <div
+  <ul v-else class="divide-y divide-slate-100">
+    <li
       v-for="item in items"
       :key="item.id"
-      class="group flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all"
-      :class="
-        selectedId === item.id
-          ? 'bg-indigo-50 border-indigo-200 shadow-sm'
-          : 'bg-white border-transparent hover:border-slate-200 hover:bg-slate-50'
-      "
-      @click="emit('select', item)"
+      class="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors"
+      @click="emit('chat', item)"
     >
-      <!-- 头像 + 未读角标 -->
-      <NBadge :value="unreadCounts?.[item.id] ?? 0" :max="99" :show="(unreadCounts?.[item.id] ?? 0) > 0">
-        <div class="w-10 h-10 rounded-full flex-shrink-0 overflow-hidden">
+      <!-- 头像 + 未读 -->
+      <NBadge
+        :value="unreadCounts?.[item.id] ?? 0"
+        :max="99"
+        :show="(unreadCounts?.[item.id] ?? 0) > 0"
+        :offset="[-2, 2]"
+      >
+        <div class="w-12 h-12 rounded-full flex-shrink-0 overflow-hidden bg-slate-100">
           <img
             v-if="item.avatar_url"
             :src="item.avatar_url"
@@ -46,32 +53,32 @@ const formatDate = (d: string) => d?.slice(0, 10) ?? ''
           />
           <div
             v-else
-            class="w-full h-full bg-indigo-100 flex items-center justify-center text-sm font-bold text-indigo-500"
+            class="w-full h-full flex items-center justify-center text-base font-semibold text-[#12b7f5]"
           >
             {{ item.nickname?.[0]?.toUpperCase() || '?' }}
           </div>
         </div>
       </NBadge>
 
-      <!-- 主信息 -->
+      <!-- 信息 -->
       <div class="flex-1 min-w-0">
-        <div class="flex items-baseline gap-1.5">
-          <span class="font-semibold text-slate-800 text-sm truncate">{{ item.nickname }}</span>
-          <span class="text-xs text-slate-400 flex-shrink-0">@{{ item.username }}</span>
-        </div>
-        <div class="text-xs text-slate-400 mt-0.5">成为好友于 {{ formatDate(item.friends_since) }}</div>
+        <div class="font-medium text-slate-800 truncate">{{ item.nickname || item.username }}</div>
+        <div class="text-xs text-slate-400 truncate mt-0.5">@{{ item.username }}</div>
       </div>
 
-      <!-- 操作按钮（hover 时显示） -->
-      <div
-        class="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-        @click.stop
-      >
+      <!-- 操作 -->
+      <div class="flex items-center gap-0.5 flex-shrink-0" @click.stop>
         <RouterLink :to="`/u/${item.username}`">
-          <NButton size="tiny" tertiary title="主页">主页</NButton>
+          <NButton size="small" quaternary>主页</NButton>
         </RouterLink>
-        <NButton size="tiny" type="error" tertiary title="删除好友" @click="emit('remove', item.id)">删除</NButton>
+        <NDropdown
+          trigger="click"
+          :options="moreMenuOptions"
+          @select="(key) => onMoreSelect(key, item)"
+        >
+          <NButton size="small" quaternary title="更多" class="!px-2">⋯</NButton>
+        </NDropdown>
       </div>
-    </div>
-  </div>
+    </li>
+  </ul>
 </template>

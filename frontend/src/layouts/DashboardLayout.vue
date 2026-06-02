@@ -1,15 +1,37 @@
 <script setup lang="ts">
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { NMenu, NButton, NSpace } from 'naive-ui'
+import { NMenu, NButton, NSpace, NSpin } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { useInactivityLogout } from '@/composables/useInactivityLogout'
 import { setActivePageTheme } from '@/stores/pageTheme'
+import { clearTokens } from '@/api/http'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 useInactivityLogout()
+
+/** 有 token 但尚未拿到 user（刷新后首屏） */
+const authBooting = computed(() => auth.tokenExists && !auth.user)
+
+const ensureUser = async () => {
+  if (!auth.tokenExists || auth.user) return
+  try {
+    await auth.fetchMe()
+  } catch {
+    // fetchMe 内部请求失败时由拦截器处理 token
+  }
+  if (!auth.user) {
+    clearTokens()
+    auth.tokenExists = false
+    router.replace({ name: 'login', query: { redirect: route.fullPath, reason: 'session_expired' } })
+  }
+}
+
+watch(authBooting, (booting) => {
+  if (booting) ensureUser()
+})
 
 const sidebarOpen = ref(false)
 
@@ -59,11 +81,18 @@ onMounted(() => {
   document.body.style.backgroundColor = ''
   document.body.style.color = ''
   document.body.style.fontFamily = ''
+  if (authBooting.value) ensureUser()
 })
 </script>
 
 <template>
-  <div class="min-h-screen flex bg-[#f8fafc]">
+  <!-- 鉴权加载中：立即显示骨架，避免手机弱网长时间白屏 -->
+  <div v-if="authBooting" class="min-h-screen flex flex-col items-center justify-center bg-[#f8fafc] gap-3">
+    <NSpin size="large" />
+    <p class="text-sm text-slate-500">正在加载用户中心…</p>
+  </div>
+
+  <div v-else class="min-h-screen flex bg-[#f8fafc]">
 
     <!-- 移动端遮罩层 -->
     <div

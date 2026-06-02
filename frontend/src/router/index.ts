@@ -64,37 +64,25 @@ router.beforeEach(async (to, from) => {
     document.body.style.fontFamily = ''
   }
 
-  const loggedIn = !!getAccessToken()
-  if (to.meta.requiresAuth && !loggedIn) {
+  const auth = useAuthStore()
+  const hasToken = !!getAccessToken()
+
+  if (to.meta.requiresAuth && !hasToken) {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
-  if (to.meta.guest && loggedIn) {
+
+  // 仅 token + user 均有效时重定向，避免过期 token 导致无法打开登录页（手机常见）
+  if (to.meta.guest && auth.isLoggedIn) {
     return { name: 'dashboard' }
   }
 
-  // 已登录但用户数据尚未加载（如刷新后），需要获取完整的用户信息
-  if (loggedIn && !useAuthStore().user) {
-    if (to.meta.requiresAuth) {
-      // 受保护路由：必须等待用户数据加载完成后再放行，失败则跳转登录
-      // 使用 try/catch 保护：若 access token 过期且无 refresh token，fetchMe 会 reject
-      try {
-        await useAuthStore().fetchMe()
-      } catch {
-        const { clearTokens } = await import('@/api/http')
-        clearTokens()
-        return { name: 'login', query: { redirect: to.fullPath } }
+  // 有 token 但 user 未加载（刷新/冷启动）：后台拉取，绝不 await，避免弱网下整页白屏
+  if (hasToken && !auth.user) {
+    auth.fetchMe().then(() => {
+      if (auth.user && to.meta.guest) {
+        router.replace({ name: 'dashboard' })
       }
-      // fetchMe 未抛出但仍未能设置 user（如服务端返回非 0 code），同样视为鉴权失败
-      if (!useAuthStore().user) {
-        const { clearTokens } = await import('@/api/http')
-        clearTokens()
-        return { name: 'login', query: { redirect: to.fullPath } }
-      }
-    } else {
-      // 公开路由：后台静默加载用户信息，不阻塞导航
-      // 避免手机等弱网环境因等待 fetchMe 导致白屏（RouterView 在导航完成前不渲染）
-      useAuthStore().fetchMe().catch(() => {})
-    }
+    }).catch(() => {})
   }
 })
 

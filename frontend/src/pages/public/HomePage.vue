@@ -11,7 +11,7 @@ import Pagination from '@/components/common/Pagination.vue'
 
 const posts = ref<PostSummary[]>([])
 const pins = ref<PinnedPost[]>([])
-const loading = ref(false)
+const loading = ref(true)
 const page = ref(1)
 const pageSize = 12
 const total = ref(0)

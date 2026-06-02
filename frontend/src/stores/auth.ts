@@ -26,14 +26,28 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const login = async (login: string, password: string, captchaId: string, captchaAnswer: string) => {
-    const res = await authApi.login({ login, password, captcha_id: captchaId, captcha_answer: captchaAnswer })
+    // 清除过期 token，避免请求携带无效 Authorization 或 guest 路由误判
+    clearTokens()
+    tokenExists.value = false
+    user.value = null
+
+    const res = await authApi.login({
+      login: login.trim(),
+      password,
+      captcha_id: captchaId,
+      captcha_answer: captchaAnswer.trim(),
+    })
     if (res.code !== 0 || !res.data) {
       throw new Error(res.message || '登录失败')
     }
     setTokens(res.data.access_token, res.data.refresh_token)
     tokenExists.value = true
-    // 登录接口返回的 user 可能缺少 role 等字段，直接请求 /users/me 获取完整数据
     await fetchMe()
+    if (!user.value) {
+      clearTokens()
+      tokenExists.value = false
+      throw new Error('登录成功但获取用户信息失败，请检查网络后重试')
+    }
     return res.data
   }
 
@@ -47,7 +61,14 @@ export const useAuthStore = defineStore('auth', () => {
     captcha_id: string
     captcha_answer: string
   }) => {
-    const res = await authApi.register(payload)
+    clearTokens()
+    tokenExists.value = false
+    user.value = null
+
+    const res = await authApi.register({
+      ...payload,
+      captcha_answer: payload.captcha_answer.trim(),
+    })
     if (res.code !== 0 || !res.data) {
       throw new Error(res.message || '注册失败')
     }

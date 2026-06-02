@@ -13,6 +13,7 @@ type CaptchaService struct {
 	captcha *base64Captcha.Captcha
 }
 
+// NewCaptchaService 使用进程内内存存储验证码。
 func NewCaptchaService() *CaptchaService {
 	store := base64Captcha.NewMemoryStore(10240, 5*time.Minute)
 	driver := base64Captcha.NewDriverString(

@@ -11,15 +11,22 @@ import FriendList from '@/components/friend/FriendList.vue'
 import ChatPanel from '@/components/chat/ChatPanel.vue'
 import type { FriendListItem } from '@/types/friend'
 
+type ViewMode = 'list' | 'chat'
+
 const message = useMessage()
 const friendStore = useFriendStore()
 const chatStore = useChatStore()
 const authStore = useAuthStore()
 const username = ref('')
 const selectedFriend = ref<FriendListItem | null>(null)
-const showRequests = ref(true)
+const viewMode = ref<ViewMode>('list')
+const showRequests = ref(false)
+const showAddFriend = ref(false)
 
 const requestCount = computed(() => friendStore.received.length)
+const totalUnread = computed(() =>
+  Object.values(chatStore.unreadCounts).reduce((sum, n) => sum + (n || 0), 0),
+)
 
 const load = async () => {
   await Promise.all([friendStore.loadFriends(), friendStore.loadReceived()])
@@ -44,6 +51,7 @@ const send = async () => {
   if (res.code === 0) {
     message.success('申请已发送')
     username.value = ''
+    showAddFriend.value = false
     load()
   } else {
     message.error(res.message)
@@ -66,25 +74,44 @@ const remove = async (id: number) => {
   await friendsApi.deleteFriend(id)
   message.success('已删除好友')
   if (selectedFriend.value?.id === id) {
-    selectedFriend.value = null
-    chatStore.setActiveFriend(null)
+    closeChat()
   }
   load()
 }
 
-const selectFriend = (friend: FriendListItem) => {
+const openChat = (friend: FriendListItem) => {
   selectedFriend.value = friend
+  viewMode.value = 'chat'
   chatStore.setActiveFriend(friend.id)
+}
+
+const closeChat = () => {
+  selectedFriend.value = null
+  viewMode.value = 'list'
+  chatStore.setActiveFriend(null)
 }
 </script>
 
 <template>
-  <div class="flex gap-4 h-[calc(100vh-8rem)] min-h-0">
-    <!-- 左侧：好友管理 -->
-    <div class="w-80 flex-shrink-0 flex flex-col gap-3 min-h-0">
-      <!-- 标题 + 添加好友 -->
-      <div class="bg-white rounded-2xl border border-slate-200 p-4 flex-shrink-0">
-        <h1 class="text-lg font-bold mb-3 text-slate-800">好友管理</h1>
+  <div class="friends-page h-[calc(100vh-5.5rem)] sm:h-[calc(100vh-6rem)] min-h-[420px] max-w-2xl mx-auto flex flex-col">
+    <!-- 好友列表视图 -->
+    <div v-show="viewMode === 'list'" class="flex flex-col h-full min-h-0 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <!-- 顶栏 -->
+      <header class="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-[#f5f5f5] flex-shrink-0">
+        <h1 class="text-lg font-semibold text-slate-800">好友</h1>
+        <div class="flex items-center gap-2">
+          <span
+            v-if="totalUnread > 0"
+            class="text-xs text-white bg-red-500 px-2 py-0.5 rounded-full"
+          >{{ totalUnread > 99 ? '99+' : totalUnread }} 条未读</span>
+          <NButton size="small" quaternary @click="showAddFriend = !showAddFriend">
+            {{ showAddFriend ? '收起' : '添加' }}
+          </NButton>
+        </div>
+      </header>
+
+      <!-- 添加好友 -->
+      <div v-if="showAddFriend" class="px-4 py-3 border-b border-slate-100 bg-slate-50 flex-shrink-0">
         <div class="flex gap-2">
           <NInput
             v-model:value="username"
@@ -93,65 +120,61 @@ const selectFriend = (friend: FriendListItem) => {
             class="flex-1"
             @keydown.enter="send"
           />
-          <NButton type="primary" size="small" @click="send">添加</NButton>
+          <NButton type="primary" size="small" class="!bg-[#12b7f5] !border-[#12b7f5]" @click="send">
+            发送申请
+          </NButton>
         </div>
       </div>
 
-      <!-- 收到的申请（可折叠） -->
-      <div class="bg-white rounded-2xl border border-slate-200 flex-shrink-0">
+      <!-- 收到的申请 -->
+      <div class="flex-shrink-0 border-b border-slate-100">
         <button
-          class="w-full flex items-center justify-between px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 rounded-2xl transition"
+          type="button"
+          class="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition"
           @click="showRequests = !showRequests"
         >
-          <div class="flex items-center gap-2">
-            <span>收到的申请</span>
+          <span class="flex items-center gap-2">
+            <span class="font-medium">新的朋友</span>
             <span
               v-if="requestCount > 0"
-              class="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none"
+              class="bg-red-500 text-white text-xs font-bold min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1"
             >{{ requestCount }}</span>
-          </div>
-          <span class="text-slate-400 text-xs transition-transform" :class="showRequests ? 'rotate-180' : ''">▼</span>
+          </span>
+          <span class="text-slate-400 text-xs" :class="showRequests ? 'rotate-180 inline-block' : ''">▼</span>
         </button>
-        <div v-if="showRequests" class="px-3 pb-3">
+        <div v-if="showRequests" class="px-3 pb-3 bg-slate-50/80">
           <FriendRequestList :items="friendStore.received" @accept="accept" @reject="reject" />
         </div>
       </div>
 
       <!-- 好友列表 -->
-      <div class="bg-white rounded-2xl border border-slate-200 flex flex-col min-h-0 flex-1">
-        <div class="px-4 py-3 border-b border-slate-100 flex-shrink-0">
-          <h2 class="text-sm font-semibold text-slate-700">
-            好友列表
-            <span class="text-slate-400 font-normal ml-1">{{ friendStore.friends.length }}</span>
-          </h2>
+      <div class="flex-1 min-h-0 overflow-y-auto">
+        <div class="px-4 py-2 text-xs text-slate-400 font-medium">
+          我的好友 ({{ friendStore.friends.length }})
         </div>
-        <div class="flex-1 overflow-y-auto px-2 py-2">
-          <FriendList
-            :items="friendStore.friends"
-            :selected-id="selectedFriend?.id"
-            :unread-counts="chatStore.unreadCounts"
-            @remove="remove"
-            @select="selectFriend"
-          />
-        </div>
+        <FriendList
+          :items="friendStore.friends"
+          :unread-counts="chatStore.unreadCounts"
+          @remove="remove"
+          @chat="openChat"
+        />
       </div>
     </div>
 
-    <!-- 右侧：聊天面板 -->
-    <div class="flex-1 min-w-0">
+    <!-- 聊天视图（全屏覆盖） -->
+    <div v-show="viewMode === 'chat' && selectedFriend" class="h-full min-h-0 flex flex-col">
       <ChatPanel
         v-if="selectedFriend"
         :friend="selectedFriend"
-        @close="() => { selectedFriend = null; chatStore.setActiveFriend(null) }"
+        show-back
+        @close="closeChat"
       />
-      <div
-        v-else
-        class="h-full flex flex-col items-center justify-center text-slate-400 bg-white rounded-2xl border border-slate-200"
-      >
-        <div class="text-5xl mb-4">💬</div>
-        <div class="text-base font-medium text-slate-500">选择一位好友开始聊天</div>
-        <div class="text-sm text-slate-400 mt-1">从左侧列表中点击好友即可</div>
-      </div>
     </div>
   </div>
 </template>
+
+<style scoped>
+.friends-page {
+  -webkit-tap-highlight-color: transparent;
+}
+</style>

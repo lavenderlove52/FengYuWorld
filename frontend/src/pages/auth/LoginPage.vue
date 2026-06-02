@@ -26,7 +26,13 @@ const onLoginBlur = () => {
   }
 }
 
-const { captchaId, captchaImage, loading: captchaLoading, refresh: refreshCaptcha } = useCaptcha()
+const {
+  captchaId,
+  captchaImage,
+  loading: captchaLoading,
+  loadError: captchaLoadError,
+  refresh: refreshCaptcha,
+} = useCaptcha()
 
 onMounted(async () => {
   await refreshCaptcha()
@@ -49,13 +55,19 @@ const submit = async () => {
     message.warning('请填写完整信息')
     return
   }
-  if (!captchaAnswer.value) {
+  if (!captchaId.value || !captchaImage.value) {
+    message.warning(captchaLoadError.value || '验证码未加载，请点击图片刷新')
+    await refreshCaptcha()
+    return
+  }
+  const answer = captchaAnswer.value.trim()
+  if (!answer) {
     message.warning('请输入验证码')
     return
   }
   loading.value = true
   try {
-    await auth.login(form.value.login, form.value.password, captchaId.value, captchaAnswer.value)
+    await auth.login(form.value.login.trim(), form.value.password, captchaId.value, answer)
     message.success('登录成功')
     const raw = (route.query.redirect as string) || ''
     const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/dashboard'
@@ -107,13 +119,20 @@ const submit = async () => {
           </NFormItem>
 
           <!-- 图形验证码 -->
-          <NFormItem label="验证码">
+          <NFormItem
+            label="验证码"
+            :feedback="captchaLoadError"
+            :validation-status="captchaLoadError ? 'error' : undefined"
+          >
             <div class="flex items-center gap-3 w-full">
               <NInput
                 v-model:value="captchaAnswer"
-                placeholder="输入图中字符"
+                placeholder="输入图中字符（不区分大小写）"
                 size="large"
                 style="flex: 1"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
                 @keydown.enter="submit"
               />
               <div
@@ -128,8 +147,8 @@ const submit = async () => {
                   alt="验证码"
                   class="w-full h-full object-cover"
                 />
-                <div v-else class="w-full h-full flex items-center justify-center text-xs text-slate-400">
-                  加载中...
+                <div v-else class="w-full h-full flex items-center justify-center text-xs text-slate-400 px-1 text-center">
+                  {{ captchaLoading ? '加载中' : '点击刷新' }}
                 </div>
               </div>
             </div>

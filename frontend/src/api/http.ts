@@ -81,6 +81,11 @@ http.interceptors.response.use(
       return Promise.reject(new Error('账号已被锁定'))
     }
 
+    // 无响应：弱网/断网（手机常见）
+    if (!error.response) {
+      return Promise.reject(new Error('网络连接失败，请检查网络后重试'))
+    }
+
     // 非 401 错误：提取后端 message 字段直接抛出，避免前端显示 "Request failed with status code 4xx"
     if (status !== 401) {
       const backendMsg = (error.response?.data as any)?.message
@@ -94,8 +99,10 @@ http.interceptors.response.use(
 
     const backendMsg = (error.response?.data as any)?.message
     const refreshToken = getRefreshToken()
-    // 登录/注册等 auth 接口本身不需要 token，直接返回后端提示
-    if (!refreshToken || original.url?.includes('/auth/')) {
+    const isAuthApi = /\/auth\//.test(original.url || '')
+    const isLoginFailed = code === 40002
+    // 登录/注册等 auth 接口、或「登录失败」业务码：不尝试 refresh，直接返回后端文案
+    if (!refreshToken || isAuthApi || isLoginFailed) {
       if (backendMsg) return Promise.reject(new Error(backendMsg))
       return Promise.reject(error)
     }
