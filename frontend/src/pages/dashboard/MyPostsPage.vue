@@ -5,6 +5,7 @@ import { NButton, useDialog, useMessage } from 'naive-ui'
 import { listMyPosts, deletePost } from '@/api/posts'
 import type { PostSummary } from '@/types/post'
 import Pagination from '@/components/common/Pagination.vue'
+import { getPostPath } from '@/utils/postPath'
 
 const router = useRouter()
 const dialog = useDialog()
@@ -51,6 +52,10 @@ const load = async () => {
 onMounted(load)
 
 const onFilter = () => { page.value = 1; load() }
+
+const openPost = (post: PostSummary) => {
+  router.push(getPostPath(post))
+}
 
 const remove = (post: PostSummary) => {
   dialog.warning({
@@ -137,7 +142,8 @@ const visibilityBadge: Record<string, { label: string; cls: string }> = {
       <div
         v-for="post in posts"
         :key="post.id"
-        class="group flex items-start gap-4 py-4 border-b border-slate-100 hover:bg-slate-50/60 transition-colors rounded-lg px-3 -mx-3"
+        class="group flex items-start gap-4 py-4 border-b border-slate-100 hover:bg-slate-50/60 transition-colors rounded-lg px-3 -mx-3 cursor-pointer"
+        @click="openPost(post)"
       >
         <!-- 封面缩略图 -->
         <div class="w-14 h-14 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0 mt-0.5">
@@ -172,7 +178,7 @@ const visibilityBadge: Record<string, { label: string; cls: string }> = {
           </div>
 
           <!-- 第二行：摘要 -->
-          <p class="text-sm text-slate-400 truncate mb-2">{{ post.summary || '暂无摘要' }}</p>
+          <p v-if="post.summary" class="text-sm text-slate-400 truncate mb-2">{{ post.summary }}</p>
 
           <!-- 第三行：元信息 + 操作按钮 同行 -->
           <div class="flex items-center gap-3 text-xs text-slate-400">
@@ -182,7 +188,10 @@ const visibilityBadge: Record<string, { label: string; cls: string }> = {
             <span v-if="post.tags?.length">· {{ post.tags.join('、') }}</span>
 
             <!-- 操作按钮 紧跟元信息后面 -->
-            <div class="flex items-center gap-1.5 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div
+              class="flex items-center gap-1.5 ml-2 opacity-0 group-hover:opacity-100 transition-opacity"
+              @click.stop
+            >
               <button
                 class="px-2.5 py-1 text-xs text-slate-600 bg-white border border-slate-200 rounded-md hover:border-slate-400 hover:text-slate-800 transition"
                 @click="router.push(`/dashboard/posts/${post.id}/edit`)"

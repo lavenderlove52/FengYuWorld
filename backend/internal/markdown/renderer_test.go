@@ -5,19 +5,20 @@ import (
 	"testing"
 )
 
-func TestRenderBlockMath(t *testing.T) {
-	source := `$$
-SamplePoint = \frac{1 + TimeSegment1}{Total_Tq}
-$$`
+func TestRenderSanitizesUnsafeHTML(t *testing.T) {
+	source := `[safe](https://example.com)
+
+<script>alert(1)</script>
+<img src=x onerror=alert(1)>`
 
 	got, err := NewRenderer().Render(source)
 	if err != nil {
 		t.Fatalf("Render() error = %v", err)
 	}
-	if !strings.Contains(got, `class="katex"`) {
-		t.Fatalf("expected katex markup, got: %s", got)
+	if strings.Contains(got, `<script`) || strings.Contains(got, `onerror`) {
+		t.Fatalf("expected unsafe HTML to be removed, got: %s", got)
 	}
-	if strings.Contains(got, `\frac`) {
-		t.Fatalf("expected rendered math, not raw LaTeX: %s", got)
+	if !strings.Contains(got, `href="https://example.com"`) {
+		t.Fatalf("expected safe link to remain, got: %s", got)
 	}
 }

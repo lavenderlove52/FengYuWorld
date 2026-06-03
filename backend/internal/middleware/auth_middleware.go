@@ -41,7 +41,6 @@ func (m *AuthMiddleware) Optional() gin.HandlerFunc {
 					c.Set("userRole", string(cu.Role))
 					c.Set("userCanSitePin", cu.CanSitePin)
 				}
-				// 用户不存在或已锁定：静默降级为匿名，不 abort
 			} else {
 				c.Set(ContextUserIDKey, uid)
 				c.Set(ContextUsernameKey, username)
@@ -79,7 +78,6 @@ func (m *AuthMiddleware) Required() gin.HandlerFunc {
 	}
 }
 
-// lookupUser 先查内存缓存，未命中再查 DB 并回填缓存。
 func (m *AuthMiddleware) lookupUser(uid int64) (cachedUser, error) {
 	if m.cache != nil {
 		if cu, ok := m.cache.Get(uid); ok {
@@ -102,16 +100,11 @@ func (m *AuthMiddleware) lookupUser(uid int64) (cachedUser, error) {
 }
 
 func (m *AuthMiddleware) parseBearer(c *gin.Context) (int64, string, bool) {
-	var token string
 	auth := c.GetHeader("Authorization")
-	if auth != "" && strings.HasPrefix(auth, "Bearer ") {
-		token = strings.TrimPrefix(auth, "Bearer ")
-	} else if q := c.Query("token"); q != "" {
-		// WebSocket 握手时浏览器无法设置自定义 Header，退而通过 ?token= query param 传递
-		token = q
-	} else {
+	if auth == "" || !strings.HasPrefix(auth, "Bearer ") {
 		return 0, "", false
 	}
+	token := strings.TrimPrefix(auth, "Bearer ")
 	claims, err := m.jwt.ParseAccessToken(token)
 	if err != nil {
 		return 0, "", false

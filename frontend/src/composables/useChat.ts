@@ -1,5 +1,6 @@
 import { ref, reactive } from 'vue'
 import { apiBase } from '@/config/app'
+import { getWsTicket } from '@/api/auth'
 import type { Message, UnreadCounts, WsOutMsg } from '@/types/chat'
 
 const WS_RECONNECT_MAX = 30000
@@ -27,15 +28,18 @@ export function useChat() {
   let myUserId = 0
   let stopped = false
 
-  function connect(userId: number, token: string) {
+  function connect(userId: number) {
     stopped = false
     myUserId = userId
-    _connect(token)
+    void _connect()
   }
 
-  function _connect(token: string) {
+  async function _connect() {
     if (stopped) return
-    const url = `${buildWsUrl()}?token=${encodeURIComponent(token)}`
+    const ticketRes = await getWsTicket()
+    if (stopped || ticketRes.code !== 0 || !ticketRes.data?.ticket) return
+
+    const url = `${buildWsUrl()}?ticket=${encodeURIComponent(ticketRes.data.ticket)}`
     ws = new WebSocket(url)
 
     ws.onopen = () => {
@@ -58,7 +62,7 @@ export function useChat() {
       if (!stopped) {
         reconnectTimer = setTimeout(() => {
           reconnectDelay = Math.min(reconnectDelay * 2, WS_RECONNECT_MAX)
-          _connect(token)
+          void _connect()
         }, reconnectDelay)
       }
     }

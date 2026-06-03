@@ -19,20 +19,24 @@ var (
 )
 
 type AuthService struct {
-	db           *gorm.DB
-	users        *repository.UserRepository
-	jwt          *util.JWTManager
-	emailCodeSvc *EmailCodeService
-	inviteSvc    *InviteService
+	db            *gorm.DB
+	users         *repository.UserRepository
+	jwt           *util.JWTManager
+	refreshTokens *repository.RefreshTokenRepository
+	refreshTTL    time.Duration
+	emailCodeSvc  *EmailCodeService
+	inviteSvc     *InviteService
 }
 
-func NewAuthService(db *gorm.DB, users *repository.UserRepository, jwt *util.JWTManager, emailCodeSvc *EmailCodeService, inviteSvc *InviteService) *AuthService {
+func NewAuthService(db *gorm.DB, users *repository.UserRepository, jwt *util.JWTManager, refreshTokens *repository.RefreshTokenRepository, refreshTTL time.Duration, emailCodeSvc *EmailCodeService, inviteSvc *InviteService) *AuthService {
 	return &AuthService{
-		db:           db,
-		users:        users,
-		jwt:          jwt,
-		emailCodeSvc: emailCodeSvc,
-		inviteSvc:    inviteSvc,
+		db:            db,
+		users:         users,
+		jwt:           jwt,
+		refreshTokens: refreshTokens,
+		refreshTTL:    refreshTTL,
+		emailCodeSvc:  emailCodeSvc,
+		inviteSvc:     inviteSvc,
 	}
 }
 
@@ -134,7 +138,29 @@ func (s *AuthService) Refresh(refreshToken string) (*dto.AuthResponse, error) {
 	if err != nil || user == nil || user.Status != domain.UserStatusActive {
 		return nil, ErrUnauthorized
 	}
-	return s.buildAuthResponse(user)
+	active, err := s.refreshTokens.IsActive(refreshToken, user.ID)
+	if err != nil || !active {
+		return nil, ErrUnauthorized
+	}
+
+	tokens, err := s.jwt.GenerateTokenPair(user.ID, user.Username)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.refreshTokens.Rotate(refreshToken, tokens.RefreshToken, user.ID, time.Now().Add(s.refreshTTL)); err != nil {
+		return nil, ErrUnauthorized
+	}
+	return &dto.AuthResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		User:         toUserInfo(user, false),
+	}, nil
+}
+
+func (s *AuthService) Logout(refreshToken string) {
+	if refreshToken != "" {
+		_ = s.refreshTokens.Revoke(refreshToken)
+	}
 }
 
 // ResetPassword 用邮箱验证码重置密码
@@ -150,12 +176,19 @@ func (s *AuthService) ResetPassword(email, emailCode, newPassword string) error 
 	if err != nil {
 		return err
 	}
-	return s.users.UpdatePassword(user.ID, hash)
+	if err := s.users.UpdatePassword(user.ID, hash); err != nil {
+		return err
+	}
+	_ = s.refreshTokens.RevokeUser(user.ID)
+	return nil
 }
 
 func (s *AuthService) buildAuthResponse(user *domain.User) (*dto.AuthResponse, error) {
 	tokens, err := s.jwt.GenerateTokenPair(user.ID, user.Username)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.refreshTokens.Create(tokens.RefreshToken, user.ID, time.Now().Add(s.refreshTTL)); err != nil {
 		return nil, err
 	}
 	return &dto.AuthResponse{

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, NSpace, NSelect, NCollapse, NCollapseItem, useMessage } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, NSpace, NSelect, NSwitch, NCollapse, NCollapseItem, useMessage } from 'naive-ui'
 import { createPost, getPost, updatePost } from '@/api/posts'
 import { listCategories, createCategory } from '@/api/categories'
 import type { Category } from '@/types/category'
@@ -23,12 +23,14 @@ const form = ref<CreatePostPayload>({
   title: '',
   slug: '',
   cover_image_url: '',
+  summary: '',
   content_md: '# 标题\n\n开始写作...',
   tag_names: [],
   status: 'draft',
   visibility: 'private',
   visible_user_ids: [],
   allow_comment: true,
+  show_toc: true,
 })
 
 const tagInput = ref('')
@@ -91,6 +93,7 @@ onMounted(async () => {
         title: p.title,
         slug: p.slug,
         cover_image_url: p.cover_image_url,
+        summary: p.summary || '',
         content_md: p.content_md || '',
         category_id: p.category_id,
         tag_names: p.tags || [],
@@ -98,6 +101,7 @@ onMounted(async () => {
         visibility: p.visibility as PostVisibility,
         visible_user_ids: p.visible_user_ids || [],
         allow_comment: p.allow_comment,
+        show_toc: p.show_toc !== false,
       }
       tagInput.value = (p.tags || []).join(', ')
     }
@@ -171,6 +175,16 @@ const save = async (status: 'draft' | 'published') => {
       <NFormItem label="封面">
         <ImageUploader v-model="form.cover_image_url" />
       </NFormItem>
+      <NFormItem label="文章简介">
+        <NInput
+          v-model:value="form.summary"
+          type="textarea"
+          :rows="3"
+          :maxlength="500"
+          show-count
+          placeholder="可选；留空时首页和列表不会展示简介"
+        />
+      </NFormItem>
       <NFormItem label="分类">
         <div class="w-full flex items-center gap-2">
           <NSelect
@@ -209,6 +223,12 @@ const save = async (status: 'draft' | 'published') => {
       </NFormItem>
       <NFormItem v-if="form.visibility === 'specified'" label="指定好友">
         <FriendMultiSelect v-model="form.visible_user_ids!" />
+      </NFormItem>
+      <NFormItem label="文章目录">
+        <div class="flex items-center gap-3">
+          <NSwitch v-model:value="form.show_toc" />
+          <span class="text-sm text-slate-500">开启后，详情页会自动识别 Markdown 标题并生成目录</span>
+        </div>
       </NFormItem>
       <NFormItem label="正文">
         <MarkdownEditor v-model="form.content_md" />

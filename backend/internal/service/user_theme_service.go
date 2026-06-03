@@ -15,8 +15,8 @@ var (
 	ErrInvalidPreset      = errors.New("invalid preset")
 	ErrInvalidLayout      = errors.New("invalid layout")
 	ErrCSSToLong          = errors.New("custom_css exceeds 10000 characters")
+	ErrJSToLong           = errors.New("custom_js exceeds 10000 characters")
 	ErrInvalidAccentColor = errors.New("invalid accent_color format")
-	ErrJSTooLong          = errors.New("custom_js exceeds 50000 characters")
 	ErrForbidden          = errors.New("forbidden")
 
 	allowedPresets = map[string]bool{"default": true, "minimal": true, "dark": true, "forest": true, "ocean": true, "warm": true}
@@ -57,26 +57,21 @@ func (s *UserThemeService) Update(userID int64, req dto.UpdateThemeRequest) (*do
 	if len(req.CustomCSS) > 10000 {
 		return nil, ErrCSSToLong
 	}
+	if len(req.CustomJS) > 10000 {
+		return nil, ErrJSToLong
+	}
 	if req.AccentColor != "" && !accentColorRe.MatchString(req.AccentColor) {
 		return nil, ErrInvalidAccentColor
 	}
-	if len(req.CustomJS) > 50000 {
-		return nil, ErrJSTooLong
-	}
-
 	if req.CustomJS != "" {
 		user, err := s.userRepo.FindByID(userID)
-		if err != nil {
-			return nil, err
+		if err != nil || user == nil {
+			return nil, ErrForbidden
 		}
-		if user == nil {
-			return nil, ErrUserNotFound
-		}
-		if !user.CanCustomJS && user.Role != domain.UserRoleAdmin {
+		if user.Role != "admin" && !user.CanCustomJS {
 			return nil, ErrForbidden
 		}
 	}
-
 	filteredCSS := filterCSS(req.CustomCSS)
 
 	theme, err := s.repo.GetByUserID(userID)

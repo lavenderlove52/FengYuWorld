@@ -6,6 +6,8 @@ import type { UserTheme } from '@/types/theme'
 
 const STYLE_ID_PREFIX = 'user-theme-css-'
 
+const jsCleanups = new Map<string, Array<() => void>>()
+
 function getPresetConfig(preset: string) {
   return PRESETS.find((p) => p.id === preset) ?? PRESETS[0]
 }
@@ -30,6 +32,8 @@ function injectCustomCss(username: string, css: string) {
     el.id = id
     document.head.appendChild(el)
   }
+
+  const scope = `[data-theme-user="${CSS.escape(username)}"]`
   const scoped = css
     .split('}')
     .filter((block) => block.trim())
@@ -38,11 +42,21 @@ function injectCustomCss(username: string, css: string) {
       if (!rest.length) return ''
       const selectors = selector
         .split(',')
-        .map((s) => `[data-theme-user="${username}"] ${s.trim()}`)
+        .map((s) => {
+          const trimmed = s.trim()
+          if (!trimmed) return ''
+          // 用户已写 [data-theme-user] 时，替换为当前用户精确 scope，避免双重选择器导致样式不生效
+          if (trimmed.includes('[data-theme-user')) {
+            return trimmed.replace(/\[data-theme-user\]/g, scope)
+          }
+          return `${scope} ${trimmed}`
+        })
+        .filter(Boolean)
         .join(', ')
       return `${selectors} { ${rest.join('{')} }`
     })
     .join('\n')
+
   el.textContent = scoped
 }
 
@@ -50,58 +64,112 @@ function removeCustomCss(username: string) {
   document.getElementById(STYLE_ID_PREFIX + username)?.remove()
 }
 
-const JS_SCRIPT_ID_PREFIX = 'user-theme-js-'
-
-function injectCustomJS(username: string, js: string) {
-  removeCustomJS(username)
-  if (!js.trim()) return
-
-  // 包装：拦截 canvas 创建，记录以便导航后清理；同时提供停止 RAF 的钩子
-  const cleanupKey = `__theme_cleanup_${username.replace(/[^a-z0-9]/gi, '_')}`
-  const wrapper = `
-(function(){
-  var _canvases = [];
-  var _origCE = document.createElement.bind(document);
-  document.createElement = function(tag) {
-    var el = _origCE(tag);
-    if (typeof tag === 'string' && tag.toLowerCase() === 'canvas') _canvases.push(el);
-    return el;
-  };
-  var _rafIds = [];
-  var _origRAF = window.requestAnimationFrame.bind(window);
-  window.requestAnimationFrame = function(cb) {
-    var id = _origRAF(cb); _rafIds.push(id); return id;
-  };
-  try { ${js} } catch(e) { console.warn('[theme-js]', e); }
-  document.createElement = _origCE;
-  window.requestAnimationFrame = _origRAF;
-  window['${cleanupKey}'] = function() {
-    _canvases.forEach(function(c) { try { c.remove(); } catch(e){} });
-    _rafIds.forEach(function(id) { try { cancelAnimationFrame(id); } catch(e){} });
-    delete window['${cleanupKey}'];
-  };
-})();
-`
-  const script = document.createElement('script')
-  script.id = JS_SCRIPT_ID_PREFIX + username
-  script.textContent = wrapper
-  document.body.appendChild(script)
+function registerCleanup(username: string, cleanup: () => void) {
+  const list = jsCleanups.get(username) ?? []
+  list.push(cleanup)
+  jsCleanups.set(username, list)
 }
 
-function removeCustomJS(username: string) {
-  const cleanupKey = `__theme_cleanup_${username.replace(/[^a-z0-9]/gi, '_')}`
-  const cleanup = (window as any)[cleanupKey]
-  if (cleanup) {
-    try { cleanup() } catch {}
+function runCleanup(username: string) {
+  const list = jsCleanups.get(username) ?? []
+  for (const cleanup of list.splice(0).reverse()) {
+    try {
+      cleanup()
+    } catch (e) {
+      console.warn('[useUserTheme] custom_js cleanup failed', e)
+    }
   }
-  // 执行用户代码自注册的清理函数
-  const bgCleanup = (window as any).__bgCleanup
-  if (Array.isArray(bgCleanup)) {
-    bgCleanup.forEach((fn: () => void) => { try { fn() } catch {} })
-    delete (window as any).__bgCleanup
+  jsCleanups.delete(username)
+}
+
+function createScopedDocument(root: HTMLElement) {
+  const scopedDocument = {
+    querySelector: (selector: string) => root.querySelector(selector),
+    querySelectorAll: (selector: string) => root.querySelectorAll(selector),
+    getElementById: (id: string) => {
+      const el = document.getElementById(id)
+      return el && root.contains(el) ? el : null
+    },
+    getElementsByClassName: (className: string) => root.getElementsByClassName(className),
+    getElementsByTagName: (tagName: string) => root.getElementsByTagName(tagName),
+    createElement: document.createElement.bind(document),
+    createTextNode: document.createTextNode.bind(document),
+    addEventListener: root.addEventListener.bind(root),
+    removeEventListener: root.removeEventListener.bind(root),
+    body: root,
+    documentElement: root,
   }
-  const el = document.getElementById(JS_SCRIPT_ID_PREFIX + username)
-  el?.remove()
+
+  return scopedDocument as unknown as Document
+}
+
+function createScopedWindow(username: string, root: HTMLElement) {
+  const customState = new Map<PropertyKey, unknown>()
+  const cleanupList: Array<() => void> = []
+
+  customState.set('__themeRoot', root)
+  customState.set('__themeCleanup', cleanupList)
+  customState.set('__bgCleanup', cleanupList)
+  registerCleanup(username, () => {
+    for (const cleanup of cleanupList.splice(0).reverse()) {
+      cleanup()
+    }
+  })
+
+  return new Proxy(window, {
+    get(target, prop, receiver) {
+      if (prop === 'document') return createScopedDocument(root)
+      if (prop === 'window' || prop === 'self' || prop === 'globalThis' || prop === 'top' || prop === 'parent') {
+        return receiver
+      }
+      if (customState.has(prop)) return customState.get(prop)
+      return Reflect.get(target, prop, target)
+    },
+    set(_target, prop, value) {
+      customState.set(prop, value)
+      return true
+    },
+  })
+}
+
+function injectCustomJs(username: string, js: string, root: HTMLElement | null) {
+  removeCustomJs(username)
+  if (!js.trim() || !root) return
+
+  const scopedDocument = createScopedDocument(root)
+  const scopedWindow = createScopedWindow(username, root)
+  const beforeChildren = new Set(root.childNodes)
+
+  const runner = new Function(
+    'root',
+    'document',
+    'window',
+    'globalThis',
+    'self',
+    'parent',
+    'top',
+    'console',
+    `
+      "use strict";
+      const Function = undefined;
+      const eval = undefined;
+      ${js}
+      //# sourceURL=custom-theme-${encodeURIComponent(username)}.js
+    `,
+  )
+
+  runner(root, scopedDocument, scopedWindow, scopedWindow, scopedWindow, scopedWindow, scopedWindow, console)
+  registerCleanup(username, () => {
+    for (const node of Array.from(root.childNodes)) {
+      if (!beforeChildren.has(node)) {
+        node.parentNode?.removeChild(node)
+      }
+    }
+  })
+}
+
+function removeCustomJs(username: string) {
+  runCleanup(username)
 }
 
 export function useUserTheme(containerRef: { value: HTMLElement | null }) {
@@ -117,9 +185,7 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
     originalBodyColor = document.body.style.color
     document.body.style.backgroundColor = p.bg
     document.body.style.color = p.text
-    if (t.font_family) {
-      document.body.style.fontFamily = `'${t.font_family}', serif`
-    }
+    document.body.style.fontFamily = t.font_family ? `'${t.font_family}', serif` : ''
     setActivePageTheme(t)
   }
 
@@ -149,23 +215,18 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
     loading.value = true
     try {
       const res = await getUserTheme(username)
-      if (res.code === 0 && res.data) {
-        theme.value = res.data
-      } else {
-        theme.value = { ...DEFAULT_THEME }
-      }
+      theme.value = res.code === 0 && res.data ? res.data : { ...DEFAULT_THEME }
     } catch {
       theme.value = { ...DEFAULT_THEME }
     } finally {
       loading.value = false
-      // 用 try/catch 包裹所有 DOM 操作：若任意步骤抛出，不应影响页面内容显示
       try { applyToBody(theme.value) } catch (e) { console.warn('[useUserTheme] applyToBody failed', e) }
       try { applyToContainer(theme.value) } catch (e) { console.warn('[useUserTheme] applyToContainer failed', e) }
       if (theme.value.custom_css) {
         try { injectCustomCss(username, theme.value.custom_css) } catch (e) { console.warn('[useUserTheme] injectCustomCss failed', e) }
       }
       if (theme.value.custom_js) {
-        try { injectCustomJS(username, theme.value.custom_js) } catch (e) { console.warn('[useUserTheme] injectCustomJS failed', e) }
+        try { injectCustomJs(username, theme.value.custom_js, containerRef.value) } catch (e) { console.warn('[useUserTheme] injectCustomJs failed', e) }
       }
     }
   }
@@ -183,7 +244,7 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
   onUnmounted(() => {
     if (currentUsername) {
       removeCustomCss(currentUsername)
-      removeCustomJS(currentUsername)
+      removeCustomJs(currentUsername)
     }
     restoreBody()
   })
@@ -191,7 +252,6 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
   return { theme, loading, load, applyPreview }
 }
 
-// 用于在设置页获取预设对应的 CSS 变量（无需挂载 DOM）
 export function getThemeCssVars(theme: UserTheme) {
   return buildCssVars(theme)
 }

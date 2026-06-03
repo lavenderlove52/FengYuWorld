@@ -82,6 +82,10 @@ docker-compose.override.yml
 *.temp
 *.swp
 *~
+backend/internal/util/*.go.*
+backend/internal/service/*.go.*
+backend/internal/domain/*.go.*
 .cache/
+.gocache/
 tmp/
 temp/

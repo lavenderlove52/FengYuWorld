@@ -5,7 +5,6 @@ import (
 
 	"my-blog/backend/internal/domain"
 	"my-blog/backend/internal/dto"
-	"my-blog/backend/internal/markdown"
 	"my-blog/backend/internal/repository"
 	"my-blog/backend/internal/util"
 )
@@ -289,9 +288,10 @@ func postToSummaryForPin(post *domain.Post) dto.PostSummary {
 		Title:         post.Title,
 		Slug:          post.Slug,
 		CoverImageURL: post.CoverImageURL,
-		Summary:       markdown.Summary(post.ContentHTML, 200),
+		Summary:       post.Summary,
 		Status:        string(post.Status),
 		Visibility:    string(post.Visibility),
+		ShowTOC:       post.ShowTOC,
 		ViewCount:     post.ViewCount,
 		CreatedAt:     util.FormatTime(post.CreatedAt),
 	}

@@ -4,6 +4,7 @@ type CreatePostRequest struct {
 	Title          string   `json:"title" binding:"required,max=200"`
 	Slug           string   `json:"slug"`
 	CoverImageURL  string   `json:"cover_image_url"`
+	Summary        string   `json:"summary" binding:"max=500"`
 	ContentMD      string   `json:"content_md" binding:"required"`
 	CategoryID     *int64   `json:"category_id"`
 	TagNames       []string `json:"tag_names"`
@@ -11,12 +12,14 @@ type CreatePostRequest struct {
 	Visibility     string   `json:"visibility" binding:"required,oneof=public private friends specified"`
 	VisibleUserIDs []int64  `json:"visible_user_ids"`
 	AllowComment   *bool    `json:"allow_comment"`
+	ShowTOC        *bool    `json:"show_toc"`
 }
 
 type UpdatePostRequest struct {
 	Title          string   `json:"title" binding:"required,max=200"`
 	Slug           string   `json:"slug"`
 	CoverImageURL  string   `json:"cover_image_url"`
+	Summary        string   `json:"summary" binding:"max=500"`
 	ContentMD      string   `json:"content_md" binding:"required"`
 	CategoryID     *int64   `json:"category_id"`
 	TagNames       []string `json:"tag_names"`
@@ -24,6 +27,7 @@ type UpdatePostRequest struct {
 	Visibility     string   `json:"visibility" binding:"required,oneof=public private friends specified"`
 	VisibleUserIDs []int64  `json:"visible_user_ids"`
 	AllowComment   *bool    `json:"allow_comment"`
+	ShowTOC        *bool    `json:"show_toc"`
 }
 
 type PostSummary struct {
@@ -34,6 +38,7 @@ type PostSummary struct {
 	Summary       string         `json:"summary"`
 	Status        string         `json:"status"`
 	Visibility    string         `json:"visibility"`
+	ShowTOC       bool           `json:"show_toc"`
 	ViewCount     int64          `json:"view_count"`
 	PublishedAt   *string        `json:"published_at"`
 	CreatedAt     string         `json:"created_at"`

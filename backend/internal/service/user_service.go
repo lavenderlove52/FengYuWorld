@@ -62,36 +62,6 @@ func (s *UserService) GetByUsername(username string) (*domain.User, error) {
 	return user, nil
 }
 
-func (s *UserService) GrantCustomJS(adminID int64, targetUserID int64) error {
-	admin, err := s.users.FindByID(adminID)
-	if err != nil || admin == nil || admin.Role != domain.UserRoleAdmin {
-		return ErrAdminForbidden
-	}
-	target, err := s.users.FindByID(targetUserID)
-	if err != nil {
-		return err
-	}
-	if target == nil {
-		return ErrUserNotFound
-	}
-	return s.users.UpdateCanCustomJS(targetUserID, true)
-}
-
-func (s *UserService) RevokeCustomJS(adminID int64, targetUserID int64) error {
-	admin, err := s.users.FindByID(adminID)
-	if err != nil || admin == nil || admin.Role != domain.UserRoleAdmin {
-		return ErrAdminForbidden
-	}
-	target, err := s.users.FindByID(targetUserID)
-	if err != nil {
-		return err
-	}
-	if target == nil {
-		return ErrUserNotFound
-	}
-	return s.users.UpdateCanCustomJS(targetUserID, false)
-}
-
 func (s *UserService) ListUsers(keyword string, page, pageSize int) ([]dto.UserInfo, int64, error) {
 	users, total, err := s.users.ListUsers(keyword, page, pageSize)
 	if err != nil {
@@ -102,4 +72,23 @@ func (s *UserService) ListUsers(keyword string, page, pageSize int) ([]dto.UserI
 		infos[i] = toUserInfo(&u, true)
 	}
 	return infos, total, nil
+}
+
+func (s *UserService) GrantCustomJS(userID int64) error {
+	user, err := s.users.FindByID(userID)
+	if err != nil || user == nil {
+		return ErrUserNotFound
+	}
+	return s.users.UpdateCanCustomJS(userID, true)
+}
+
+func (s *UserService) RevokeCustomJS(userID int64) error {
+	user, err := s.users.FindByID(userID)
+	if err != nil || user == nil {
+		return ErrUserNotFound
+	}
+	if user.Role == "admin" {
+		return ErrAdminForbidden
+	}
+	return s.users.UpdateCanCustomJS(userID, false)
 }

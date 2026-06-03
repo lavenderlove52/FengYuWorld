@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"my-blog/backend/internal/config"
 	"my-blog/backend/internal/db"
@@ -55,6 +56,7 @@ func New(cfg *config.Config) (*App, error) {
 	pinRepo := repository.NewPinRepository(database)
 	emailCodeRepo := repository.NewEmailCodeRepository(database)
 	inviteCodeRepo := repository.NewInviteCodeRepository(database)
+	refreshTokenRepo := repository.NewRefreshTokenRepository(database)
 
 	mdRenderer := markdown.NewRenderer()
 	localStorage := storage.NewLocalStorage(cfg.UploadDir, cfg.PublicUploadBaseURL)
@@ -69,7 +71,7 @@ func New(cfg *config.Config) (*App, error) {
 	emailCodeSvc := service.NewEmailCodeService(emailCodeRepo, emailSvc)
 	inviteSvc := service.NewInviteService(inviteCodeRepo)
 
-	authSvc := service.NewAuthService(database, userRepo, jwtManager, emailCodeSvc, inviteSvc)
+	authSvc := service.NewAuthService(database, userRepo, jwtManager, refreshTokenRepo, cfg.JWTRefreshExpires, emailCodeSvc, inviteSvc)
 	userSvc := service.NewUserService(userRepo)
 	policy := service.NewPostPolicy(friendRepo, postRepo)
 	postSvc := service.NewPostService(postRepo, tagRepo, categoryRepo, friendRepo, policy, mdRenderer)
@@ -82,7 +84,9 @@ func New(cfg *config.Config) (*App, error) {
 	userThemeRepo := repository.NewUserThemeRepository(database)
 	userThemeSvc := service.NewUserThemeService(userThemeRepo, userRepo)
 
-	authHandler := handler.NewAuthHandler(authSvc, emailCodeSvc, captchaSvc)
+	wsTicketStore := service.NewWSTicketStore(60 * time.Second)
+
+	authHandler := handler.NewAuthHandler(authSvc, emailCodeSvc, captchaSvc, wsTicketStore)
 	captchaHandler := handler.NewCaptchaHandler(captchaSvc)
 	userHandler := handler.NewUserHandler(userSvc, postSvc)
 	postHandler := handler.NewPostHandler(postSvc)
@@ -99,7 +103,7 @@ func New(cfg *config.Config) (*App, error) {
 
 	hub := ws.NewHub()
 	msgRepo := repository.NewMessageRepository(database)
-	wsHandler := handler.NewWSHandler(hub, msgRepo, friendRepo)
+	wsHandler := handler.NewWSHandler(hub, msgRepo, friendRepo, wsTicketStore)
 	chatHandler := handler.NewChatHandler(msgRepo, friendRepo)
 
 	router := gin.New()

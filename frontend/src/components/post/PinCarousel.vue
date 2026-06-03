@@ -82,7 +82,7 @@ onUnmounted(stopTimer)
               {{ post?.title }}
             </h2>
 
-            <p class="text-slate-500 text-sm leading-relaxed line-clamp-2 mb-4 sm:mb-5 sm:max-w-lg">
+            <p v-if="post?.summary" class="text-slate-500 text-sm leading-relaxed line-clamp-2 mb-4 sm:mb-5 sm:max-w-lg">
               {{ post?.summary }}
             </p>
 

@@ -5,29 +5,25 @@ import (
 	"regexp"
 	"strings"
 
-	katex "github.com/FurqanSoftware/goldmark-katex"
+	"github.com/microcosm-cc/bluemonday"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
 	"github.com/yuin/goldmark/renderer/html"
 )
 
-var (
-	scriptRe  = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
-	onEventRe = regexp.MustCompile(`(?i)\s(on\w+)\s*=`)
-)
-
 type Renderer struct {
-	md goldmark.Markdown
+	md        goldmark.Markdown
+	sanitizer *bluemonday.Policy
 }
 
 func NewRenderer() *Renderer {
 	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM, &katex.Extender{}),
+		goldmark.WithExtensions(extension.GFM),
 		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
 		goldmark.WithRendererOptions(html.WithHardWraps(), html.WithXHTML()),
 	)
-	return &Renderer{md: md}
+	return &Renderer{md: md, sanitizer: bluemonday.UGCPolicy()}
 }
 
 func (r *Renderer) Render(source string) (string, error) {
@@ -35,13 +31,7 @@ func (r *Renderer) Render(source string) (string, error) {
 	if err := r.md.Convert([]byte(source), &buf); err != nil {
 		return "", err
 	}
-	return sanitizeHTML(buf.String()), nil
-}
-
-func sanitizeHTML(input string) string {
-	out := scriptRe.ReplaceAllString(input, "")
-	out = onEventRe.ReplaceAllString(out, "")
-	return strings.TrimSpace(out)
+	return strings.TrimSpace(r.sanitizer.Sanitize(buf.String())), nil
 }
 
 func Summary(html string, maxLen int) string {

@@ -5,7 +5,6 @@ import * as friendsApi from '@/api/friends'
 import { useFriendStore } from '@/stores/friend'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
-import { getAccessToken } from '@/api/http'
 import FriendRequestList from '@/components/friend/FriendRequestList.vue'
 import FriendList from '@/components/friend/FriendList.vue'
 import ChatPanel from '@/components/chat/ChatPanel.vue'
@@ -34,9 +33,8 @@ const load = async () => {
 
 onMounted(async () => {
   await load()
-  const token = getAccessToken()
-  if (token && authStore.user) {
-    chatStore.initWs(authStore.user.id, token)
+  if (authStore.user) {
+    chatStore.initWs(authStore.user.id)
   }
 })
 

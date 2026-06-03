@@ -13,8 +13,8 @@ export const useChatStore = defineStore('chat', () => {
   const { connected, messages, unreadCounts, activeFriendId, connect, disconnect, sendMessage, markRead, injectMessages } = chat
 
   /** 初始化 WebSocket 连接 */
-  function initWs(userId: number, token: string) {
-    connect(userId, token)
+  function initWs(userId: number) {
+    connect(userId)
   }
 
   /** 关闭连接 */

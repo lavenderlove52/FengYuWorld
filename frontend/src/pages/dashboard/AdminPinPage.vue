@@ -2,7 +2,15 @@
 import { onMounted, ref, computed } from 'vue'
 import { useMessage } from 'naive-ui'
 import { listPublicPosts } from '@/api/posts'
-import { getSitePins, addSitePin, removeSitePin, grantSitePinPermission, revokeSitePinPermission, grantCustomJSPermission, revokeCustomJSPermission } from '@/api/pins'
+import {
+  getSitePins,
+  addSitePin,
+  removeSitePin,
+  grantSitePinPermission,
+  revokeSitePinPermission,
+  grantCustomJSPermission,
+  revokeCustomJSPermission,
+} from '@/api/pins'
 import { listUsers } from '@/api/users'
 import type { PostSummary, PinnedPost } from '@/types/post'
 import type { UserInfo } from '@/types/auth'
@@ -75,6 +83,7 @@ const users = ref<UserInfo[]>([])
 const userTotal = ref(0)
 const loadingUsers = ref(false)
 const operatingUser = ref<number | null>(null)
+const operatingUserJS = ref<number | null>(null)
 const userKeyword = ref('')
 let userSearchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -121,8 +130,6 @@ const toggleGrant = async (user: UserInfo) => {
   }
 }
 
-const operatingUserJS = ref<number | null>(null)
-
 const toggleCustomJS = async (user: UserInfo) => {
   operatingUserJS.value = user.id
   try {
@@ -138,7 +145,7 @@ const toggleCustomJS = async (user: UserInfo) => {
       const res = await grantCustomJSPermission(user.id)
       if (res.code === 0) {
         user.can_custom_js = true
-        message.success(`已授权 ${user.nickname} 使用自定义 JS`)
+        message.success(`已授予 ${user.nickname} 自定义 JS 权限`)
       } else {
         message.error(res.message || '操作失败')
       }
@@ -317,7 +324,7 @@ const formatDate = (d: string) => d?.slice(0, 10) ?? ''
                 <span v-if="user.can_site_pin && user.role !== 'admin'"
                   class="text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-full">置顶</span>
                 <span v-if="user.can_custom_js && user.role !== 'admin'"
-                  class="text-[10px] px-1.5 py-0.5 bg-orange-50 text-orange-500 border border-orange-100 rounded-full">自定义JS</span>
+                  class="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">JS</span>
               </div>
               <div class="text-xs text-slate-400 mt-0.5">@{{ user.username }}</div>
             </div>
@@ -337,17 +344,16 @@ const formatDate = (d: string) => d?.slice(0, 10) ?? ''
                 <span v-if="operatingUser === user.id">...</span>
                 <span v-else>{{ user.can_site_pin ? '撤销置顶' : '授予置顶' }}</span>
               </button>
-              <!-- 自定义 JS 授权 -->
               <button
                 class="text-xs px-2.5 py-1.5 rounded-lg border transition min-w-[64px] text-center"
                 :class="user.can_custom_js
-                  ? 'bg-orange-50 text-orange-500 border-orange-100 hover:bg-red-50 hover:text-red-500 hover:border-red-100'
-                  : 'bg-white text-slate-500 border-slate-200 hover:bg-orange-50 hover:text-orange-500 hover:border-orange-200'"
+                  ? 'bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-red-50 hover:text-red-500 hover:border-red-100'
+                  : 'bg-white text-slate-500 border-slate-200 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200'"
                 :disabled="operatingUserJS === user.id"
                 @click="toggleCustomJS(user)"
               >
                 <span v-if="operatingUserJS === user.id">...</span>
-                <span v-else>{{ user.can_custom_js ? '撤销JS' : '授予JS' }}</span>
+                <span v-else>{{ user.can_custom_js ? '撤销 JS' : '授予 JS' }}</span>
               </button>
             </div>
           </div>

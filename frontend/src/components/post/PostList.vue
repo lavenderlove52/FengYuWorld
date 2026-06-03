@@ -48,7 +48,7 @@ const rows = computed(() => {
         </div>
         <div class="flex-1 min-w-0">
           <h2 class="text-lg font-bold mb-2 group-hover:opacity-70 transition-opacity" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h2>
-          <p class="text-sm leading-relaxed line-clamp-2 mb-3" style="color: var(--theme-text, #64748b); opacity: 0.7">{{ post.summary }}</p>
+          <p v-if="post.summary" class="text-sm leading-relaxed line-clamp-2 mb-3" style="color: var(--theme-text, #64748b); opacity: 0.7">{{ post.summary }}</p>
           <div class="flex items-center gap-2 text-xs" style="color: var(--theme-text, #94a3b8); opacity: 0.6">
             <span>{{ post.author.nickname }}</span>
             <span>·</span>
@@ -75,7 +75,7 @@ const rows = computed(() => {
       </div>
       <div class="p-5">
         <h2 class="text-base font-bold mb-2 group-hover:opacity-70 transition-opacity line-clamp-2" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h2>
-        <p class="text-sm line-clamp-2 mb-3" style="color: var(--theme-text, #64748b); opacity: 0.7">{{ post.summary }}</p>
+        <p v-if="post.summary" class="text-sm line-clamp-2 mb-3" style="color: var(--theme-text, #64748b); opacity: 0.7">{{ post.summary }}</p>
         <div class="text-xs" style="color: var(--theme-text, #94a3b8); opacity: 0.6">
           {{ post.author.nickname }} · {{ (post.published_at || post.created_at)?.slice(0, 10) }} · {{ post.view_count }} 阅读
         </div>

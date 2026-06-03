@@ -1,0 +1,7 @@
+-- +goose Up
+ALTER TABLE posts ADD COLUMN summary TEXT NOT NULL DEFAULT '';
+ALTER TABLE posts ADD COLUMN show_toc BOOLEAN NOT NULL DEFAULT true;
+
+-- +goose Down
+ALTER TABLE posts DROP COLUMN IF EXISTS show_toc;
+ALTER TABLE posts DROP COLUMN IF EXISTS summary;

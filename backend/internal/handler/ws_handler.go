@@ -3,12 +3,13 @@ package handler
 import (
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"my-blog/backend/internal/domain"
-	"my-blog/backend/internal/middleware"
 	"my-blog/backend/internal/repository"
+	"my-blog/backend/internal/service"
 	"my-blog/backend/internal/ws"
 
 	"github.com/gin-gonic/gin"
@@ -18,23 +19,23 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
-	CheckOrigin:     func(r *http.Request) bool { return true },
+	CheckOrigin:     sameOrigin,
 }
 
 type WSHandler struct {
 	hub        *ws.Hub
 	msgRepo    *repository.MessageRepository
 	friendRepo *repository.FriendshipRepository
+	tickets    *service.WSTicketStore
 }
 
-func NewWSHandler(hub *ws.Hub, msgRepo *repository.MessageRepository, friendRepo *repository.FriendshipRepository) *WSHandler {
-	return &WSHandler{hub: hub, msgRepo: msgRepo, friendRepo: friendRepo}
+func NewWSHandler(hub *ws.Hub, msgRepo *repository.MessageRepository, friendRepo *repository.FriendshipRepository, tickets *service.WSTicketStore) *WSHandler {
+	return &WSHandler{hub: hub, msgRepo: msgRepo, friendRepo: friendRepo, tickets: tickets}
 }
 
-// HandleWS GET /api/ws/chat（需登录）
 func (h *WSHandler) HandleWS(c *gin.Context) {
-	userID := middleware.MustUserID(c)
-	if userID == 0 {
+	userID, ok := h.tickets.Consume(c.Query("ticket"))
+	if !ok || userID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
 		return
 	}
@@ -52,10 +53,8 @@ func (h *WSHandler) HandleWS(c *gin.Context) {
 	h.hub.Register(client)
 	defer h.hub.Unregister(client)
 
-	// 推送未读消息数
 	h.pushUnreadCounts(client)
 
-	// 写协程：从 Send 通道取数据写入 WebSocket
 	go func() {
 		defer conn.Close()
 		for data := range client.Send {
@@ -66,7 +65,6 @@ func (h *WSHandler) HandleWS(c *gin.Context) {
 		}
 	}()
 
-	// 读循环
 	conn.SetReadLimit(64 * 1024)
 	conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	conn.SetPongHandler(func(string) error {
@@ -95,25 +93,21 @@ func (h *WSHandler) handleMsg(client *ws.Client, in ws.InMsg) {
 		return
 	}
 
-	// 校验消息类型，无效类型回退为 text
 	validTypes := map[string]bool{"text": true, "image": true, "emoji": true}
 	if !validTypes[in.MsgType] {
 		in.MsgType = "text"
 	}
 
-	// 内容长度限制
 	if len(in.Content) > 4096 {
 		client.Send <- marshalOut(ws.OutMsg{Type: "error", Payload: "消息内容过长"})
 		return
 	}
 
-	// image 类型校验 URL（只允许本站 /uploads/ 路径或 http/https 开头）
-	if in.MsgType == "image" && !strings.HasPrefix(in.Content, "/uploads/") && !strings.HasPrefix(in.Content, "http") {
+	if in.MsgType == "image" && !strings.HasPrefix(in.Content, "/uploads/") && !strings.HasPrefix(in.Content, "https://") {
 		client.Send <- marshalOut(ws.OutMsg{Type: "error", Payload: "图片地址无效"})
 		return
 	}
 
-	// 校验是否好友
 	ok, err := h.friendRepo.AreFriends(client.UserID, in.To)
 	if err != nil || !ok {
 		client.Send <- marshalOut(ws.OutMsg{Type: "error", Payload: "非好友关系"})
@@ -137,9 +131,7 @@ func (h *WSHandler) handleMsg(client *ws.Client, in ws.InMsg) {
 	}
 
 	out := ws.OutMsg{Type: "msg", Payload: msg}
-	// 推送给接收方
 	h.hub.SendToUser(in.To, out)
-	// 回显给发送方（同步给其他设备）
 	h.hub.SendToUser(client.UserID, out)
 }
 
@@ -149,7 +141,6 @@ func (h *WSHandler) handleRead(client *ws.Client, in ws.InMsg) {
 		return
 	}
 
-	// 校验是否好友，防止越权标记
 	ok, err := h.friendRepo.AreFriends(client.UserID, friendID)
 	if err != nil || !ok {
 		return
@@ -158,12 +149,10 @@ func (h *WSHandler) handleRead(client *ws.Client, in ws.InMsg) {
 	if err := h.msgRepo.MarkRead(friendID, client.UserID); err != nil {
 		return
 	}
-	// 推送 unread_update 给对方
 	h.hub.SendToUser(friendID, ws.OutMsg{
 		Type:    "unread_update",
 		Payload: map[string]interface{}{"friend_id": client.UserID, "count": 0},
 	})
-	// 更新自己的未读数
 	h.pushUnreadCounts(client)
 }
 
@@ -181,4 +170,16 @@ func marshalOut(v interface{}) []byte {
 		return []byte(`{"type":"error","payload":"marshal error"}`)
 	}
 	return data
+}
+
+func sameOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Host, r.Host)
 }

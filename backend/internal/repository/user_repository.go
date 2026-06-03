@@ -72,8 +72,8 @@ func (r *UserRepository) UpdatePassword(userID int64, hash string) error {
 	return r.db.Model(&domain.User{}).Where("id = ?", userID).Update("password_hash", hash).Error
 }
 
-func (r *UserRepository) UpdateCanCustomJS(userID int64, value bool) error {
-	return r.db.Model(&domain.User{}).Where("id = ?", userID).Update("can_custom_js", value).Error
+func (r *UserRepository) UpdateCanCustomJS(userID int64, allowed bool) error {
+	return r.db.Model(&domain.User{}).Where("id = ?", userID).Update("can_custom_js", allowed).Error
 }
 
 func (r *UserRepository) ListUsers(keyword string, page, pageSize int) ([]domain.User, int64, error) {

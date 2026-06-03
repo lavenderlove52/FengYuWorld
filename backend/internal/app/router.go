@@ -38,6 +38,7 @@ func registerRoutes(
 			authGroup.POST("/refresh", auth.Refresh)
 			authGroup.POST("/logout", auth.Logout)
 			authGroup.POST("/reset-password", auth.ResetPassword)
+			authGroup.POST("/ws-ticket", authMW.Required(), auth.WSTicket)
 		}
 
 		api.GET("/posts/public", posts.ListPublic)
@@ -82,7 +83,6 @@ func registerRoutes(
 			authed.POST("/uploads/image", uploads.UploadImage)
 			authed.POST("/uploads/avatar", uploads.UploadAvatar)
 
-			authed.GET("/ws/chat", wsHandler.HandleWS)
 			authed.GET("/chat/unread", chat.GetUnreadCounts)
 			authed.GET("/chat/:friend_id", chat.GetHistory)
 			authed.POST("/chat/:friend_id/read", chat.MarkRead)
@@ -93,6 +93,8 @@ func registerRoutes(
 			authed.POST("/me/posts/:post_id/pin", pins.UserPinPost)
 			authed.DELETE("/me/posts/:post_id/pin", pins.UserUnpinPost)
 		}
+
+		api.GET("/ws/chat", wsHandler.HandleWS)
 
 		adminGroup := api.Group("/admin")
 		adminGroup.Use(authMW.RequireAdmin())

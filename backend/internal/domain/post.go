@@ -24,21 +24,23 @@ type Post struct {
 	Title         string         `gorm:"size:200;not null"`
 	Slug          string         `gorm:"size:220;not null;default:''"`
 	CoverImageURL string         `gorm:"size:500;not null;default:''"`
+	Summary       string         `gorm:"type:text;not null;default:''"`
 	ContentMD     string         `gorm:"type:text;not null"`
 	ContentHTML   string         `gorm:"type:text;not null"`
 	CategoryID    *int64         `gorm:"index"`
 	Status        PostStatus     `gorm:"size:20;not null;default:draft;index:idx_posts_author_status_deleted,priority:2;index:idx_posts_public_list,priority:1"`
 	Visibility    PostVisibility `gorm:"size:20;not null;default:private;index:idx_posts_public_list,priority:2"`
 	AllowComment  bool           `gorm:"not null;default:true"`
+	ShowTOC       bool           `gorm:"not null;default:true"`
 	ViewCount     int64          `gorm:"not null;default:0"`
 	IsDeleted     bool           `gorm:"not null;default:false;index:idx_posts_author_status_deleted,priority:3;index:idx_posts_public_list,priority:3"`
 	PublishedAt   *time.Time
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
 
-	Author   *User    `gorm:"foreignKey:AuthorID"`
+	Author   *User     `gorm:"foreignKey:AuthorID"`
 	Category *Category `gorm:"foreignKey:CategoryID"`
-	Tags     []Tag    `gorm:"many2many:post_tags;"`
+	Tags     []Tag     `gorm:"many2many:post_tags;"`
 }
 
 func (Post) TableName() string { return "posts" }

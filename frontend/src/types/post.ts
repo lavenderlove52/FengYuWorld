@@ -8,6 +8,7 @@ export interface PostSummary {
   summary: string
   status: string
   visibility: string
+  show_toc: boolean
   view_count: number
   published_at?: string
   created_at: string
@@ -44,6 +45,7 @@ export interface CreatePostPayload {
   title: string
   slug?: string
   cover_image_url?: string
+  summary?: string
   content_md: string
   category_id?: number
   tag_names?: string[]
@@ -51,4 +53,5 @@ export interface CreatePostPayload {
   visibility: PostVisibility
   visible_user_ids?: number[]
   allow_comment?: boolean
+  show_toc?: boolean
 }

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 type TokenPair struct {
@@ -61,6 +62,7 @@ func (m *JWTManager) sign(userID int64, username string, secret []byte, ttl time
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ID:        uuid.NewString(),
 		},
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -69,8 +71,11 @@ func (m *JWTManager) sign(userID int64, username string, secret []byte, ttl time
 
 func (m *JWTManager) parse(tokenStr string, secret []byte) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+		if t.Method != jwt.SigningMethodHS256 {
+			return nil, errors.New("unexpected signing method")
+		}
 		return secret, nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return nil, err
 	}

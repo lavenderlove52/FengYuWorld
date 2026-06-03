@@ -73,18 +73,24 @@ func (s *PostService) Create(authorID int64, req dto.CreatePostRequest) (*dto.Po
 	if req.AllowComment != nil {
 		allowComment = *req.AllowComment
 	}
+	showTOC := true
+	if req.ShowTOC != nil {
+		showTOC = *req.ShowTOC
+	}
 
 	post := &domain.Post{
 		AuthorID:      authorID,
 		Title:         req.Title,
 		Slug:          slug,
 		CoverImageURL: req.CoverImageURL,
+		Summary:       strings.TrimSpace(req.Summary),
 		ContentMD:     req.ContentMD,
 		ContentHTML:   html,
 		CategoryID:    req.CategoryID,
 		Status:        domain.PostStatus(req.Status),
 		Visibility:    domain.PostVisibility(req.Visibility),
 		AllowComment:  allowComment,
+		ShowTOC:       showTOC,
 	}
 	if post.Status == domain.PostStatusPublished {
 		now := time.Now()
@@ -167,17 +173,23 @@ func (s *PostService) Update(authorID, postID int64, req dto.UpdatePostRequest) 
 	if req.AllowComment != nil {
 		allowComment = *req.AllowComment
 	}
+	showTOC := post.ShowTOC
+	if req.ShowTOC != nil {
+		showTOC = *req.ShowTOC
+	}
 
 	wasPublished := post.Status == domain.PostStatusPublished
 	post.Title = req.Title
 	post.Slug = slug
 	post.CoverImageURL = req.CoverImageURL
+	post.Summary = strings.TrimSpace(req.Summary)
 	post.ContentMD = req.ContentMD
 	post.ContentHTML = html
 	post.CategoryID = req.CategoryID
 	post.Status = domain.PostStatus(req.Status)
 	post.Visibility = domain.PostVisibility(req.Visibility)
 	post.AllowComment = allowComment
+	post.ShowTOC = showTOC
 
 	if post.Status == domain.PostStatusPublished && (!wasPublished || post.PublishedAt == nil) {
 		now := time.Now()
@@ -336,9 +348,10 @@ func (s *PostService) toSummary(post *domain.Post) dto.PostSummary {
 		Title:         post.Title,
 		Slug:          post.Slug,
 		CoverImageURL: post.CoverImageURL,
-		Summary:       markdown.Summary(post.ContentHTML, 160),
+		Summary:       post.Summary,
 		Status:        string(post.Status),
 		Visibility:    string(post.Visibility),
+		ShowTOC:       post.ShowTOC,
 		ViewCount:     post.ViewCount,
 		CreatedAt:     util.FormatTime(post.CreatedAt),
 	}
@@ -362,16 +375,14 @@ func (s *PostService) toDetail(post *domain.Post, viewerID int64, isAuthor bool)
 	summary := s.toSummary(post)
 	detail := &dto.PostDetail{
 		PostSummary:  summary,
+		ContentMD:    post.ContentMD,
 		ContentHTML:  post.ContentHTML,
 		CategoryID:   post.CategoryID,
 		AllowComment: post.AllowComment,
 	}
-	if isAuthor {
-		detail.ContentMD = post.ContentMD
-		if post.Visibility == domain.PostVisibilitySpecified {
-			ids, _ := s.posts.GetVisibleUserIDs(post.ID)
-			detail.VisibleUserIDs = ids
-		}
+	if isAuthor && post.Visibility == domain.PostVisibilitySpecified {
+		ids, _ := s.posts.GetVisibleUserIDs(post.ID)
+		detail.VisibleUserIDs = ids
 	}
 	return detail
 }

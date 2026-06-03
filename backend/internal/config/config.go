@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
@@ -55,8 +56,33 @@ func Load() (*Config, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid JWT_REFRESH_EXPIRES: %w", err)
 	}
+	if strings.EqualFold(cfg.AppEnv, "production") {
+		if err := validateProductionSecret("JWT_ACCESS_SECRET", cfg.JWTAccessSecret); err != nil {
+			return nil, err
+		}
+		if err := validateProductionSecret("JWT_REFRESH_SECRET", cfg.JWTRefreshSecret); err != nil {
+			return nil, err
+		}
+	}
 
 	return cfg, nil
+}
+
+func validateProductionSecret(name, value string) error {
+	if len(value) < 32 {
+		return fmt.Errorf("%s must be at least 32 characters in production", name)
+	}
+	defaults := map[string]struct{}{
+		"change-me-access-secret-min-32-chars":  {},
+		"change-me-refresh-secret-min-32-chars": {},
+	}
+	if _, ok := defaults[value]; ok {
+		return fmt.Errorf("%s must not use the default value in production", name)
+	}
+	if strings.Contains(strings.ToLower(value), "change-me") {
+		return fmt.Errorf("%s must not use a placeholder value in production", name)
+	}
+	return nil
 }
 
 func getEnv(key, fallback string) string {

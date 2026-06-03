@@ -36,7 +36,7 @@ const postPath = computed(() => getPostPath(props.post))
         {{ post.title }}
       </h2>
 
-      <p class="text-slate-500 text-[15px] leading-relaxed line-clamp-2 mb-4">
+      <p v-if="post.summary" class="text-slate-500 text-[15px] leading-relaxed line-clamp-2 mb-4">
         {{ post.summary }}
       </p>
     </RouterLink>

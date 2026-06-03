@@ -12,10 +12,6 @@ const auth = useAuthStore()
 const message = useMessage()
 const router = useRouter()
 
-const hasCustomJS = computed(() =>
-  auth.user?.role === 'admin' || !!auth.user?.can_custom_js
-)
-
 const myUrl = computed(() =>
   auth.user ? router.resolve({ name: 'user-home', params: { username: auth.user.username } }).href : '/'
 )
@@ -291,39 +287,29 @@ const LAYOUTS = [
             />
             <span class="absolute bottom-3 right-3 text-xs text-slate-300">{{ form.custom_css.length }} / 10000</span>
           </div>
-          <p class="text-xs text-slate-400 mt-2">CSS 会作用于 <code class="bg-slate-100 px-1 rounded">[data-theme-user]</code> 容器内，不影响全局样式</p>
+          <p class="text-xs text-slate-400 mt-2">CSS 自动限定在个人主页/文章页容器内。可直接写 <code class="bg-slate-100 px-1 rounded">[data-theme-user] &gt; div:first-child</code> 或 <code class="bg-slate-100 px-1 rounded">.min-h-screen</code> 等选择器</p>
         </section>
 
         <!-- 自定义 JS（需权限） -->
         <section>
-          <div v-if="hasCustomJS">
-            <div class="flex items-baseline gap-2 mb-3">
-              <h2 class="text-base font-semibold text-slate-700">自定义 JS</h2>
-              <span class="text-xs text-slate-400">高级 · 最多 50000 字符</span>
-              <span class="text-[11px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 border border-amber-100">已授权</span>
-            </div>
-            <div class="relative">
-              <textarea
-                v-model="form.custom_js"
-                rows="10"
-                placeholder="// 在访客浏览你的主页时执行&#10;// 例：鼠标点击特效、动画等&#10;document.body.addEventListener('click', function(e) {&#10;  // ...&#10;})"
-                class="w-full px-4 py-3 text-sm font-mono border border-amber-200 rounded-xl focus:outline-none focus:border-amber-400 resize-y bg-amber-50/30"
-                :maxlength="50000"
-              />
-              <span class="absolute bottom-3 right-3 text-xs text-slate-300">{{ form.custom_js.length }} / 50000</span>
-            </div>
-            <p class="text-xs text-amber-600 mt-2">⚠️ JS 会在访客浏览器中直接执行，请勿写入恶意代码</p>
+          <div class="flex items-baseline gap-2 mb-3">
+            <h2 class="text-base font-semibold text-slate-700">自定义 JS</h2>
+            <span class="text-xs text-slate-400">高级 · 需要管理员授权 · 最大 10000 字符</span>
+          </div>
+          <div v-if="auth.user?.role === 'admin' || auth.user?.can_custom_js" class="relative">
+            <textarea
+              v-model="form.custom_js"
+              rows="8"
+              placeholder="console.log('hello from my page')"
+              class="w-full px-4 py-3 text-sm font-mono border border-slate-200 rounded-xl focus:outline-none focus:border-slate-400 resize-y bg-slate-50"
+              :maxlength="10000"
+            />
+            <span class="absolute bottom-3 right-3 text-xs text-slate-300">{{ form.custom_js.length }} / 10000</span>
           </div>
           <div v-else class="flex items-start gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5">
-              <path fill-rule="evenodd" d="M10 1a4.5 4.5 0 0 0-4.5 4.5V9H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2h-.5V5.5A4.5 4.5 0 0 0 10 1Zm3 8V5.5a3 3 0 1 0-6 0V9h6Z" />
-            </svg>
             <div>
-              <div class="text-sm font-medium text-slate-600">自定义 JS · 需要申请权限</div>
-              <p class="text-xs text-slate-400 mt-1">此功能需要管理员授权后才能使用。前往
-                <router-link to="/dashboard/settings" class="text-indigo-500 hover:underline">设置页</router-link>
-                申请权限。
-              </p>
+              <div class="text-sm font-medium text-slate-600">自定义 JS 需要管理员授权</div>
+              <p class="text-xs text-slate-400 mt-1">可在账号设置中复制申请文案，管理员授权后这里会显示 JS 编辑框。</p>
             </div>
           </div>
         </section>

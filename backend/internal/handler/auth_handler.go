@@ -4,8 +4,10 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"my-blog/backend/internal/dto"
+	"my-blog/backend/internal/middleware"
 	"my-blog/backend/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -15,10 +17,11 @@ type AuthHandler struct {
 	auth      *service.AuthService
 	emailCode *service.EmailCodeService
 	captcha   *service.CaptchaService
+	wsTickets *service.WSTicketStore
 }
 
-func NewAuthHandler(auth *service.AuthService, emailCode *service.EmailCodeService, captcha *service.CaptchaService) *AuthHandler {
-	return &AuthHandler{auth: auth, emailCode: emailCode, captcha: captcha}
+func NewAuthHandler(auth *service.AuthService, emailCode *service.EmailCodeService, captcha *service.CaptchaService, wsTickets *service.WSTicketStore) *AuthHandler {
+	return &AuthHandler{auth: auth, emailCode: emailCode, captcha: captcha, wsTickets: wsTickets}
 }
 
 func (h *AuthHandler) SendEmailCode(c *gin.Context) {
@@ -122,7 +125,23 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
+	var req dto.RefreshRequest
+	_ = c.ShouldBindJSON(&req)
+	h.auth.Logout(req.RefreshToken)
 	c.JSON(http.StatusOK, dto.OK(nil))
+}
+
+func (h *AuthHandler) WSTicket(c *gin.Context) {
+	userID := middleware.MustUserID(c)
+	ticket, expiresAt, err := h.wsTickets.Issue(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(gin.H{
+		"ticket":     ticket,
+		"expires_at": expiresAt.Format(time.RFC3339),
+	}))
 }
 
 // ResetPassword POST /api/auth/reset-password

@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { NButton } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { activePageTheme } from '@/stores/pageTheme'
 import { appBase } from '@/config/app'
 
 const auth = useAuthStore()
+const route = useRoute()
 const logoUrl = `${appBase}logo.png`
 
 const hasToken = computed(() => auth.tokenExists)
+const showMyHomeLink = computed(() => route.name === 'post-detail' && !!auth.user?.username)
 const avatarUrl = computed(() => auth.user?.avatar_url || '')
 const avatarInitial = computed(() => auth.user?.nickname?.[0]?.toUpperCase() || 'U')
 
@@ -32,6 +34,18 @@ const headerText = computed(() => activePageTheme.enabled ? activePageTheme.text
         <img :src="logoUrl" alt="风雨世界" class="h-9 w-auto object-contain" />
       </RouterLink>
       <div class="flex items-center gap-1 sm:gap-2">
+        <RouterLink
+          v-if="showMyHomeLink"
+          :to="`/u/${auth.user!.username}`"
+          class="w-9 h-9 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
+          :style="{ color: headerText }"
+          title="我的主页"
+          aria-label="我的主页"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+            <path d="M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM3.465 14.493a1.23 1.23 0 0 0 .41 1.412A9.957 9.957 0 0 0 10 18c2.31 0 4.438-.784 6.131-2.1.43-.333.604-.903.408-1.41a7.002 7.002 0 0 0-13.074.003Z" />
+          </svg>
+        </RouterLink>
         <RouterLink v-if="hasToken" to="/dashboard" class="p-1.5 rounded-full">
           <div
             class="w-9 h-9 rounded-full overflow-hidden border flex items-center justify-center hover:opacity-80 transition-opacity cursor-pointer"

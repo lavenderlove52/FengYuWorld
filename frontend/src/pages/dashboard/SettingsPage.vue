@@ -110,7 +110,7 @@ const permissions = computed(() => [
   {
     key: 'custom_js',
     label: '自定义 JS',
-    desc: '在个人主页和文章页注入自定义 JavaScript 脚本（鼠标特效等）',
+    desc: '在个人主页加载自己编写的 JavaScript 脚本',
     granted: auth.user?.role === 'admin' || !!auth.user?.can_custom_js,
     applyable: true,
     applyLabel: '自定义 JS 权限',

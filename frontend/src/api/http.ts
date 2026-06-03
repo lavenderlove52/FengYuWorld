@@ -55,10 +55,18 @@ http.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 })
 
 let refreshing = false
-let queue: Array<(token: string) => void> = []
+let queue: Array<{
+  resolve: (token: string) => void
+  reject: (error: unknown) => void
+}> = []
 
 const flushQueue = (token: string) => {
-  queue.forEach((cb) => cb(token))
+  queue.forEach(({ resolve }) => resolve(token))
+  queue = []
+}
+
+const rejectQueue = (error: unknown) => {
+  queue.forEach(({ reject }) => reject(error))
   queue = []
 }
 
@@ -108,10 +116,13 @@ http.interceptors.response.use(
     }
 
     if (refreshing) {
-      return new Promise((resolve) => {
-        queue.push((token) => {
-          original.headers.Authorization = `Bearer ${token}`
-          resolve(http(original))
+      return new Promise((resolve, reject) => {
+        queue.push({
+          resolve: (token) => {
+            original.headers.Authorization = `Bearer ${token}`
+            resolve(http(original))
+          },
+          reject,
         })
       })
     }
@@ -130,6 +141,7 @@ http.interceptors.response.use(
       return http(original)
     } catch {
       forceLogout()
+      rejectQueue(backendMsg ? new Error(backendMsg) : error)
       if (backendMsg) return Promise.reject(new Error(backendMsg))
       return Promise.reject(error)
     } finally {

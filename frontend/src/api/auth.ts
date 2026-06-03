@@ -24,6 +24,11 @@ export interface CaptchaData {
   image: string
 }
 
+export interface WsTicketData {
+  ticket: string
+  expires_at?: string
+}
+
 export const register = (payload: RegisterPayload) =>
   http.post<ApiResponse<AuthResponse>>('/auth/register', payload).then((r) => r.data)
 
@@ -47,7 +52,11 @@ export interface ResetPasswordPayload {
 export const resetPassword = (payload: ResetPasswordPayload) =>
   http.post<ApiResponse<null>>('/auth/reset-password', payload).then((r) => r.data)
 
-export const logout = () => http.post<ApiResponse<null>>('/auth/logout').then((r) => r.data)
+export const logout = (refreshToken?: string | null) =>
+  http.post<ApiResponse<null>>('/auth/logout', refreshToken ? { refresh_token: refreshToken } : {}).then((r) => r.data)
+
+export const getWsTicket = () =>
+  http.post<ApiResponse<WsTicketData>>('/auth/ws-ticket').then((r) => r.data)
 
 export const getMe = () => http.get<ApiResponse<UserInfo>>('/users/me').then((r) => r.data)
 

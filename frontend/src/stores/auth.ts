@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import * as authApi from '@/api/auth'
-import { clearTokens, getAccessToken, setTokens } from '@/api/http'
+import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '@/api/http'
 import type { UserInfo } from '@/types/auth'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -80,8 +80,9 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   const logout = async () => {
+    const refreshToken = getRefreshToken()
     try {
-      await authApi.logout()
+      await authApi.logout(refreshToken)
     } finally {
       clearTokens()
       tokenExists.value = false

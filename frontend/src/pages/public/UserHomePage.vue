@@ -62,18 +62,18 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div ref="containerRef" :data-theme-user="String(route.params.username)" class="min-h-screen transition-colors duration-300" style="color: var(--theme-text)">
+  <div ref="containerRef" :data-theme-user="String(route.params.username)" data-theme-page="user-home" class="min-h-screen transition-colors duration-300" style="color: var(--theme-text)">
     <div v-if="loading && !user" class="text-center py-20 text-slate-400">加载中...</div>
     <EmptyState v-else-if="!loading && !user" message="用户不存在" />
     <template v-else-if="user">
 
       <!-- Banner -->
-      <div v-if="theme.banner_url" class="w-full h-36 sm:h-48 overflow-hidden mb-6 sm:mb-8 rounded-xl -mx-0">
+      <div v-if="theme.banner_url" class="theme-hero-banner w-full h-36 sm:h-48 overflow-hidden mb-6 sm:mb-8 rounded-xl -mx-0">
         <img :src="theme.banner_url" class="w-full h-full object-cover" alt="banner" />
       </div>
 
       <!-- 用户信息头 -->
-      <div class="flex items-center gap-4 sm:gap-5 mb-6 sm:mb-8 pb-6 sm:pb-8" style="border-bottom: 1px solid var(--theme-border, #e2e8f0)">
+      <div class="theme-hero-profile flex items-center gap-4 sm:gap-5 mb-6 sm:mb-8 pb-6 sm:pb-8" style="border-bottom: 1px solid var(--theme-border, #e2e8f0)">
         <div class="w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden flex-shrink-0" style="background: var(--theme-card-bg, #f1f5f9)">
           <img
             v-if="user.avatar_url"
@@ -92,6 +92,8 @@ onMounted(async () => {
         </div>
       </div>
 
+      <!-- 首屏图下方的正文区（置顶 + 文章列表） -->
+      <div class="theme-main-below">
       <!-- 置顶轮播 -->
       <div v-if="showPins && pins.length" class="mb-10">
         <div class="flex items-baseline gap-2 mb-3">
@@ -118,6 +120,7 @@ onMounted(async () => {
         class="mt-8"
         @change="(p) => { page = p; load() }"
       />
+      </div>
     </template>
   </div>
 </template>
