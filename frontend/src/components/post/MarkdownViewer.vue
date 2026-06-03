@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import 'katex/dist/katex.min.css'
+
 defineProps<{ html: string }>()
 </script>
 
@@ -29,5 +31,10 @@ defineProps<{ html: string }>()
   background: #f1f5f9;
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
+}
+.prose :deep(.katex-display) {
+  margin: 1em 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 </style>

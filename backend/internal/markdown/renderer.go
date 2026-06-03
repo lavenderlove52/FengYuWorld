@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 
+	katex "github.com/FurqanSoftware/goldmark-katex"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/parser"
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	scriptRe = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
+	scriptRe  = regexp.MustCompile(`(?is)<script[^>]*>.*?</script>`)
 	onEventRe = regexp.MustCompile(`(?i)\s(on\w+)\s*=`)
 )
 
@@ -22,7 +23,7 @@ type Renderer struct {
 
 func NewRenderer() *Renderer {
 	md := goldmark.New(
-		goldmark.WithExtensions(extension.GFM),
+		goldmark.WithExtensions(extension.GFM, &katex.Extender{}),
 		goldmark.WithParserOptions(parser.WithAutoHeadingID()),
 		goldmark.WithRendererOptions(html.WithHardWraps(), html.WithXHTML()),
 	)

@@ -2,6 +2,7 @@
 import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { PinnedPost } from '@/types/post'
+import { getPostPath } from '@/utils/postPath'
 
 const props = defineProps<{
   pins: PinnedPost[]
@@ -13,6 +14,7 @@ const transitioning = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
 
 const post = computed(() => props.pins[current.value]?.post)
+const postPath = computed(() => (post.value ? getPostPath(post.value) : '/'))
 
 const goTo = (index: number) => {
   if (transitioning.value || index === current.value) return
@@ -43,7 +45,7 @@ onUnmounted(stopTimer)
     @mouseenter="stopTimer"
     @mouseleave="startTimer"
   >
-    <RouterLink :to="`/p/${post?.id}`" class="block">
+    <RouterLink :to="postPath" class="block">
       <transition name="content-fade" mode="out-in">
         <div :key="current" class="flex flex-col sm:flex-row sm:items-stretch">
 

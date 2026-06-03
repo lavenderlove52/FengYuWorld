@@ -12,6 +12,7 @@
     "@tailwindcss/vite": "^4.3.0",
     "@vicons/ionicons5": "^0.13.0",
     "axios": "^1.16.1",
+    "katex": "^0.17.0",
     "md-editor-v3": "^6.5.0",
     "naive-ui": "^2.44.1",
     "pinia": "^3.0.4",
