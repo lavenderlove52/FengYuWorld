@@ -64,6 +64,10 @@ func (h *PostHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "文章数据无效"))
 		return
 	}
+	if err == service.ErrInvalidSlug {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "链接标识无效：只允许小写字母、数字和连字符，且不能为纯数字"))
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
 		return
@@ -94,6 +98,10 @@ func (h *PostHandler) Update(c *gin.Context) {
 	}
 	if err == service.ErrInvalidPostData {
 		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "文章数据无效"))
+		return
+	}
+	if err == service.ErrInvalidSlug {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "链接标识无效：只允许小写字母、数字和连字符，且不能为纯数字"))
 		return
 	}
 	if err != nil {

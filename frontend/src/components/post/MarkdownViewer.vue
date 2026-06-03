@@ -1,38 +1,35 @@
 <script setup lang="ts">
+import 'md-editor-v3/lib/preview.css'
 import 'katex/dist/katex.min.css'
 
 defineProps<{ html: string }>()
 </script>
 
 <template>
-  <article class="prose max-w-none" v-html="html" />
+  <article class="md-editor md-editor-previewOnly blog-markdown-viewer">
+    <div class="md-editor-preview default-theme" v-html="html" />
+  </article>
 </template>
 
 <style scoped>
-.prose :deep(h1),
-.prose :deep(h2),
-.prose :deep(h3) {
-  font-weight: 700;
-  margin-top: 1.5em;
-  margin-bottom: 0.5em;
+.blog-markdown-viewer {
+  --md-color: var(--theme-text, #3f4a54);
+  --md-bk-color: transparent;
+  --md-border-color: transparent;
+  --md-theme-bg-color: transparent;
+  --md-theme-color: var(--theme-text, #3f4a54);
+  --md-theme-border-color: var(--theme-border, #e6e6e6);
+  --md-theme-link-color: var(--theme-accent, #2d8cf0);
+  color: var(--theme-text, #3f4a54);
+  background: transparent;
+  font-family: inherit;
 }
-.prose :deep(p) {
-  margin: 0.75em 0;
-  line-height: 1.75;
+
+.blog-markdown-viewer :deep(.md-editor-preview) {
+  padding: 0;
 }
-.prose :deep(pre) {
-  background: #1e293b;
-  color: #f8fafc;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  overflow-x: auto;
-}
-.prose :deep(code) {
-  background: #f1f5f9;
-  padding: 0.125rem 0.25rem;
-  border-radius: 0.25rem;
-}
-.prose :deep(.katex-display) {
+
+.blog-markdown-viewer :deep(.katex-display) {
   margin: 1em 0;
   overflow-x: auto;
   overflow-y: hidden;

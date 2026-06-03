@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 
 	"my-blog/backend/internal/domain"
@@ -17,6 +18,7 @@ var (
 	ErrPostNotFound    = errors.New("post not found")
 	ErrPostForbidden   = errors.New("post forbidden")
 	ErrInvalidPostData = errors.New("invalid post data")
+	ErrInvalidSlug     = errors.New("invalid slug")
 )
 
 var slugValidRe = regexp.MustCompile(`^[a-z0-9-]+$`)
@@ -58,11 +60,9 @@ func (s *PostService) Create(authorID int64, req dto.CreatePostRequest) (*dto.Po
 		return nil, err
 	}
 
-	baseSlug := req.Slug
-	if baseSlug == "" {
-		baseSlug = util.Slugify(req.Title)
-	} else if !slugValidRe.MatchString(baseSlug) {
-		return nil, ErrInvalidPostData
+	baseSlug, err := s.prepareBaseSlug(req.Slug, req.Title)
+	if err != nil {
+		return nil, err
 	}
 	slug, needPostID, err := s.resolveUniqueSlug(baseSlug, 0)
 	if err != nil {
@@ -151,11 +151,9 @@ func (s *PostService) Update(authorID, postID int64, req dto.UpdatePostRequest) 
 		return nil, err
 	}
 
-	baseSlug := req.Slug
-	if baseSlug == "" {
-		baseSlug = util.Slugify(req.Title)
-	} else if !slugValidRe.MatchString(baseSlug) {
-		return nil, ErrInvalidPostData
+	baseSlug, err := s.prepareBaseSlug(req.Slug, req.Title)
+	if err != nil {
+		return nil, err
 	}
 	slug, needPostID, err := s.resolveUniqueSlug(baseSlug, post.ID)
 	if err != nil {
@@ -406,6 +404,25 @@ func (s *PostService) GetBySlug(slug string, viewerID *int64) (*dto.PostDetail, 
 		post.ViewCount++
 	}
 	return s.toDetail(post, deref(viewerID), isAuthor), nil
+}
+
+// prepareBaseSlug 解析用户填写或标题生成的 slug；用户填写纯数字则拒绝。
+func (s *PostService) prepareBaseSlug(reqSlug, title string) (string, error) {
+	baseSlug := strings.TrimSpace(reqSlug)
+	userProvided := baseSlug != ""
+	if !userProvided {
+		baseSlug = util.Slugify(title)
+	}
+	if baseSlug == "" {
+		return "", ErrInvalidPostData
+	}
+	if !slugValidRe.MatchString(baseSlug) {
+		return "", ErrInvalidSlug
+	}
+	if userProvided && util.SlugIsAllNumeric(baseSlug) {
+		return "", ErrInvalidSlug
+	}
+	return baseSlug, nil
 }
 
 // resolveUniqueSlug 找到 base 的第一个可用候选 slug（排除 excludeID 自身）。

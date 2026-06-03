@@ -10,6 +10,7 @@ import MarkdownEditor from '@/components/post/MarkdownEditor.vue'
 import VisibilitySelect from '@/components/post/VisibilitySelect.vue'
 import FriendMultiSelect from '@/components/post/FriendMultiSelect.vue'
 import ImageUploader from '@/components/upload/ImageUploader.vue'
+import { validatePostSlug } from '@/utils/postSlug'
 
 const route = useRoute()
 const router = useRouter()
@@ -76,12 +77,7 @@ const categoryOptions = computed(() => [
   { label: '无分类', value: undefined as number | undefined },
   ...categories.value.map((c) => ({ label: c.name, value: c.id as number | undefined })),
 ])
-const slugWarning = computed(() => {
-  const s = form.value.slug?.trim()
-  if (!s) return ''
-  if (!/^[a-z0-9-]+$/.test(s)) return '只允许小写字母、数字和连字符'
-  return ''
-})
+const slugWarning = computed(() => validatePostSlug(form.value.slug || ''))
 
 onMounted(async () => {
   const catRes = await listCategories()
@@ -135,6 +131,11 @@ const validate = () => {
   }
   if (form.value.visibility === 'specified' && !form.value.visible_user_ids?.length) {
     message.warning('指定好友可见时至少选择一位好友')
+    return false
+  }
+  const slugErr = validatePostSlug(form.value.slug || '')
+  if (slugErr) {
+    message.warning(slugErr)
     return false
   }
   return true
@@ -219,7 +220,7 @@ const save = async (status: 'draft' | 'published') => {
             <div class="w-full">
               <NInput v-model:value="form.slug" placeholder="留空则自动根据标题生成" />
               <p v-if="slugWarning" class="mt-1 text-xs text-red-400">{{ slugWarning }}</p>
-              <p v-else class="mt-1 text-xs text-slate-400">可选，留空则自动生成；只允许小写字母、数字和连字符</p>
+              <p v-else class="mt-1 text-xs text-slate-400">可选，留空则自动生成；只允许小写字母、数字和连字符，不能为纯数字</p>
             </div>
           </NFormItem>
         </NCollapseItem>
