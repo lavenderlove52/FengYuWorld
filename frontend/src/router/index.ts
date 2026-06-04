@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { getAccessToken } from '@/api/http'
+import { getAccessToken, getRefreshToken } from '@/api/http'
 import { setActivePageTheme } from '@/stores/pageTheme'
 import { useAuthStore } from '@/stores/auth'
 
@@ -65,10 +65,19 @@ router.beforeEach(async (to, from) => {
   }
 
   const auth = useAuthStore()
-  const hasToken = !!getAccessToken()
+  const hasAccessToken = !!getAccessToken()
+  const hasSessionToken = hasAccessToken || !!getRefreshToken()
 
-  if (to.meta.requiresAuth && !hasToken) {
+  if (to.meta.requiresAuth && !hasSessionToken) {
     return { name: 'login', query: { redirect: to.fullPath } }
+  }
+
+  // 浏览器重开后可能只剩可用的 refresh token；先续期并恢复用户，再进入受保护页面。
+  if (to.meta.requiresAuth && !hasAccessToken && !auth.user) {
+    await auth.fetchMe().catch(() => {})
+    if (!auth.user) {
+      return { name: 'login', query: { redirect: to.fullPath } }
+    }
   }
 
   // 仅 token + user 均有效时重定向，避免过期 token 导致无法打开登录页（手机常见）
@@ -77,7 +86,7 @@ router.beforeEach(async (to, from) => {
   }
 
   // 有 token 但 user 未加载（刷新/冷启动）：后台拉取，绝不 await，避免弱网下整页白屏
-  if (hasToken && !auth.user) {
+  if (hasSessionToken && !auth.user) {
     auth.fetchMe().then(() => {
       if (auth.user && to.meta.guest) {
         router.replace({ name: 'dashboard' })

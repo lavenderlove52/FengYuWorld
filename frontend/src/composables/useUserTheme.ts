@@ -1,12 +1,24 @@
 import { ref, onUnmounted } from 'vue'
 import { getUserTheme } from '@/api/theme'
-import { PRESETS, DEFAULT_THEME } from '@/types/theme'
+import { PRESETS, DEFAULT_THEME, createDefaultEffectConfig } from '@/types/theme'
 import { setActivePageTheme } from '@/stores/pageTheme'
 import type { UserTheme } from '@/types/theme'
 
 const STYLE_ID_PREFIX = 'user-theme-css-'
 
 const jsCleanups = new Map<string, Array<() => void>>()
+
+function defaultTheme(): UserTheme {
+  return { ...DEFAULT_THEME, effect_config: createDefaultEffectConfig() }
+}
+
+function normalizeTheme(theme?: UserTheme | null): UserTheme {
+  return {
+    ...defaultTheme(),
+    ...theme,
+    effect_config: theme?.effect_config ?? createDefaultEffectConfig(),
+  }
+}
 
 function getPresetConfig(preset: string) {
   return PRESETS.find((p) => p.id === preset) ?? PRESETS[0]
@@ -140,6 +152,7 @@ function injectCustomJs(username: string, js: string, root: HTMLElement | null) 
   const scopedWindow = createScopedWindow(username, root)
   const beforeChildren = new Set(root.childNodes)
 
+  // 勿在 strict 下声明 const eval / const arguments（会直接 SyntaxError，导致整段 custom_js 不执行）
   const runner = new Function(
     'root',
     'document',
@@ -149,13 +162,8 @@ function injectCustomJs(username: string, js: string, root: HTMLElement | null) 
     'parent',
     'top',
     'console',
-    `
-      "use strict";
-      const Function = undefined;
-      const eval = undefined;
-      ${js}
-      //# sourceURL=custom-theme-${encodeURIComponent(username)}.js
-    `,
+    `${js}
+//# sourceURL=custom-theme-${encodeURIComponent(username)}.js`,
   )
 
   runner(root, scopedDocument, scopedWindow, scopedWindow, scopedWindow, scopedWindow, scopedWindow, console)
@@ -173,7 +181,7 @@ function removeCustomJs(username: string) {
 }
 
 export function useUserTheme(containerRef: { value: HTMLElement | null }) {
-  const theme = ref<UserTheme>({ ...DEFAULT_THEME })
+  const theme = ref<UserTheme>(defaultTheme())
   const loading = ref(false)
   let currentUsername = ''
   let originalBodyBg = ''
@@ -211,13 +219,17 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
   }
 
   const load = async (username: string) => {
+    if (currentUsername && currentUsername !== username) {
+      removeCustomCss(currentUsername)
+      removeCustomJs(currentUsername)
+    }
     currentUsername = username
     loading.value = true
     try {
       const res = await getUserTheme(username)
-      theme.value = res.code === 0 && res.data ? res.data : { ...DEFAULT_THEME }
+      theme.value = res.code === 0 && res.data ? normalizeTheme(res.data) : defaultTheme()
     } catch {
-      theme.value = { ...DEFAULT_THEME }
+      theme.value = defaultTheme()
     } finally {
       loading.value = false
       try { applyToBody(theme.value) } catch (e) { console.warn('[useUserTheme] applyToBody failed', e) }

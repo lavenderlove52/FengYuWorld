@@ -8,12 +8,12 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref<UserInfo | null>(null)
   const loading = ref(false)
   // 响应式追踪 token 是否存在，确保 computed/watch 可感知登录/登出状态变化
-  const tokenExists = ref<boolean>(!!getAccessToken())
+  const tokenExists = ref<boolean>(!!getAccessToken() || !!getRefreshToken())
 
   const isLoggedIn = computed(() => tokenExists.value && !!user.value)
 
   const fetchMe = async () => {
-    if (!getAccessToken()) return
+    if (!getAccessToken() && !getRefreshToken()) return
     loading.value = true
     try {
       const res = await authApi.getMe()

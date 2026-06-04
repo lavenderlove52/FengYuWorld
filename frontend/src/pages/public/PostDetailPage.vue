@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, nextTick, ref } from 'vue'
+import { computed, onMounted, nextTick, ref, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import { getPost, getPostBySlug } from '@/api/posts'
 import { useUserTheme } from '@/composables/useUserTheme'
@@ -7,6 +7,7 @@ import type { PostDetail } from '@/types/post'
 import MarkdownViewer from '@/components/post/MarkdownViewer.vue'
 import ArticleToc from '@/components/post/ArticleToc.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import ThemeEffects from '@/components/theme/ThemeEffects.vue'
 import { extractTocItems } from '@/utils/markdownToc'
 
 const route = useRoute()
@@ -15,7 +16,7 @@ const loading = ref(true)
 const notFound = ref(false)
 
 const containerRef = ref<HTMLElement | null>(null)
-const { load: loadTheme } = useUserTheme(containerRef)
+const { theme, load: loadTheme } = useUserTheme(containerRef)
 const showToc = computed(() => post.value?.show_toc !== false && extractTocItems(post.value?.content_md || '').length > 0)
 
 async function loadPost(param: string) {
@@ -34,7 +35,10 @@ async function loadPost(param: string) {
   return null
 }
 
-onMounted(async () => {
+const loadPage = async () => {
+  post.value = null
+  loading.value = true
+  notFound.value = false
   const param = String(route.params.id)
 
   try {
@@ -61,7 +65,10 @@ onMounted(async () => {
       // 主题加载失败属于非致命错误，静默忽略
     }
   }
-})
+}
+
+onMounted(loadPage)
+watch(() => route.params.id, loadPage)
 </script>
 
 <template>
@@ -74,6 +81,7 @@ onMounted(async () => {
     data-theme-page="post-detail"
     class="article-detail-root transition-colors duration-300"
   >
+    <ThemeEffects :config="theme.effect_config" page-scope="post" />
     <div class="article-detail-layout grid gap-6" :class="showToc ? 'lg:grid-cols-[minmax(0,1fr)_220px]' : ''">
       <article class="article-detail-card rounded-xl border px-4 py-5 sm:px-6 sm:py-7 md:px-8 md:py-10" style="background: var(--theme-card-bg, #fff); border-color: var(--theme-border, #e2e8f0)">
         <h1 class="text-2xl sm:text-3xl font-bold mb-4" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h1>

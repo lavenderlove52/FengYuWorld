@@ -1,5 +1,37 @@
 export type ThemePreset = 'default' | 'minimal' | 'dark' | 'forest' | 'ocean' | 'warm'
 export type ThemeLayout = 'grid' | 'list' | 'magazine'
+export type ThemeEffectScope = 'home' | 'post' | 'all'
+export type ThemeBackgroundEffectType = 'off' | 'floating-shapes'
+export type ThemeCursorEffectType = 'off' | 'particle-trail'
+export type ThemeClickEffectType = 'off' | 'heart' | 'star' | 'dot'
+
+export interface ThemeEffectConfig {
+  scope: ThemeEffectScope
+  background: {
+    type: ThemeBackgroundEffectType
+    color: string
+    count: number
+    size: number
+    opacity: number
+    speed: number
+  }
+  cursor: {
+    type: ThemeCursorEffectType
+    color: string
+    count: number
+    size: number
+    opacity: number
+    duration: number
+  }
+  click: {
+    type: ThemeClickEffectType
+    color: string
+    count: number
+    size: number
+    opacity: number
+    duration: number
+  }
+}
 
 export interface UserTheme {
   user_id: number
@@ -11,6 +43,7 @@ export interface UserTheme {
   show_pins_public: boolean
   custom_css: string
   custom_js: string
+  effect_config: ThemeEffectConfig
 }
 
 export interface UpdateThemePayload {
@@ -22,7 +55,36 @@ export interface UpdateThemePayload {
   show_pins_public?: boolean
   custom_css?: string
   custom_js?: string
+  effect_config?: ThemeEffectConfig
 }
+
+export const createDefaultEffectConfig = (): ThemeEffectConfig => ({
+  scope: 'all',
+  background: {
+    type: 'off',
+    color: '#6366f1',
+    count: 20,
+    size: 20,
+    opacity: 0.25,
+    speed: 0.5,
+  },
+  cursor: {
+    type: 'off',
+    color: '#6366f1',
+    count: 16,
+    size: 5,
+    opacity: 0.7,
+    duration: 700,
+  },
+  click: {
+    type: 'off',
+    color: '#ec4899',
+    count: 8,
+    size: 16,
+    opacity: 0.9,
+    duration: 900,
+  },
+})
 
 export const DEFAULT_THEME: UserTheme = {
   user_id: 0,
@@ -34,6 +96,7 @@ export const DEFAULT_THEME: UserTheme = {
   show_pins_public: false,
   custom_css: '',
   custom_js: '',
+  effect_config: createDefaultEffectConfig(),
 }
 
 export interface PresetConfig {

@@ -37,6 +37,7 @@ func (h *UserThemeHandler) GetTheme(c *gin.Context) {
 		ShowPinsPublic: theme.ShowPinsPublic,
 		CustomCSS:      theme.CustomCSS,
 		CustomJS:       theme.CustomJS,
+		EffectConfig:   theme.EffectConfig,
 	}))
 }
 
@@ -57,7 +58,8 @@ func (h *UserThemeHandler) UpdateTheme(c *gin.Context) {
 			errors.Is(err, service.ErrInvalidLayout),
 			errors.Is(err, service.ErrCSSToLong),
 			errors.Is(err, service.ErrJSToLong),
-			errors.Is(err, service.ErrInvalidAccentColor):
+			errors.Is(err, service.ErrInvalidAccentColor),
+			errors.Is(err, service.ErrInvalidEffectConfig):
 			c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, err.Error()))
 		case errors.Is(err, service.ErrForbidden):
 			c.JSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "无自定义 JS 权限"))
@@ -77,5 +79,6 @@ func (h *UserThemeHandler) UpdateTheme(c *gin.Context) {
 		ShowPinsPublic: theme.ShowPinsPublic,
 		CustomCSS:      theme.CustomCSS,
 		CustomJS:       theme.CustomJS,
+		EffectConfig:   theme.EffectConfig,
 	}))
 }

@@ -5,8 +5,9 @@ import { NButton, NSwitch, NUpload, useMessage } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { getUserTheme, updateMyTheme } from '@/api/theme'
 import { uploadImage } from '@/api/uploads'
-import { PRESETS, FONT_OPTIONS, DEFAULT_THEME } from '@/types/theme'
+import { PRESETS, FONT_OPTIONS, DEFAULT_THEME, createDefaultEffectConfig } from '@/types/theme'
 import type { UserTheme, ThemePreset, ThemeLayout } from '@/types/theme'
+import ThemeEffectsSettings from '@/components/theme/ThemeEffectsSettings.vue'
 
 const auth = useAuthStore()
 const message = useMessage()
@@ -16,7 +17,7 @@ const myUrl = computed(() =>
   auth.user ? router.resolve({ name: 'user-home', params: { username: auth.user.username } }).href : '/'
 )
 
-const form = ref<UserTheme>({ ...DEFAULT_THEME })
+const form = ref<UserTheme>({ ...DEFAULT_THEME, effect_config: createDefaultEffectConfig() })
 const saving = ref(false)
 const uploadingBanner = ref(false)
 
@@ -40,7 +41,11 @@ onMounted(async () => {
   try {
     const res = await getUserTheme(auth.user.username)
     if (res.code === 0 && res.data) {
-      form.value = { ...DEFAULT_THEME, ...res.data }
+      form.value = {
+        ...DEFAULT_THEME,
+        ...res.data,
+        effect_config: res.data.effect_config ?? createDefaultEffectConfig(),
+      }
     }
   } catch {
     // 首次使用，使用默认值
@@ -86,6 +91,7 @@ const save = async () => {
       show_pins_public: form.value.show_pins_public,
       custom_css: form.value.custom_css,
       custom_js: form.value.custom_js,
+      effect_config: form.value.effect_config,
     })
     if (res.code === 0) {
       message.success('主题已保存，刷新个人主页即可看到效果')
@@ -270,6 +276,8 @@ const LAYOUTS = [
             <NSwitch v-model:value="form.show_pins_public" />
           </div>
         </section>
+
+        <ThemeEffectsSettings v-model="form.effect_config" />
 
         <!-- 自定义 CSS -->
         <section>

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, computed } from 'vue'
+import { onMounted, ref, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getUserProfile } from '@/api/users'
 import { listUserPosts } from '@/api/posts'
@@ -12,6 +12,7 @@ import PostList from '@/components/post/PostList.vue'
 import PinCarousel from '@/components/post/PinCarousel.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import ThemeEffects from '@/components/theme/ThemeEffects.vue'
 
 const route = useRoute()
 const auth = useAuthStore()
@@ -54,15 +55,24 @@ const load = async () => {
   }
 }
 
-onMounted(async () => {
+const loadPage = async () => {
+  user.value = null
+  posts.value = []
+  pins.value = []
+  total.value = 0
+  page.value = 1
   const username = String(route.params.username)
   await loadTheme(username)
   await load()
-})
+}
+
+onMounted(loadPage)
+watch(() => route.params.username, loadPage)
 </script>
 
 <template>
   <div ref="containerRef" :data-theme-user="String(route.params.username)" data-theme-page="user-home" class="min-h-screen transition-colors duration-300" style="color: var(--theme-text)">
+    <ThemeEffects :config="theme.effect_config" page-scope="home" />
     <div v-if="loading && !user" class="text-center py-20 text-slate-400">加载中...</div>
     <EmptyState v-else-if="!loading && !user" message="用户不存在" />
     <template v-else-if="user">
