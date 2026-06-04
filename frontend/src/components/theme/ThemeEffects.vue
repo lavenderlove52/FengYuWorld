@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from 'vue'
-import type { ThemeClickEffectType, ThemeCursorEffectType, ThemeEffectConfig, ThemeEffectScope } from '@/types/theme'
+import type { ThemeClickEffectType, ThemeEffectConfig, ThemeEffectScope } from '@/types/theme'
 
 const props = defineProps<{
   config: ThemeEffectConfig
