@@ -17,9 +17,9 @@ func TestValidateEffectConfig(t *testing.T) {
 	t.Run("accepts enabled effects within bounds", func(t *testing.T) {
 		config := domain.DefaultThemeEffectConfig()
 		config.Scope = "post"
-		config.Background.Type = "constellation"
-		config.Orbit.Type = "rainbow-orbit"
-		config.Cursor.Type = "comet-trail"
+		config.Background.Type = "magnetic-shapes"
+		config.Orbit.Type = "particle-orbit"
+		config.Cursor.Type = "hue-trail"
 		config.Click.Type = "flower"
 
 		if err := validateEffectConfig(config); err != nil {

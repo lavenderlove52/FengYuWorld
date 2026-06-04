@@ -119,7 +119,7 @@ func (s *UserThemeService) Update(userID int64, req dto.UpdateThemeRequest) (*do
 		theme.EffectConfig = effectConfig
 	}
 	if req.HeroConfig != nil {
-		heroConfig := domain.ThemeHeroConfig(*req.HeroConfig)
+		heroConfig := normalizeHeroConfig(domain.ThemeHeroConfig(*req.HeroConfig))
 		if err := validateHeroConfig(heroConfig); err != nil {
 			return nil, err
 		}
@@ -156,6 +156,47 @@ func (s *UserThemeService) HeroImages(theme *domain.UserTheme) ([]domain.HomeThe
 		}
 	}
 	return ordered, nil
+}
+
+func normalizeHeroConfig(config domain.ThemeHeroConfig) domain.ThemeHeroConfig {
+	minInterval := 3000
+	if config.Transition == "slices" || config.Transition == "interlaced" {
+		minInterval = 5000
+	}
+	if config.IntervalMS < minInterval {
+		config.IntervalMS = minInterval
+	}
+	if config.IntervalMS > 30000 {
+		config.IntervalMS = 30000
+	}
+	if config.OverlayOpacity < 0 {
+		config.OverlayOpacity = 0
+	}
+	if config.OverlayOpacity > 0.9 {
+		config.OverlayOpacity = 0.9
+	}
+	if config.HeroHeightVH < 60 {
+		config.HeroHeightVH = 60
+	}
+	if config.HeroHeightVH > 100 {
+		config.HeroHeightVH = 100
+	}
+	if config.PageWidthPX < 600 {
+		config.PageWidthPX = 600
+	}
+	if config.PageWidthPX > 1800 {
+		config.PageWidthPX = 1800
+	}
+	if config.ArticleListWidthPX < 600 {
+		config.ArticleListWidthPX = 600
+	}
+	if config.ArticleListWidthPX > 1600 {
+		config.ArticleListWidthPX = 1600
+	}
+	if config.ArticleListWidthPX > config.PageWidthPX {
+		config.ArticleListWidthPX = config.PageWidthPX
+	}
+	return config
 }
 
 func validateHeroConfig(config domain.ThemeHeroConfig) error {
@@ -208,7 +249,7 @@ func validateEffectConfig(config domain.ThemeEffectConfig) error {
 	}
 
 	background := config.Background
-	if !allowedValue(background.Type, "off", "floating-shapes", "starfield", "fireflies", "bubbles", "constellation", "rain") {
+	if !allowedValue(background.Type, "off", "floating-shapes", "magnetic-shapes", "starfield", "fireflies", "bubbles", "constellation", "rain") {
 		return invalidEffectConfig("background.type")
 	}
 	if !validEffectColor(background.Color) ||
@@ -220,7 +261,7 @@ func validateEffectConfig(config domain.ThemeEffectConfig) error {
 	}
 
 	orbit := config.Orbit
-	if !allowedValue(orbit.Type, "off", "rainbow-orbit", "atom-orbit", "spiral-orbit") {
+	if !allowedValue(orbit.Type, "off", "rainbow-orbit", "atom-orbit", "spiral-orbit", "particle-orbit") {
 		return invalidEffectConfig("orbit.type")
 	}
 	if !validEffectColor(orbit.Color) ||
@@ -233,7 +274,7 @@ func validateEffectConfig(config domain.ThemeEffectConfig) error {
 	}
 
 	cursor := config.Cursor
-	if !allowedValue(cursor.Type, "off", "particle-trail", "comet-trail", "sparkle-trail") {
+	if !allowedValue(cursor.Type, "off", "particle-trail", "comet-trail", "sparkle-trail", "hue-trail") {
 		return invalidEffectConfig("cursor.type")
 	}
 	if !validEffectColor(cursor.Color) ||

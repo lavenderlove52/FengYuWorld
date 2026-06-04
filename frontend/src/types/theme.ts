@@ -4,13 +4,24 @@ export type ThemeEffectScope = 'home' | 'post' | 'all'
 export type ThemeBackgroundEffectType =
   | 'off'
   | 'floating-shapes'
+  | 'magnetic-shapes'
   | 'starfield'
   | 'fireflies'
   | 'bubbles'
   | 'constellation'
   | 'rain'
-export type ThemeOrbitEffectType = 'off' | 'rainbow-orbit' | 'atom-orbit' | 'spiral-orbit'
-export type ThemeCursorEffectType = 'off' | 'particle-trail' | 'comet-trail' | 'sparkle-trail'
+export type ThemeOrbitEffectType =
+  | 'off'
+  | 'rainbow-orbit'
+  | 'atom-orbit'
+  | 'spiral-orbit'
+  | 'particle-orbit'
+export type ThemeCursorEffectType =
+  | 'off'
+  | 'particle-trail'
+  | 'comet-trail'
+  | 'sparkle-trail'
+  | 'hue-trail'
 export type ThemeClickEffectType = 'off' | 'heart' | 'star' | 'dot' | 'ring' | 'diamond' | 'flower' | 'sparkle'
 export type ThemeHeroTransition = 'off' | 'fade' | 'slices' | 'interlaced'
 
@@ -158,6 +169,56 @@ export const createDefaultHeroConfig = (): ThemeHeroConfig => ({
   article_list_width_px: 960,
   article_layout: 'list',
 })
+
+const HERO_INTERVAL_MIN_MS = 3000
+const HERO_INTERVAL_MAX_MS = 30000
+const HERO_SLICE_INTERVAL_MIN_MS = 5000
+
+export function minHeroIntervalMs(transition: ThemeHeroTransition) {
+  return transition === 'slices' || transition === 'interlaced' ? HERO_SLICE_INTERVAL_MIN_MS : HERO_INTERVAL_MIN_MS
+}
+
+/** 与后端 validateHeroConfig 对齐，避免保存时报 interval_ms 等字段无效 */
+export function normalizeHeroConfig(config?: Partial<ThemeHeroConfig> | null): ThemeHeroConfig {
+  const base = createDefaultHeroConfig()
+  const transition = config?.transition ?? base.transition
+  const merged: ThemeHeroConfig = {
+    ...base,
+    ...config,
+    transition,
+    image_ids: Array.isArray(config?.image_ids) ? config.image_ids.filter((id) => id > 0).slice(0, 5) : [],
+  }
+
+  const minInterval = minHeroIntervalMs(transition)
+  const interval = Number(merged.interval_ms)
+  merged.interval_ms = Math.min(
+    HERO_INTERVAL_MAX_MS,
+    Math.max(minInterval, Number.isFinite(interval) ? interval : base.interval_ms),
+  )
+
+  merged.overlay_opacity = Math.min(0.9, Math.max(0, Number(merged.overlay_opacity) || base.overlay_opacity))
+  merged.hero_height_vh = Math.min(100, Math.max(60, Number(merged.hero_height_vh) || base.hero_height_vh))
+  merged.page_width_px = Math.min(1800, Math.max(600, Number(merged.page_width_px) || base.page_width_px))
+  merged.article_list_width_px = Math.min(
+    1600,
+    Math.max(600, Number(merged.article_list_width_px) || base.article_list_width_px),
+  )
+  if (merged.article_list_width_px > merged.page_width_px) {
+    merged.article_list_width_px = merged.page_width_px
+  }
+
+  if (!['list', 'grid', 'magazine'].includes(merged.article_layout)) {
+    merged.article_layout = base.article_layout
+  }
+  if (!['off', 'fade', 'slices', 'interlaced'].includes(merged.transition)) {
+    merged.transition = base.transition
+  }
+  if (merged.enabled && merged.image_ids.length === 0) {
+    merged.enabled = false
+  }
+
+  return merged
+}
 
 export const DEFAULT_THEME: UserTheme = {
   user_id: 0,

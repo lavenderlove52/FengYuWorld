@@ -11,6 +11,7 @@ import {
   DEFAULT_THEME,
   createDefaultEffectConfig,
   createDefaultHeroConfig,
+  normalizeHeroConfig,
 } from '@/types/theme'
 import { resolveThemeBackground, resolveThemeColor } from '@/utils/themeColor'
 import type { UserTheme, ThemePreset, ThemeLayout } from '@/types/theme'
@@ -89,11 +90,11 @@ onMounted(async () => {
           cursor: { ...defaultEffects.cursor, ...res.data.effect_config?.cursor },
           click: { ...defaultEffects.click, ...res.data.effect_config?.click },
         },
-        hero_config: {
+        hero_config: normalizeHeroConfig({
           ...createDefaultHeroConfig(),
           ...res.data.hero_config,
           image_ids: res.data.hero_config?.image_ids ?? [],
-        },
+        }),
       }
     }
   } catch {
@@ -149,7 +150,7 @@ const save = async () => {
       custom_css: form.value.custom_css,
       custom_js: form.value.custom_js,
       effect_config: form.value.effect_config,
-      hero_config: form.value.hero_config,
+      hero_config: normalizeHeroConfig(form.value.hero_config),
     })
     if (res.code === 0) {
       message.success('主题已保存，刷新个人主页即可看到效果')

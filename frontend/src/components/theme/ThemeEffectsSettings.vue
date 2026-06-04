@@ -19,6 +19,7 @@ const scopes: Array<{ value: ThemeEffectScope; label: string }> = [
 const backgroundTypes: Array<{ value: ThemeBackgroundEffectType; label: string }> = [
   { value: 'off', label: '关闭' },
   { value: 'floating-shapes', label: '漂浮图形' },
+  { value: 'magnetic-shapes', label: '鼠吸漂浮图形' },
   { value: 'starfield', label: '闪烁星空' },
   { value: 'fireflies', label: '萤火微光' },
   { value: 'bubbles', label: '上浮气泡' },
@@ -28,6 +29,7 @@ const backgroundTypes: Array<{ value: ThemeBackgroundEffectType; label: string }
 
 const orbitTypes: Array<{ value: ThemeOrbitEffectType; label: string }> = [
   { value: 'off', label: '关闭' },
+  { value: 'particle-orbit', label: '彩色粒子环' },
   { value: 'rainbow-orbit', label: '彩色轨道' },
   { value: 'atom-orbit', label: '原子环' },
   { value: 'spiral-orbit', label: '螺旋光点' },
@@ -35,6 +37,7 @@ const orbitTypes: Array<{ value: ThemeOrbitEffectType; label: string }> = [
 
 const cursorTypes: Array<{ value: ThemeCursorEffectType; label: string }> = [
   { value: 'off', label: '关闭' },
+  { value: 'hue-trail', label: '彩虹轨迹' },
   { value: 'particle-trail', label: '粒子轨迹' },
   { value: 'comet-trail', label: '彗星尾迹' },
   { value: 'sparkle-trail', label: '闪光轨迹' },
@@ -73,7 +76,7 @@ const clickTypes: Array<{ value: ThemeClickEffectType; label: string }> = [
       <label class="effect-row">
         <span>
           <strong>背景特效</strong>
-          <small>漂浮图形、星空、萤火、气泡、星座与细雨</small>
+          <small>鼠吸漂浮图形、星空、萤火、气泡、星座与细雨</small>
         </span>
         <select v-model="config.background.type" class="effect-select">
           <option v-for="item in backgroundTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
@@ -92,7 +95,7 @@ const clickTypes: Array<{ value: ThemeClickEffectType; label: string }> = [
       <label class="effect-row">
         <span>
           <strong>环绕特效</strong>
-          <small>在指针周围旋转的彩色轨道、原子环与螺旋光点</small>
+          <small>彩色粒子环（静止时绕指针旋转）、彩色轨道、原子环与螺旋光点</small>
         </span>
         <select v-model="config.orbit.type" class="effect-select">
           <option v-for="item in orbitTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
@@ -112,7 +115,7 @@ const clickTypes: Array<{ value: ThemeClickEffectType; label: string }> = [
       <label class="effect-row">
         <span>
           <strong>鼠标跟随</strong>
-          <small>指针移动时留下粒子、彗星或闪光轨迹</small>
+          <small>彩虹轨迹、粒子、彗星或闪光轨迹</small>
         </span>
         <select v-model="config.cursor.type" class="effect-select">
           <option v-for="item in cursorTypes" :key="item.value" :value="item.value">{{ item.label }}</option>

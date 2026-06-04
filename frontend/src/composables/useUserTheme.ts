@@ -1,7 +1,7 @@
 import { ref, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUserTheme } from '@/api/theme'
-import { DEFAULT_THEME, createDefaultEffectConfig, createDefaultHeroConfig } from '@/types/theme'
+import { DEFAULT_THEME, createDefaultEffectConfig, createDefaultHeroConfig, normalizeHeroConfig } from '@/types/theme'
 import { setActivePageTheme } from '@/stores/pageTheme'
 import {
   buildThemeBackgroundLockCss,
@@ -54,11 +54,7 @@ function normalizeTheme(theme?: UserTheme | null): UserTheme {
       cursor: { ...defaultEffects.cursor, ...theme?.effect_config?.cursor },
       click: { ...defaultEffects.click, ...theme?.effect_config?.click },
     },
-    hero_config: {
-      ...createDefaultHeroConfig(),
-      ...theme?.hero_config,
-      image_ids: theme?.hero_config?.image_ids ?? [],
-    },
+    hero_config: normalizeHeroConfig(theme?.hero_config),
   }
 }
 

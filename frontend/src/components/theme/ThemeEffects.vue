@@ -19,7 +19,12 @@ interface BackgroundParticle {
   phase: number
 }
 
-type TransientKind = 'trail' | Exclude<ThemeCursorEffectType, 'off' | 'particle-trail'> | Exclude<ThemeClickEffectType, 'off'>
+type TransientKind =
+  | 'trail'
+  | 'comet-trail'
+  | 'sparkle-trail'
+  | 'hue-trail'
+  | Exclude<ThemeClickEffectType, 'off'>
 
 interface TransientParticle {
   x: number
@@ -32,6 +37,16 @@ interface TransientParticle {
   opacity: number
   color: string
   kind: TransientKind
+  life?: number
+  hue?: number
+}
+
+interface HueOrbiter {
+  angle: number
+  radius: number
+  speed: number
+  size: number
+  hue: number
 }
 
 interface OrbitPoint {
@@ -55,6 +70,9 @@ let lastPointerParticleAt = 0
 let cursorParticleCount = 0
 let pointerX = window.innerWidth / 2
 let pointerY = window.innerHeight / 2
+let pointerIsMoving = false
+let pointerIdleTimer = 0
+let hueOrbiters: HueOrbiter[] = []
 let lastContinuousFrameAt = 0
 const CONTINUOUS_FRAME_MS = 1000 / 30
 
@@ -103,10 +121,23 @@ function createBackgroundParticles() {
   const count = Math.floor(clamp(effect.count, 0, maxCount))
   const size = clamp(effect.size, 4, 80)
   const configuredSpeed = clamp(effect.speed, 0.1, 2)
-  backgroundParticles = Array.from({ length: count }, () => {
+  backgroundParticles = Array.from({ length: count }, (_, index) => {
     const speed = configuredSpeed * randomBetween(0.15, 0.45)
     let vx = randomBetween(-speed, speed)
     let vy = randomBetween(-speed, speed)
+    if (effect.type === 'magnetic-shapes') {
+      return {
+        x: Math.random() * window.innerWidth,
+        y: Math.random() * window.innerHeight,
+        size: size * randomBetween(0.55, 1.15),
+        vx: randomBetween(-0.5, 0.5) * configuredSpeed,
+        vy: randomBetween(-0.5, 0.5) * configuredSpeed,
+        rotation: Math.random() * 360,
+        rotationSpeed: randomBetween(-0.4, 0.4) * configuredSpeed,
+        shape: index % 5,
+        phase: Math.random() * Math.PI * 2,
+      }
+    }
     if (effect.type === 'rain') {
       vx = randomBetween(-0.35, -0.05) * configuredSpeed
       vy = randomBetween(3, 7) * configuredSpeed
@@ -129,6 +160,63 @@ function createBackgroundParticles() {
       phase: Math.random() * Math.PI * 2,
     }
   })
+}
+
+function applyMagneticForce(particle: BackgroundParticle, speedScale: number) {
+  const dx = pointerX - particle.x
+  const dy = pointerY - particle.y
+  const distance = Math.hypot(dx, dy)
+  if (distance < 220 && distance > 0) {
+    const force = (1 - distance / 220) * 0.012 * speedScale
+    particle.vx += (dx / distance) * force
+    particle.vy += (dy / distance) * force
+  }
+  particle.vx *= 0.98
+  particle.vy *= 0.98
+  const currentSpeed = Math.hypot(particle.vx, particle.vy)
+  if (currentSpeed > 3) {
+    particle.vx = (particle.vx / currentSpeed) * 3
+    particle.vy = (particle.vy / currentSpeed) * 3
+  }
+  particle.x += particle.vx
+  particle.y += particle.vy
+  particle.rotation += particle.rotationSpeed
+}
+
+function drawMagneticShape(
+  ctx: CanvasRenderingContext2D,
+  kind: number,
+  x: number,
+  y: number,
+  size: number,
+  rotationDeg: number,
+) {
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.rotate((rotationDeg * Math.PI) / 180)
+  ctx.lineWidth = 1.2
+  ctx.beginPath()
+  if (kind === 0) {
+    ctx.rect(-size / 2, -size / 2, size, size)
+  } else if (kind === 1) {
+    ctx.arc(0, 0, size / 2, 0, Math.PI * 2)
+  } else if (kind === 2) {
+    ctx.moveTo(0, -size / 2)
+    ctx.lineTo(size / 2, size / 2)
+    ctx.lineTo(-size / 2, size / 2)
+    ctx.closePath()
+  } else if (kind === 3) {
+    ctx.moveTo(0, -size / 2)
+    ctx.lineTo(size / 2, 0)
+    ctx.lineTo(0, size / 2)
+    ctx.lineTo(-size / 2, 0)
+    ctx.closePath()
+  } else {
+    ctx.moveTo(-size / 2, 0)
+    ctx.lineTo(size / 2, 0)
+  }
+  ctx.stroke()
+  ctx.restore()
 }
 
 function drawShape(
@@ -244,7 +332,26 @@ function drawClickShape(ctx: CanvasRenderingContext2D, particle: TransientPartic
 }
 
 function isCursorParticle(kind: TransientKind) {
-  return kind === 'trail' || kind === 'comet-trail' || kind === 'sparkle-trail'
+  return kind === 'trail' || kind === 'comet-trail' || kind === 'sparkle-trail' || kind === 'hue-trail'
+}
+
+function createHueOrbiters() {
+  const effect = props.config.orbit
+  if (effect.type !== 'particle-orbit') {
+    hueOrbiters = []
+    return
+  }
+  const count = Math.floor(clamp(effect.count, 3, 24))
+  const baseRadius = clamp(effect.radius, 20, 120)
+  const baseSize = clamp(effect.size, 1, 16)
+  const speedScale = clamp(effect.speed, 0.1, 3)
+  hueOrbiters = Array.from({ length: count }, (_, index) => ({
+    angle: (index / count) * Math.PI * 2,
+    radius: baseRadius * randomBetween(0.45, 0.9),
+    speed: (0.04 + randomBetween(0, 0.03)) * speedScale,
+    size: baseSize * randomBetween(0.65, 1.35),
+    hue: Math.floor(Math.random() * 360),
+  }))
 }
 
 function addPointerParticle(event: PointerEvent) {
@@ -253,6 +360,30 @@ function addPointerParticle(event: PointerEvent) {
   if (now - lastPointerParticleAt < 24) return
   lastPointerParticleAt = now
   if (cursorParticleCount >= clamp(effect.count, 0, 50) || transientParticles.length >= MAX_TRANSIENT_PARTICLES) return
+
+  if (effect.type === 'hue-trail') {
+    for (let i = 0; i < 2; i += 1) {
+      if (transientParticles.length >= MAX_TRANSIENT_PARTICLES) break
+      transientParticles.push({
+        x: event.clientX,
+        y: event.clientY,
+        vx: randomBetween(-1.25, 1.25),
+        vy: randomBetween(-1.25, 1.25) - 1,
+        size: clamp(effect.size, 1, 20) * randomBetween(0.75, 1.25),
+        bornAt: now,
+        duration: 0,
+        opacity: clamp(effect.opacity, 0.05, 1),
+        color: '',
+        kind: 'hue-trail',
+        life: 1,
+        hue: Math.floor(Math.random() * 360),
+      })
+      cursorParticleCount += 1
+    }
+    ensureAnimation()
+    return
+  }
+
   transientParticles.push({
     x: event.clientX,
     y: event.clientY,
@@ -276,6 +407,11 @@ function addPointerParticle(event: PointerEvent) {
 function onPointerMove(event: PointerEvent) {
   pointerX = event.clientX
   pointerY = event.clientY
+  pointerIsMoving = true
+  window.clearTimeout(pointerIdleTimer)
+  pointerIdleTimer = window.setTimeout(() => {
+    pointerIsMoving = false
+  }, 120)
   if (props.config.cursor.type !== 'off') addPointerParticle(event)
   if (props.config.orbit.type !== 'off') ensureAnimation()
 }
@@ -350,6 +486,17 @@ function drawBackground(ctx: CanvasRenderingContext2D, now: number) {
   }
 
   for (const particle of backgroundParticles) {
+    if (effect.type === 'magnetic-shapes') {
+      applyMagneticForce(particle, clamp(effect.speed, 0.1, 2))
+      if (particle.x < -50) particle.x = window.innerWidth + 50
+      if (particle.x > window.innerWidth + 50) particle.x = -50
+      if (particle.y < -50) particle.y = window.innerHeight + 50
+      if (particle.y > window.innerHeight + 50) particle.y = -50
+      ctx.globalAlpha = opacity
+      drawMagneticShape(ctx, particle.shape, particle.x, particle.y, particle.size, particle.rotation)
+      continue
+    }
+
     updateBackgroundParticle(particle)
     const twinkle = 0.55 + Math.sin(now * 0.002 + particle.phase) * 0.35
     ctx.globalAlpha = opacity * (effect.type === 'starfield' || effect.type === 'fireflies' ? twinkle : 1)
@@ -380,9 +527,42 @@ function drawBackground(ctx: CanvasRenderingContext2D, now: number) {
   ctx.restore()
 }
 
+function drawParticleOrbit(ctx: CanvasRenderingContext2D) {
+  const effect = props.config.orbit
+  if (effect.type !== 'particle-orbit' || hueOrbiters.length === 0) return
+
+  const opacity = clamp(effect.opacity, 0.05, 1)
+  ctx.save()
+  for (const orbiter of hueOrbiters) {
+    orbiter.angle += orbiter.speed * (pointerIsMoving ? 3 : 1)
+    const tx = pointerX + Math.cos(orbiter.angle) * orbiter.radius
+    const ty = pointerY + Math.sin(orbiter.angle) * orbiter.radius
+    orbiter.hue = (orbiter.hue + 0.5) % 360
+    ctx.globalAlpha = pointerIsMoving ? opacity * 0.5 : opacity * 0.9
+    ctx.fillStyle = `hsl(${orbiter.hue},90%,65%)`
+    ctx.beginPath()
+    ctx.arc(tx, ty, orbiter.size / 2, 0, Math.PI * 2)
+    ctx.fill()
+    if (!pointerIsMoving) {
+      ctx.globalAlpha = opacity * 0.15
+      ctx.strokeStyle = `hsl(${orbiter.hue},80%,65%)`
+      ctx.lineWidth = 0.8
+      ctx.beginPath()
+      ctx.moveTo(pointerX, pointerY)
+      ctx.lineTo(tx, ty)
+      ctx.stroke()
+    }
+  }
+  ctx.restore()
+}
+
 function drawOrbit(ctx: CanvasRenderingContext2D, now: number) {
   const effect = props.config.orbit
   if (effect.type === 'off') return
+  if (effect.type === 'particle-orbit') {
+    drawParticleOrbit(ctx)
+    return
+  }
   const count = Math.floor(clamp(effect.count, 3, 24))
   const radius = clamp(effect.radius, 20, 120)
   const size = clamp(effect.size, 1, 16)
@@ -477,6 +657,26 @@ function render(now: number) {
 
   let nextParticleIndex = 0
   for (const particle of transientParticles) {
+    if (particle.kind === 'hue-trail') {
+      const life = (particle.life ?? 0) - 0.03
+      if (life <= 0) {
+        if (isCursorParticle(particle.kind)) cursorParticleCount = Math.max(0, cursorParticleCount - 1)
+        continue
+      }
+      particle.life = life
+      particle.x += particle.vx
+      particle.y += particle.vy
+      particle.vy += 0.06
+      ctx.globalAlpha = life * 0.8 * particle.opacity
+      ctx.fillStyle = `hsl(${particle.hue ?? 0},90%,65%)`
+      ctx.beginPath()
+      ctx.arc(particle.x, particle.y, particle.size / 2, 0, Math.PI * 2)
+      ctx.fill()
+      transientParticles[nextParticleIndex] = particle
+      nextParticleIndex += 1
+      continue
+    }
+
     const progress = (now - particle.bornAt) / particle.duration
     if (progress >= 1) {
       if (isCursorParticle(particle.kind)) cursorParticleCount = Math.max(0, cursorParticleCount - 1)
@@ -503,6 +703,10 @@ function ensureAnimation() {
 }
 
 function stopEffects() {
+  window.clearTimeout(pointerIdleTimer)
+  pointerIdleTimer = 0
+  pointerIsMoving = false
+  hueOrbiters = []
   lastContinuousFrameAt = 0
   cancelAnimationFrame(animationFrame)
   cancelAnimationFrame(resizeFrame)
@@ -522,6 +726,7 @@ function startEffects() {
   resizeCanvas()
 
   if (props.config.background.type !== 'off') createBackgroundParticles()
+  createHueOrbiters()
   if (props.config.cursor.type !== 'off' || props.config.orbit.type !== 'off') {
     window.addEventListener('pointermove', onPointerMove, { passive: true })
     effectCleanups.push(() => window.removeEventListener('pointermove', onPointerMove))

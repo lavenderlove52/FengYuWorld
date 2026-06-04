@@ -7,7 +7,13 @@ import {
   uploadMyThemeImage,
   type ThemeImageList,
 } from '@/api/theme'
-import type { ThemeHeroConfig, ThemeHeroTransition, ThemeImage, ThemeLayout } from '@/types/theme'
+import {
+  minHeroIntervalMs,
+  type ThemeHeroConfig,
+  type ThemeHeroTransition,
+  type ThemeImage,
+  type ThemeLayout,
+} from '@/types/theme'
 
 const config = defineModel<ThemeHeroConfig>({ required: true })
 
@@ -34,9 +40,7 @@ const articleLayouts: Array<{ value: ThemeLayout; label: string }> = [
 
 const selectedCount = computed(() => config.value.image_ids.length)
 const libraryFull = computed(() => images.value.length >= MAX_LIBRARY_IMAGES)
-const minimumInterval = computed(() =>
-  config.value.transition === 'slices' || config.value.transition === 'interlaced' ? 5000 : 3000,
-)
+const minimumInterval = computed(() => minHeroIntervalMs(config.value.transition))
 
 watch(
   minimumInterval,
