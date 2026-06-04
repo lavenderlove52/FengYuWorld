@@ -56,3 +56,51 @@ func TestValidateEffectConfig(t *testing.T) {
 		})
 	}
 }
+
+func TestValidateHeroConfig(t *testing.T) {
+	t.Run("accepts trusted defaults", func(t *testing.T) {
+		if err := validateHeroConfig(domain.DefaultThemeHeroConfig()); err != nil {
+			t.Fatalf("validate defaults: %v", err)
+		}
+	})
+
+	t.Run("accepts enabled hero", func(t *testing.T) {
+		config := domain.DefaultThemeHeroConfig()
+		config.Enabled = true
+		config.ImageIDs = []int64{4, 2}
+		config.Transition = "slices"
+		config.ArticleLayout = "grid"
+		config.PageWidthPX = 720
+		config.ArticleListWidthPX = 1400
+		if err := validateHeroConfig(config); err != nil {
+			t.Fatalf("validate enabled hero: %v", err)
+		}
+	})
+
+	tests := []struct {
+		name   string
+		change func(*domain.ThemeHeroConfig)
+	}{
+		{"enabled without image", func(c *domain.ThemeHeroConfig) { c.Enabled = true }},
+		{"more than five images", func(c *domain.ThemeHeroConfig) { c.ImageIDs = []int64{1, 2, 3, 4, 5, 6} }},
+		{"duplicate image", func(c *domain.ThemeHeroConfig) { c.ImageIDs = []int64{1, 1} }},
+		{"invalid image", func(c *domain.ThemeHeroConfig) { c.ImageIDs = []int64{-1} }},
+		{"unknown transition", func(c *domain.ThemeHeroConfig) { c.Transition = "javascript" }},
+		{"short interval", func(c *domain.ThemeHeroConfig) { c.IntervalMS = 100 }},
+		{"invalid overlay", func(c *domain.ThemeHeroConfig) { c.OverlayOpacity = 1 }},
+		{"invalid hero height", func(c *domain.ThemeHeroConfig) { c.HeroHeightVH = 20 }},
+		{"invalid page width", func(c *domain.ThemeHeroConfig) { c.PageWidthPX = 500 }},
+		{"invalid article width", func(c *domain.ThemeHeroConfig) { c.ArticleListWidthPX = 1800 }},
+		{"unknown article layout", func(c *domain.ThemeHeroConfig) { c.ArticleLayout = "script" }},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			config := domain.DefaultThemeHeroConfig()
+			test.change(&config)
+			if err := validateHeroConfig(config); !errors.Is(err, ErrInvalidHeroConfig) {
+				t.Fatalf("expected ErrInvalidHeroConfig, got %v", err)
+			}
+		})
+	}
+}

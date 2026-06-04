@@ -38,7 +38,7 @@ const headerText = computed(() => activePageTheme.enabled ? activePageTheme.text
           v-if="showMyHomeLink"
           :to="`/u/${auth.user!.username}`"
           class="w-9 h-9 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
-          :style="{ color: headerText }"
+          :style="{ color: activePageTheme.themeColorActive ? activePageTheme.accent : headerText }"
           title="我的主页"
           aria-label="我的主页"
         >

@@ -22,6 +22,7 @@ func registerRoutes(
 	pins *handler.PinHandler,
 	invite *handler.InviteHandler,
 	theme *handler.UserThemeHandler,
+	homeThemeImages *handler.HomeThemeImageHandler,
 	wsHandler *handler.WSHandler,
 	chat *handler.ChatHandler,
 ) {
@@ -57,6 +58,9 @@ func registerRoutes(
 			authed.GET("/users/me", users.GetMe)
 			authed.PUT("/users/me", users.UpdateMe)
 			authed.PUT("/me/theme", theme.UpdateTheme)
+			authed.GET("/me/theme-images", homeThemeImages.List)
+			authed.POST("/me/theme-images", homeThemeImages.Upload)
+			authed.DELETE("/me/theme-images/:id", homeThemeImages.Delete)
 
 			authed.GET("/me/posts", posts.ListMine)
 			authed.POST("/posts", posts.Create)
@@ -81,6 +85,7 @@ func registerRoutes(
 			authed.DELETE("/tags/:id", tags.Delete)
 
 			authed.POST("/uploads/image", uploads.UploadImage)
+			authed.POST("/uploads/banner", uploads.UploadBanner)
 			authed.POST("/uploads/avatar", uploads.UploadAvatar)
 
 			authed.GET("/chat/unread", chat.GetUnreadCounts)

@@ -4,6 +4,28 @@ export type ThemeEffectScope = 'home' | 'post' | 'all'
 export type ThemeBackgroundEffectType = 'off' | 'floating-shapes'
 export type ThemeCursorEffectType = 'off' | 'particle-trail'
 export type ThemeClickEffectType = 'off' | 'heart' | 'star' | 'dot'
+export type ThemeHeroTransition = 'off' | 'fade' | 'slices'
+
+export interface ThemeHeroConfig {
+  enabled: boolean
+  image_ids: number[]
+  transition: ThemeHeroTransition
+  interval_ms: number
+  overlay_opacity: number
+  hero_height_vh: number
+  /** Width of the article content area on a personal homepage. */
+  page_width_px: number
+  /** Width of the main article body on a post detail page. */
+  article_list_width_px: number
+  article_layout: ThemeLayout
+}
+
+export interface ThemeImage {
+  id: number
+  url: string
+  file_name?: string
+  created_at?: string
+}
 
 export interface ThemeEffectConfig {
   scope: ThemeEffectScope
@@ -37,6 +59,11 @@ export interface UserTheme {
   user_id: number
   preset: ThemePreset
   accent_color: string
+  /** 开启后主题色强制作用于个人主页与文章页，优先级高于自定义 CSS/JS */
+  theme_color_enabled: boolean
+  background_color: string
+  /** 开启后背景色强制作用于个人主页与文章页整页背景，优先级高于自定义 CSS/JS */
+  background_color_enabled: boolean
   font_family: string
   banner_url: string
   layout: ThemeLayout
@@ -44,11 +71,17 @@ export interface UserTheme {
   custom_css: string
   custom_js: string
   effect_config: ThemeEffectConfig
+  hero_config: ThemeHeroConfig
+  /** Read-only records resolved by the server from hero_config.image_ids. */
+  hero_images?: ThemeImage[]
 }
 
 export interface UpdateThemePayload {
   preset?: ThemePreset
   accent_color?: string
+  theme_color_enabled?: boolean
+  background_color?: string
+  background_color_enabled?: boolean
   font_family?: string
   banner_url?: string
   layout?: ThemeLayout
@@ -56,6 +89,7 @@ export interface UpdateThemePayload {
   custom_css?: string
   custom_js?: string
   effect_config?: ThemeEffectConfig
+  hero_config?: ThemeHeroConfig
 }
 
 export const createDefaultEffectConfig = (): ThemeEffectConfig => ({
@@ -86,10 +120,25 @@ export const createDefaultEffectConfig = (): ThemeEffectConfig => ({
   },
 })
 
+export const createDefaultHeroConfig = (): ThemeHeroConfig => ({
+  enabled: false,
+  image_ids: [],
+  transition: 'fade',
+  interval_ms: 6000,
+  overlay_opacity: 0.4,
+  hero_height_vh: 100,
+  page_width_px: 1280,
+  article_list_width_px: 960,
+  article_layout: 'list',
+})
+
 export const DEFAULT_THEME: UserTheme = {
   user_id: 0,
   preset: 'default',
   accent_color: '',
+  theme_color_enabled: false,
+  background_color: '',
+  background_color_enabled: false,
   font_family: '',
   banner_url: '',
   layout: 'grid',
@@ -97,6 +146,7 @@ export const DEFAULT_THEME: UserTheme = {
   custom_css: '',
   custom_js: '',
   effect_config: createDefaultEffectConfig(),
+  hero_config: createDefaultHeroConfig(),
 }
 
 export interface PresetConfig {

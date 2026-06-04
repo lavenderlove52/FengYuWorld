@@ -4,10 +4,18 @@ import { useRouter } from 'vue-router'
 import { NButton, NSwitch, NUpload, useMessage } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
 import { getUserTheme, updateMyTheme } from '@/api/theme'
-import { uploadImage } from '@/api/uploads'
-import { PRESETS, FONT_OPTIONS, DEFAULT_THEME, createDefaultEffectConfig } from '@/types/theme'
+import { uploadThemeBackground } from '@/api/uploads'
+import {
+  PRESETS,
+  FONT_OPTIONS,
+  DEFAULT_THEME,
+  createDefaultEffectConfig,
+  createDefaultHeroConfig,
+} from '@/types/theme'
+import { resolveThemeBackground, resolveThemeColor } from '@/utils/themeColor'
 import type { UserTheme, ThemePreset, ThemeLayout } from '@/types/theme'
 import ThemeEffectsSettings from '@/components/theme/ThemeEffectsSettings.vue'
+import ThemeHeroSettings from '@/components/theme/ThemeHeroSettings.vue'
 
 const auth = useAuthStore()
 const message = useMessage()
@@ -17,21 +25,33 @@ const myUrl = computed(() =>
   auth.user ? router.resolve({ name: 'user-home', params: { username: auth.user.username } }).href : '/'
 )
 
-const form = ref<UserTheme>({ ...DEFAULT_THEME, effect_config: createDefaultEffectConfig() })
+const form = ref<UserTheme>({
+  ...DEFAULT_THEME,
+  effect_config: createDefaultEffectConfig(),
+  hero_config: createDefaultHeroConfig(),
+})
 const saving = ref(false)
 const uploadingBanner = ref(false)
 
 const selectedPreset = computed(() => PRESETS.find((p) => p.id === form.value.preset) ?? PRESETS[0])
 
+const previewAccent = computed(() => {
+  return resolveThemeColor(form.value) || form.value.accent_color || selectedPreset.value.accent
+})
+
+const previewBackground = computed(() => {
+  return resolveThemeBackground(form.value) || form.value.background_color || selectedPreset.value.bg
+})
+
 const previewStyle = computed(() => {
   const p = selectedPreset.value
   return {
-    '--theme-bg': p.bg,
-    '--theme-accent': form.value.accent_color || p.accent,
+    '--theme-bg': previewBackground.value,
+    '--theme-accent': previewAccent.value,
     '--theme-text': p.text,
     '--theme-border': p.border,
     '--theme-card-bg': p.cardBg,
-    backgroundColor: p.bg,
+    backgroundColor: previewBackground.value,
     color: p.text,
   }
 })
@@ -45,6 +65,11 @@ onMounted(async () => {
         ...DEFAULT_THEME,
         ...res.data,
         effect_config: res.data.effect_config ?? createDefaultEffectConfig(),
+        hero_config: {
+          ...createDefaultHeroConfig(),
+          ...res.data.hero_config,
+          image_ids: res.data.hero_config?.image_ids ?? [],
+        },
       }
     }
   } catch {
@@ -56,6 +81,7 @@ const selectPreset = (preset: ThemePreset) => {
   form.value.preset = preset
   // 切换预设时清空自定义强调色，使用预设默认色
   form.value.accent_color = ''
+  form.value.background_color = ''
 }
 
 const selectLayout = (layout: ThemeLayout) => {
@@ -65,7 +91,7 @@ const selectLayout = (layout: ThemeLayout) => {
 const onBannerUpload = async ({ file, onFinish, onError }: any) => {
   uploadingBanner.value = true
   try {
-    const res = await uploadImage(file.file as File)
+    const res = await uploadThemeBackground(file.file as File)
     if (res.code === 0 && res.data) {
       form.value.banner_url = res.data.url
       onFinish()
@@ -80,11 +106,18 @@ const onBannerUpload = async ({ file, onFinish, onError }: any) => {
 }
 
 const save = async () => {
+  if (form.value.hero_config.enabled && form.value.hero_config.image_ids.length === 0) {
+    message.warning('启用全屏主页大图前，请至少选择一张主页图片')
+    return
+  }
   saving.value = true
   try {
     const res = await updateMyTheme({
       preset: form.value.preset,
       accent_color: form.value.accent_color,
+      theme_color_enabled: form.value.theme_color_enabled,
+      background_color: form.value.background_color,
+      background_color_enabled: form.value.background_color_enabled,
       font_family: form.value.font_family,
       banner_url: form.value.banner_url,
       layout: form.value.layout,
@@ -92,6 +125,7 @@ const save = async () => {
       custom_css: form.value.custom_css,
       custom_js: form.value.custom_js,
       effect_config: form.value.effect_config,
+      hero_config: form.value.hero_config,
     })
     if (res.code === 0) {
       message.success('主题已保存，刷新个人主页即可看到效果')
@@ -178,12 +212,19 @@ const LAYOUTS = [
           </div>
         </section>
 
-        <!-- 强调色 -->
+        <!-- 主题色 -->
         <section>
-          <h2 class="text-base font-semibold text-slate-700 mb-3">强调色
-            <span class="text-xs font-normal text-slate-400 ml-2">覆盖预设默认色，留空则用预设色</span>
-          </h2>
-          <div class="flex items-center gap-3">
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-semibold text-slate-700">主题色</h2>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-slate-500">启用</span>
+              <NSwitch v-model:value="form.theme_color_enabled" />
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 mb-3 leading-relaxed">
+            开启后，主题色将强制应用于你的个人主页与文章详情页（链接、标签、列表标题悬停、Markdown 强调等），优先级高于自定义 CSS/JS。留空色值时使用当前预设的默认强调色。
+          </p>
+          <div class="flex items-center gap-3" :class="{ 'opacity-50 pointer-events-none': !form.theme_color_enabled }">
             <input
               type="color"
               :value="form.accent_color || selectedPreset.accent"
@@ -200,7 +241,40 @@ const LAYOUTS = [
               v-if="form.accent_color"
               class="text-xs text-slate-400 hover:text-slate-600 transition-colors"
               @click="form.accent_color = ''"
-            >重置</button>
+            >重置颜色</button>
+          </div>
+        </section>
+
+        <!-- 背景色 -->
+        <section>
+          <div class="flex items-center justify-between mb-3">
+            <h2 class="text-base font-semibold text-slate-700">背景色</h2>
+            <div class="flex items-center gap-2">
+              <span class="text-sm text-slate-500">启用</span>
+              <NSwitch v-model:value="form.background_color_enabled" />
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 mb-3 leading-relaxed">
+            开启后，背景色将强制应用于你的个人主页与文章详情页（整页底色、顶栏与内容区外层），优先级高于自定义 CSS/JS。留空色值时使用当前预设的默认背景色。
+          </p>
+          <div class="flex items-center gap-3" :class="{ 'opacity-50 pointer-events-none': !form.background_color_enabled }">
+            <input
+              type="color"
+              :value="form.background_color || selectedPreset.bg"
+              class="w-10 h-10 rounded-lg border border-slate-200 cursor-pointer p-0.5"
+              @input="(e) => form.background_color = (e.target as HTMLInputElement).value"
+            />
+            <input
+              v-model="form.background_color"
+              type="text"
+              placeholder="#0f172a"
+              class="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:border-slate-400"
+            />
+            <button
+              v-if="form.background_color"
+              class="text-xs text-slate-400 hover:text-slate-600 transition-colors"
+              @click="form.background_color = ''"
+            >重置颜色</button>
           </div>
         </section>
 
@@ -224,7 +298,7 @@ const LAYOUTS = [
         <!-- Banner 图 -->
         <section>
           <h2 class="text-base font-semibold text-slate-700 mb-3">Banner 图
-            <span class="text-xs font-normal text-slate-400 ml-2">显示在个人主页顶部</span>
+            <span class="text-xs font-normal text-slate-400 ml-2">显示在个人主页顶部；上传后压缩至 2K（短边最高 1080px）</span>
           </h2>
           <div v-if="form.banner_url" class="mb-3 rounded-lg overflow-hidden h-28 bg-slate-100">
             <img :src="form.banner_url" class="w-full h-full object-cover" />
@@ -246,6 +320,8 @@ const LAYOUTS = [
             >移除</button>
           </div>
         </section>
+
+        <ThemeHeroSettings v-model="form.hero_config" />
 
         <!-- 布局 -->
         <section>
@@ -351,7 +427,7 @@ const LAYOUTS = [
 
             <!-- 用户头 -->
             <div class="flex items-center gap-3 mb-5 pb-4" :style="{ borderBottom: `1px solid ${selectedPreset.border}` }">
-              <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white" :style="{ backgroundColor: form.accent_color || selectedPreset.accent }">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white" :style="{ backgroundColor: previewAccent }">
                 {{ auth.user?.nickname?.[0]?.toUpperCase() || 'U' }}
               </div>
               <div>
@@ -389,9 +465,12 @@ const LAYOUTS = [
 
             <!-- 强调色标注 -->
             <div class="mt-4 flex items-center gap-2">
-              <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: form.accent_color || selectedPreset.accent }" />
-              <span class="text-xs" :style="{ color: form.accent_color || selectedPreset.accent }">
-                {{ form.accent_color || selectedPreset.accent }}
+              <div class="w-3 h-3 rounded-full" :style="{ backgroundColor: previewAccent }" />
+              <span class="text-xs" :style="{ color: previewAccent }">
+                主题 {{ previewAccent }}{{ form.theme_color_enabled ? ' · 开' : ' · 关' }}
+              </span>
+              <span class="text-xs" :style="{ color: selectedPreset.text, opacity: 0.5 }">
+                背景 {{ previewBackground }}{{ form.background_color_enabled ? ' · 开' : ' · 关' }}
               </span>
               <span class="text-xs" :style="{ color: selectedPreset.text, opacity: 0.4 }">
                 — {{ FONT_OPTIONS.find(f => f.value === form.font_family)?.label || '全局默认字体' }}

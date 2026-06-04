@@ -32,7 +32,10 @@ const postPath = computed(() => getPostPath(props.post))
         />
       </div>
 
-      <h2 class="text-lg sm:text-xl font-bold text-slate-800 leading-snug mb-3 line-clamp-2 group-hover:text-blue-600 transition-colors duration-200">
+      <h2
+        class="post-card-title text-lg sm:text-xl font-bold leading-snug mb-3 line-clamp-2 transition-colors duration-200"
+        style="color: var(--theme-text, #0f172a)"
+      >
         {{ post.title }}
       </h2>
 
@@ -45,7 +48,8 @@ const postPath = computed(() => getPostPath(props.post))
       <RouterLink
         v-if="post.author.username"
         :to="`/u/${post.author.username}`"
-        class="text-slate-500 font-medium hover:text-indigo-500 transition-colors duration-200"
+        class="theme-color-accent font-medium transition-colors duration-200"
+        style="color: var(--theme-text, #64748b)"
       >{{ post.author.nickname || post.author.username }}</RouterLink>
       <span v-else class="text-slate-500 font-medium">{{ post.author.nickname }}</span>
       <span class="text-slate-300">·</span>

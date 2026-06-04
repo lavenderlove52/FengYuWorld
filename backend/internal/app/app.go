@@ -82,7 +82,9 @@ func New(cfg *config.Config) (*App, error) {
 	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo, friendRepo, policy)
 
 	userThemeRepo := repository.NewUserThemeRepository(database)
-	userThemeSvc := service.NewUserThemeService(userThemeRepo, userRepo)
+	homeThemeImageRepo := repository.NewHomeThemeImageRepository(database)
+	userThemeSvc := service.NewUserThemeService(userThemeRepo, userRepo, homeThemeImageRepo)
+	homeThemeImageSvc := service.NewHomeThemeImageService(homeThemeImageRepo, uploadSvc)
 
 	wsTicketStore := service.NewWSTicketStore(60 * time.Second)
 
@@ -98,6 +100,7 @@ func New(cfg *config.Config) (*App, error) {
 	pinHandler := handler.NewPinHandler(pinSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc)
 	userThemeHandler := handler.NewUserThemeHandler(userThemeSvc)
+	homeThemeImageHandler := handler.NewHomeThemeImageHandler(homeThemeImageSvc)
 
 	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database, middleware.NewUserCache())
 
@@ -114,7 +117,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, wsHandler, chatHandler)
+	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler)
 
 	return &App{
 		Config: cfg,

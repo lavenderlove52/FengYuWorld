@@ -17,16 +17,20 @@ func NewUserThemeRepository(db *gorm.DB) *UserThemeRepository {
 
 func defaultTheme(userID int64) *domain.UserTheme {
 	return &domain.UserTheme{
-		UserID:         userID,
-		Preset:         "default",
-		AccentColor:    "",
-		FontFamily:     "",
-		BannerURL:      "",
-		Layout:         "grid",
-		ShowPinsPublic: false,
-		CustomCSS:      "",
-		CustomJS:       "",
-		EffectConfig:   domain.DefaultThemeEffectConfig(),
+		UserID:                 userID,
+		Preset:                 "default",
+		AccentColor:            "",
+		ThemeColorEnabled:      false,
+		BackgroundColor:        "",
+		BackgroundColorEnabled: false,
+		FontFamily:             "",
+		BannerURL:              "",
+		Layout:                 "grid",
+		ShowPinsPublic:         false,
+		CustomCSS:              "",
+		CustomJS:               "",
+		EffectConfig:           domain.DefaultThemeEffectConfig(),
+		HeroConfig:             domain.DefaultThemeHeroConfig(),
 	}
 }
 
@@ -62,8 +66,8 @@ func (r *UserThemeRepository) Upsert(theme *domain.UserTheme) error {
 	return r.db.Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "user_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"preset", "accent_color", "font_family", "banner_url",
-			"layout", "show_pins_public", "custom_css", "custom_js", "effect_config", "updated_at",
+			"preset", "accent_color", "theme_color_enabled", "background_color", "background_color_enabled", "font_family", "banner_url",
+			"layout", "show_pins_public", "custom_css", "custom_js", "effect_config", "hero_config", "updated_at",
 		}),
 	}).Create(theme).Error
 }

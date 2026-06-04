@@ -47,7 +47,7 @@ const rows = computed(() => {
           <img :src="post.cover_image_url" :alt="post.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
         </div>
         <div class="flex-1 min-w-0">
-          <h2 class="text-lg font-bold mb-2 group-hover:opacity-70 transition-opacity" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h2>
+          <h2 class="post-list-title text-lg font-bold mb-2 transition-colors" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h2>
           <p v-if="post.summary" class="text-sm leading-relaxed line-clamp-2 mb-3" style="color: var(--theme-text, #64748b); opacity: 0.7">{{ post.summary }}</p>
           <div class="flex items-center gap-2 text-xs" style="color: var(--theme-text, #94a3b8); opacity: 0.6">
             <span>{{ post.author.nickname }}</span>
@@ -74,7 +74,7 @@ const rows = computed(() => {
         <img :src="post.cover_image_url" :alt="post.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
       </div>
       <div class="p-5">
-        <h2 class="text-base font-bold mb-2 group-hover:opacity-70 transition-opacity line-clamp-2" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h2>
+        <h2 class="post-list-title text-base font-bold mb-2 transition-colors line-clamp-2" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h2>
         <p v-if="post.summary" class="text-sm line-clamp-2 mb-3" style="color: var(--theme-text, #64748b); opacity: 0.7">{{ post.summary }}</p>
         <div class="text-xs" style="color: var(--theme-text, #94a3b8); opacity: 0.6">
           {{ post.author.nickname }} · {{ (post.published_at || post.created_at)?.slice(0, 10) }} · {{ post.view_count }} 阅读

@@ -1,10 +1,12 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -20,6 +22,11 @@ type SaveResult struct {
 	Path string
 	URL  string
 }
+
+var (
+	contentHashPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+	variantPattern     = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,49}$`)
+)
 
 func NewLocalStorage(baseDir, publicBase string) *LocalStorage {
 	return &LocalStorage{baseDir: baseDir, publicBase: publicBase}
@@ -58,4 +65,84 @@ func (s *LocalStorage) Save(userID int64, filename string, r io.Reader) (*SaveRe
 
 	url := strings.TrimRight(s.publicBase, "/") + "/" + relPath
 	return &SaveResult{Path: relPath, URL: url}, nil
+}
+
+func (s *LocalStorage) ContentAddressedLocation(contentHash, variant, filename string) (*SaveResult, error) {
+	if !contentHashPattern.MatchString(contentHash) || !variantPattern.MatchString(variant) {
+		return nil, errors.New("invalid content-addressed storage key")
+	}
+
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == "" || len(ext) > 10 || strings.ContainsAny(ext, `/\`) {
+		ext = ".bin"
+	}
+
+	relPath := filepath.ToSlash(filepath.Join("objects", variant, contentHash[:2], contentHash+ext))
+	url := strings.TrimRight(s.publicBase, "/") + "/" + relPath
+	return &SaveResult{Path: relPath, URL: url}, nil
+}
+
+// Ensure atomically materializes a content-addressed file. Existing files are reused.
+func (s *LocalStorage) Ensure(path string, r io.Reader) error {
+	fullPath, err := s.resolve(path)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(fullPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(fullPath), ".upload-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+
+	if _, err := io.Copy(tmp, r); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpName, fullPath); err != nil {
+		if _, statErr := os.Stat(fullPath); statErr == nil {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func (s *LocalStorage) Delete(path string) error {
+	fullPath, err := s.resolve(path)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(fullPath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}
+
+func (s *LocalStorage) resolve(path string) (string, error) {
+	base, err := filepath.Abs(s.baseDir)
+	if err != nil {
+		return "", err
+	}
+	fullPath, err := filepath.Abs(filepath.Join(base, filepath.FromSlash(path)))
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(base, fullPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", errors.New("storage path escapes base directory")
+	}
+	return fullPath, nil
 }

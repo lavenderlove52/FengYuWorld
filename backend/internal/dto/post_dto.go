@@ -56,5 +56,6 @@ type PostDetail struct {
 }
 
 type UploadResponse struct {
-	URL string `json:"url"`
+	ReferenceID int64  `json:"reference_id"`
+	URL         string `json:"url"`
 }

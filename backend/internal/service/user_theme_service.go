@@ -19,6 +19,7 @@ var (
 	ErrJSToLong            = errors.New("custom_js exceeds 10000 characters")
 	ErrInvalidAccentColor  = errors.New("invalid accent_color format")
 	ErrInvalidEffectConfig = errors.New("invalid effect_config")
+	ErrInvalidHeroConfig   = errors.New("invalid hero_config")
 	ErrForbidden           = errors.New("forbidden")
 
 	allowedPresets = map[string]bool{"default": true, "minimal": true, "dark": true, "forest": true, "ocean": true, "warm": true}
@@ -38,10 +39,11 @@ var (
 type UserThemeService struct {
 	repo     *repository.UserThemeRepository
 	userRepo *repository.UserRepository
+	images   *repository.HomeThemeImageRepository
 }
 
-func NewUserThemeService(repo *repository.UserThemeRepository, userRepo *repository.UserRepository) *UserThemeService {
-	return &UserThemeService{repo: repo, userRepo: userRepo}
+func NewUserThemeService(repo *repository.UserThemeRepository, userRepo *repository.UserRepository, images *repository.HomeThemeImageRepository) *UserThemeService {
+	return &UserThemeService{repo: repo, userRepo: userRepo, images: images}
 }
 
 // GetByUsername 公开接口，不存在时返回默认值
@@ -66,6 +68,9 @@ func (s *UserThemeService) Update(userID int64, req dto.UpdateThemeRequest) (*do
 	if req.AccentColor != "" && !accentColorRe.MatchString(req.AccentColor) {
 		return nil, ErrInvalidAccentColor
 	}
+	if req.BackgroundColor != "" && !accentColorRe.MatchString(req.BackgroundColor) {
+		return nil, ErrInvalidAccentColor
+	}
 	if req.CustomJS != "" {
 		user, err := s.userRepo.FindByID(userID)
 		if err != nil || user == nil {
@@ -86,6 +91,13 @@ func (s *UserThemeService) Update(userID int64, req dto.UpdateThemeRequest) (*do
 		theme.Preset = req.Preset
 	}
 	theme.AccentColor = req.AccentColor
+	if req.ThemeColorEnabled != nil {
+		theme.ThemeColorEnabled = *req.ThemeColorEnabled
+	}
+	theme.BackgroundColor = req.BackgroundColor
+	if req.BackgroundColorEnabled != nil {
+		theme.BackgroundColorEnabled = *req.BackgroundColorEnabled
+	}
 	theme.FontFamily = req.FontFamily
 	theme.BannerURL = req.BannerURL
 	if req.Layout != "" {
@@ -103,12 +115,85 @@ func (s *UserThemeService) Update(userID int64, req dto.UpdateThemeRequest) (*do
 		}
 		theme.EffectConfig = effectConfig
 	}
+	if req.HeroConfig != nil {
+		heroConfig := domain.ThemeHeroConfig(*req.HeroConfig)
+		if err := validateHeroConfig(heroConfig); err != nil {
+			return nil, err
+		}
+		images, err := s.images.ListByUserIDAndIDs(userID, heroConfig.ImageIDs)
+		if err != nil {
+			return nil, err
+		}
+		if len(images) != len(heroConfig.ImageIDs) {
+			return nil, invalidHeroConfig("image_ids")
+		}
+		theme.HeroConfig = heroConfig
+	}
 	theme.UpdatedAt = time.Now()
 
 	if err := s.repo.Upsert(theme); err != nil {
 		return nil, err
 	}
 	return theme, nil
+}
+
+func (s *UserThemeService) HeroImages(theme *domain.UserTheme) ([]domain.HomeThemeImage, error) {
+	images, err := s.images.ListByUserIDAndIDs(theme.UserID, theme.HeroConfig.ImageIDs)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[int64]domain.HomeThemeImage, len(images))
+	for _, image := range images {
+		byID[image.ID] = image
+	}
+	ordered := make([]domain.HomeThemeImage, 0, len(theme.HeroConfig.ImageIDs))
+	for _, id := range theme.HeroConfig.ImageIDs {
+		if image, ok := byID[id]; ok {
+			ordered = append(ordered, image)
+		}
+	}
+	return ordered, nil
+}
+
+func validateHeroConfig(config domain.ThemeHeroConfig) error {
+	if len(config.ImageIDs) > 5 {
+		return invalidHeroConfig("image_ids")
+	}
+	if config.Enabled && len(config.ImageIDs) == 0 {
+		return invalidHeroConfig("image_ids")
+	}
+	seen := make(map[int64]struct{}, len(config.ImageIDs))
+	for _, id := range config.ImageIDs {
+		if id <= 0 {
+			return invalidHeroConfig("image_ids")
+		}
+		if _, ok := seen[id]; ok {
+			return invalidHeroConfig("image_ids")
+		}
+		seen[id] = struct{}{}
+	}
+	if !allowedValue(config.Transition, "off", "fade", "slices") {
+		return invalidHeroConfig("transition")
+	}
+	if !withinInt(config.IntervalMS, 3000, 30000) {
+		return invalidHeroConfig("interval_ms")
+	}
+	if !withinFloat(config.OverlayOpacity, 0, 0.9) {
+		return invalidHeroConfig("overlay_opacity")
+	}
+	if !withinInt(config.HeroHeightVH, 60, 100) {
+		return invalidHeroConfig("hero_height_vh")
+	}
+	if !withinInt(config.PageWidthPX, 600, 1800) {
+		return invalidHeroConfig("page_width_px")
+	}
+	if !withinInt(config.ArticleListWidthPX, 600, 1600) {
+		return invalidHeroConfig("article_list_width_px")
+	}
+	if !allowedValue(config.ArticleLayout, "list", "grid", "magazine") {
+		return invalidHeroConfig("article_layout")
+	}
+	return nil
 }
 
 func validateEffectConfig(config domain.ThemeEffectConfig) error {
@@ -178,6 +263,10 @@ func withinFloat(value, min, max float64) bool {
 
 func invalidEffectConfig(field string) error {
 	return fmt.Errorf("%w: %s", ErrInvalidEffectConfig, field)
+}
+
+func invalidHeroConfig(field string) error {
+	return fmt.Errorf("%w: %s", ErrInvalidHeroConfig, field)
 }
 
 func filterCSS(css string) string {

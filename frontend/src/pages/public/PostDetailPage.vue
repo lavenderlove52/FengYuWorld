@@ -18,6 +18,14 @@ const notFound = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 const { theme, load: loadTheme } = useUserTheme(containerRef)
 const showToc = computed(() => post.value?.show_toc !== false && extractTocItems(post.value?.content_md || '').length > 0)
+const articleContentWidth = computed(() => Math.min(1600, Math.max(600, theme.value.hero_config.article_list_width_px)))
+const articleWidthStyle = computed(() => {
+  const layoutWidth = articleContentWidth.value + (showToc.value ? 244 : 0)
+  return {
+    '--article-content-width': `${articleContentWidth.value}px`,
+    '--article-layout-width': `${layoutWidth}px`,
+  }
+})
 
 async function loadPost(param: string) {
   // 纯数字路径既可能是 ID，也可能是 slug（如 slug=123 的旧链接 /p/123）
@@ -80,6 +88,7 @@ watch(() => route.params.id, loadPage)
     :data-theme-user="post.author.username"
     data-theme-page="post-detail"
     class="article-detail-root transition-colors duration-300"
+    :style="articleWidthStyle"
   >
     <ThemeEffects :config="theme.effect_config" page-scope="post" />
     <div class="article-detail-layout grid gap-6" :class="showToc ? 'lg:grid-cols-[minmax(0,1fr)_220px]' : ''">
@@ -88,7 +97,7 @@ watch(() => route.params.id, loadPage)
         <div class="text-sm mb-5 sm:mb-6 flex flex-wrap gap-2 sm:gap-4" style="color: var(--theme-text, #64748b); opacity: 0.7">
           <RouterLink
             :to="`/u/${post.author.username}`"
-            class="font-medium hover:opacity-100 transition-opacity"
+            class="theme-color-accent font-medium hover:opacity-100 transition-opacity"
             style="color: var(--theme-accent, #6366f1)"
           >
             {{ post.author.nickname }}
@@ -108,7 +117,7 @@ watch(() => route.params.id, loadPage)
           <span
             v-for="tag in post.tags"
             :key="tag"
-            class="px-2 py-1 rounded text-sm"
+            class="theme-color-accent px-2 py-1 rounded text-sm"
             style="background: var(--theme-card-bg, #f1f5f9); color: var(--theme-accent, #6366f1); border: 1px solid var(--theme-border, #e2e8f0)"
           >#{{ tag }}</span>
         </div>
@@ -121,18 +130,30 @@ watch(() => route.params.id, loadPage)
 </template>
 
 <style scoped>
+.article-detail-root {
+  box-sizing: border-box;
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 0 1rem;
+}
+
 .article-detail-root.article-detail-root > .article-detail-layout.article-detail-layout {
-  width: auto !important;
-  max-width: none !important;
+  width: min(100%, var(--article-layout-width)) !important;
+  max-width: var(--article-layout-width) !important;
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
   position: relative !important;
   left: auto !important;
   transform: none !important;
-  margin: 0 !important;
+  margin: 0 auto !important;
   border-radius: 0 !important;
   overflow: visible !important;
+}
+
+.article-detail-root.article-detail-root .article-detail-card.article-detail-card {
+  width: 100% !important;
+  max-width: var(--article-content-width) !important;
 }
 
 .article-detail-root.article-detail-root > .article-detail-layout.article-detail-layout::after {

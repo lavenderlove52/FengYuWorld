@@ -27,17 +27,27 @@ func (h *UserThemeHandler) GetTheme(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, err.Error()))
 		return
 	}
+	heroImages, err := h.svc.HeroImages(theme)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, err.Error()))
+		return
+	}
 	c.JSON(http.StatusOK, dto.OK(dto.UserThemeResponse{
-		UserID:         theme.UserID,
-		Preset:         theme.Preset,
-		AccentColor:    theme.AccentColor,
-		FontFamily:     theme.FontFamily,
-		BannerURL:      theme.BannerURL,
-		Layout:         theme.Layout,
-		ShowPinsPublic: theme.ShowPinsPublic,
-		CustomCSS:      theme.CustomCSS,
-		CustomJS:       theme.CustomJS,
-		EffectConfig:   theme.EffectConfig,
+		UserID:                 theme.UserID,
+		Preset:                 theme.Preset,
+		AccentColor:            theme.AccentColor,
+		ThemeColorEnabled:      theme.ThemeColorEnabled,
+		BackgroundColor:        theme.BackgroundColor,
+		BackgroundColorEnabled: theme.BackgroundColorEnabled,
+		FontFamily:             theme.FontFamily,
+		BannerURL:              theme.BannerURL,
+		Layout:                 theme.Layout,
+		ShowPinsPublic:         theme.ShowPinsPublic,
+		CustomCSS:              theme.CustomCSS,
+		CustomJS:               theme.CustomJS,
+		EffectConfig:           theme.EffectConfig,
+		HeroConfig:             theme.HeroConfig,
+		HeroImages:             heroImages,
 	}))
 }
 
@@ -59,7 +69,8 @@ func (h *UserThemeHandler) UpdateTheme(c *gin.Context) {
 			errors.Is(err, service.ErrCSSToLong),
 			errors.Is(err, service.ErrJSToLong),
 			errors.Is(err, service.ErrInvalidAccentColor),
-			errors.Is(err, service.ErrInvalidEffectConfig):
+			errors.Is(err, service.ErrInvalidEffectConfig),
+			errors.Is(err, service.ErrInvalidHeroConfig):
 			c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, err.Error()))
 		case errors.Is(err, service.ErrForbidden):
 			c.JSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "无自定义 JS 权限"))
@@ -68,17 +79,27 @@ func (h *UserThemeHandler) UpdateTheme(c *gin.Context) {
 		}
 		return
 	}
+	heroImages, err := h.svc.HeroImages(theme)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, err.Error()))
+		return
+	}
 
 	c.JSON(http.StatusOK, dto.OK(dto.UserThemeResponse{
-		UserID:         theme.UserID,
-		Preset:         theme.Preset,
-		AccentColor:    theme.AccentColor,
-		FontFamily:     theme.FontFamily,
-		BannerURL:      theme.BannerURL,
-		Layout:         theme.Layout,
-		ShowPinsPublic: theme.ShowPinsPublic,
-		CustomCSS:      theme.CustomCSS,
-		CustomJS:       theme.CustomJS,
-		EffectConfig:   theme.EffectConfig,
+		UserID:                 theme.UserID,
+		Preset:                 theme.Preset,
+		AccentColor:            theme.AccentColor,
+		ThemeColorEnabled:      theme.ThemeColorEnabled,
+		BackgroundColor:        theme.BackgroundColor,
+		BackgroundColorEnabled: theme.BackgroundColorEnabled,
+		FontFamily:             theme.FontFamily,
+		BannerURL:              theme.BannerURL,
+		Layout:                 theme.Layout,
+		ShowPinsPublic:         theme.ShowPinsPublic,
+		CustomCSS:              theme.CustomCSS,
+		CustomJS:               theme.CustomJS,
+		EffectConfig:           theme.EffectConfig,
+		HeroConfig:             theme.HeroConfig,
+		HeroImages:             heroImages,
 	}))
 }

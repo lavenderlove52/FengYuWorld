@@ -1,15 +1,28 @@
 import { ref, onUnmounted } from 'vue'
 import { getUserTheme } from '@/api/theme'
-import { PRESETS, DEFAULT_THEME, createDefaultEffectConfig } from '@/types/theme'
+import { DEFAULT_THEME, createDefaultEffectConfig, createDefaultHeroConfig } from '@/types/theme'
 import { setActivePageTheme } from '@/stores/pageTheme'
+import {
+  buildThemeBackgroundLockCss,
+  buildThemeColorLockCss,
+  getPresetConfig,
+  resolveThemeBackground,
+  resolveThemeColor,
+} from '@/utils/themeColor'
 import type { UserTheme } from '@/types/theme'
 
 const STYLE_ID_PREFIX = 'user-theme-css-'
+const THEME_COLOR_LOCK_ID_PREFIX = 'user-theme-color-lock-'
+const THEME_BG_LOCK_ID_PREFIX = 'user-theme-bg-lock-'
 
 const jsCleanups = new Map<string, Array<() => void>>()
 
 function defaultTheme(): UserTheme {
-  return { ...DEFAULT_THEME, effect_config: createDefaultEffectConfig() }
+  return {
+    ...DEFAULT_THEME,
+    effect_config: createDefaultEffectConfig(),
+    hero_config: createDefaultHeroConfig(),
+  }
 }
 
 function normalizeTheme(theme?: UserTheme | null): UserTheme {
@@ -17,18 +30,21 @@ function normalizeTheme(theme?: UserTheme | null): UserTheme {
     ...defaultTheme(),
     ...theme,
     effect_config: theme?.effect_config ?? createDefaultEffectConfig(),
+    hero_config: {
+      ...createDefaultHeroConfig(),
+      ...theme?.hero_config,
+      image_ids: theme?.hero_config?.image_ids ?? [],
+    },
   }
-}
-
-function getPresetConfig(preset: string) {
-  return PRESETS.find((p) => p.id === preset) ?? PRESETS[0]
 }
 
 function buildCssVars(theme: UserTheme): Record<string, string> {
   const p = getPresetConfig(theme.preset)
+  const locked = resolveThemeColor(theme)
+  const lockedBg = resolveThemeBackground(theme)
   return {
-    '--theme-bg': p.bg,
-    '--theme-accent': theme.accent_color || p.accent,
+    '--theme-bg': lockedBg || p.bg,
+    '--theme-accent': locked || theme.accent_color || p.accent,
     '--theme-text': p.text,
     '--theme-border': p.border,
     '--theme-card-bg': p.cardBg,
@@ -180,6 +196,47 @@ function removeCustomJs(username: string) {
   runCleanup(username)
 }
 
+function removeThemeColorLock(username: string) {
+  document.getElementById(THEME_COLOR_LOCK_ID_PREFIX + username)?.remove()
+}
+
+function applyThemeColorLock(username: string, theme: UserTheme, root: HTMLElement | null) {
+  removeThemeColorLock(username)
+  root?.removeAttribute('data-theme-color-active')
+
+  const color = resolveThemeColor(theme)
+  if (!color || !root) return
+
+  root.setAttribute('data-theme-color-active', 'true')
+  const el = document.createElement('style')
+  el.id = THEME_COLOR_LOCK_ID_PREFIX + username
+  el.textContent = buildThemeColorLockCss(username, color)
+  document.head.appendChild(el)
+}
+
+function removeThemeBackgroundLock(username: string) {
+  document.getElementById(THEME_BG_LOCK_ID_PREFIX + username)?.remove()
+}
+
+function applyThemeBackgroundLock(username: string, theme: UserTheme, root: HTMLElement | null) {
+  removeThemeBackgroundLock(username)
+  root?.removeAttribute('data-theme-bg-active')
+
+  const bg = resolveThemeBackground(theme)
+  if (!bg || !root) return
+
+  root.setAttribute('data-theme-bg-active', 'true')
+  const el = document.createElement('style')
+  el.id = THEME_BG_LOCK_ID_PREFIX + username
+  el.textContent = buildThemeBackgroundLockCss(username, bg)
+  document.head.appendChild(el)
+}
+
+function applyThemeLocks(username: string, theme: UserTheme, root: HTMLElement | null) {
+  applyThemeColorLock(username, theme, root)
+  applyThemeBackgroundLock(username, theme, root)
+}
+
 export function useUserTheme(containerRef: { value: HTMLElement | null }) {
   const theme = ref<UserTheme>(defaultTheme())
   const loading = ref(false)
@@ -191,7 +248,7 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
     const p = getPresetConfig(t.preset)
     originalBodyBg = document.body.style.backgroundColor
     originalBodyColor = document.body.style.color
-    document.body.style.backgroundColor = p.bg
+    document.body.style.backgroundColor = resolveThemeBackground(t) || p.bg
     document.body.style.color = p.text
     document.body.style.fontFamily = t.font_family ? `'${t.font_family}', serif` : ''
     setActivePageTheme(t)
@@ -222,6 +279,8 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
     if (currentUsername && currentUsername !== username) {
       removeCustomCss(currentUsername)
       removeCustomJs(currentUsername)
+      removeThemeColorLock(currentUsername)
+      removeThemeBackgroundLock(currentUsername)
     }
     currentUsername = username
     loading.value = true
@@ -240,6 +299,17 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
       if (theme.value.custom_js) {
         try { injectCustomJs(username, theme.value.custom_js, containerRef.value) } catch (e) { console.warn('[useUserTheme] injectCustomJs failed', e) }
       }
+      const applyLock = () => {
+        try {
+          applyThemeLocks(username, theme.value, containerRef.value)
+        } catch (e) {
+          console.warn('[useUserTheme] applyThemeLocks failed', e)
+        }
+      }
+      applyLock()
+      if (theme.value.custom_js) {
+        requestAnimationFrame(applyLock)
+      }
     }
   }
 
@@ -257,6 +327,10 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
     if (currentUsername) {
       removeCustomCss(currentUsername)
       removeCustomJs(currentUsername)
+      removeThemeColorLock(currentUsername)
+      removeThemeBackgroundLock(currentUsername)
+      containerRef.value?.removeAttribute('data-theme-color-active')
+      containerRef.value?.removeAttribute('data-theme-bg-active')
     }
     restoreBody()
   })

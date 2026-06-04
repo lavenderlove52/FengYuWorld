@@ -87,5 +87,6 @@ backend/internal/service/*.go.*
 backend/internal/domain/*.go.*
 .cache/
 .gocache/
+backend/.gotmp/
 tmp/
 temp/
