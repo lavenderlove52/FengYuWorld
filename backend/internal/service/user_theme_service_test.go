@@ -17,12 +17,24 @@ func TestValidateEffectConfig(t *testing.T) {
 	t.Run("accepts enabled effects within bounds", func(t *testing.T) {
 		config := domain.DefaultThemeEffectConfig()
 		config.Scope = "post"
-		config.Background.Type = "floating-shapes"
-		config.Cursor.Type = "particle-trail"
-		config.Click.Type = "star"
+		config.Background.Type = "constellation"
+		config.Orbit.Type = "rainbow-orbit"
+		config.Cursor.Type = "comet-trail"
+		config.Click.Type = "flower"
 
 		if err := validateEffectConfig(config); err != nil {
 			t.Fatalf("validate enabled effects: %v", err)
+		}
+	})
+
+	t.Run("accepts legacy effects after orbit default is supplied", func(t *testing.T) {
+		config := domain.DefaultThemeEffectConfig()
+		config.Orbit = domain.ThemeOrbitEffect{}
+		if config.Orbit.Type == "" {
+			config.Orbit = domain.DefaultThemeEffectConfig().Orbit
+		}
+		if err := validateEffectConfig(config); err != nil {
+			t.Fatalf("validate legacy effects: %v", err)
 		}
 	})
 
@@ -32,6 +44,8 @@ func TestValidateEffectConfig(t *testing.T) {
 	}{
 		{"unknown scope", func(c *domain.ThemeEffectConfig) { c.Scope = "admin" }},
 		{"unknown background", func(c *domain.ThemeEffectConfig) { c.Background.Type = "script" }},
+		{"unknown orbit", func(c *domain.ThemeEffectConfig) { c.Orbit.Type = "script" }},
+		{"invalid orbit radius", func(c *domain.ThemeEffectConfig) { c.Orbit.Radius = 500 }},
 		{"invalid color", func(c *domain.ThemeEffectConfig) {
 			c.Click.Type = "heart"
 			c.Click.Color = "javascript:alert(1)"
@@ -77,6 +91,14 @@ func TestValidateHeroConfig(t *testing.T) {
 		}
 	})
 
+	t.Run("accepts interlaced transition", func(t *testing.T) {
+		config := domain.DefaultThemeHeroConfig()
+		config.Transition = "interlaced"
+		if err := validateHeroConfig(config); err != nil {
+			t.Fatalf("validate interlaced transition: %v", err)
+		}
+	})
+
 	tests := []struct {
 		name   string
 		change func(*domain.ThemeHeroConfig)
@@ -87,6 +109,10 @@ func TestValidateHeroConfig(t *testing.T) {
 		{"invalid image", func(c *domain.ThemeHeroConfig) { c.ImageIDs = []int64{-1} }},
 		{"unknown transition", func(c *domain.ThemeHeroConfig) { c.Transition = "javascript" }},
 		{"short interval", func(c *domain.ThemeHeroConfig) { c.IntervalMS = 100 }},
+		{"short slice interval", func(c *domain.ThemeHeroConfig) {
+			c.Transition = "slices"
+			c.IntervalMS = 3000
+		}},
 		{"invalid overlay", func(c *domain.ThemeHeroConfig) { c.OverlayOpacity = 1 }},
 		{"invalid hero height", func(c *domain.ThemeHeroConfig) { c.HeroHeightVH = 20 }},
 		{"invalid page width", func(c *domain.ThemeHeroConfig) { c.PageWidthPX = 500 }},

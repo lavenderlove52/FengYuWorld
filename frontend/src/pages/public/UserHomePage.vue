@@ -96,7 +96,7 @@ watch(() => route.params.username, loadPage)
     ref="containerRef"
     :data-theme-user="String(route.params.username)"
     data-theme-page="user-home"
-    class="min-h-screen transition-colors duration-300"
+    class="min-h-screen"
     style="color: var(--theme-text)"
   >
     <ThemeEffects :config="theme.effect_config" page-scope="home" />
@@ -207,6 +207,7 @@ watch(() => route.params.username, loadPage)
   margin: 0 auto;
   padding: 2rem 0 3rem;
   scroll-margin-top: 3.5rem;
+  content-visibility: auto;
 }
 
 .theme-main-below {

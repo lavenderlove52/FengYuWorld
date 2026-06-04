@@ -1,11 +1,16 @@
 import http from './http'
 import type { ApiResponse } from '@/types/auth'
 
+export interface ImageUploadResult {
+  url: string
+  mobile_url?: string
+}
+
 export const uploadImage = (file: File) => {
   const form = new FormData()
   form.append('file', file)
   return http
-    .post<ApiResponse<{ url: string }>>('/uploads/image', form, {
+    .post<ApiResponse<ImageUploadResult>>('/uploads/image', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
     .then((r) => r.data)

@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { PostSummary } from '@/types/post'
 import { getPostPath } from '@/utils/postPath'
+import ResponsivePostImage from './ResponsivePostImage.vue'
 
 const props = defineProps<{ post: PostSummary }>()
 
@@ -25,7 +26,7 @@ const postPath = computed(() => getPostPath(props.post))
   <article class="py-7 group">
     <RouterLink :to="postPath" class="block">
       <div v-if="post.cover_image_url" class="h-36 sm:h-44 overflow-hidden rounded-lg mb-4 bg-slate-100">
-        <img
+        <ResponsivePostImage
           :src="post.cover_image_url"
           :alt="post.title"
           class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

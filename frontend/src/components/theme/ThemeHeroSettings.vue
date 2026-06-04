@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { NButton, NUpload, useMessage } from 'naive-ui'
 import {
   deleteMyThemeImage,
@@ -24,6 +24,7 @@ const transitions: Array<{ value: ThemeHeroTransition; label: string; descriptio
   { value: 'off', label: '直接切换', description: '不播放过渡动画' },
   { value: 'fade', label: '淡入淡出', description: '柔和地交叉切换图片' },
   { value: 'slices', label: '切片', description: '纵向切片依次显现' },
+  { value: 'interlaced', label: '交错切片', description: '两张图片按奇偶列上下交错切换' },
 ]
 const articleLayouts: Array<{ value: ThemeLayout; label: string }> = [
   { value: 'list', label: '图文列表' },
@@ -33,6 +34,17 @@ const articleLayouts: Array<{ value: ThemeLayout; label: string }> = [
 
 const selectedCount = computed(() => config.value.image_ids.length)
 const libraryFull = computed(() => images.value.length >= MAX_LIBRARY_IMAGES)
+const minimumInterval = computed(() =>
+  config.value.transition === 'slices' || config.value.transition === 'interlaced' ? 5000 : 3000,
+)
+
+watch(
+  minimumInterval,
+  (minimum) => {
+    if (config.value.interval_ms < minimum) config.value.interval_ms = minimum
+  },
+  { immediate: true },
+)
 
 const normalizeList = (data?: ThemeImage[] | ThemeImageList) => {
   if (Array.isArray(data)) return data
@@ -121,7 +133,7 @@ onMounted(loadImages)
       <div>
         <h2 class="text-base font-semibold text-slate-700">全屏主页大图</h2>
         <p class="text-xs text-slate-400 mt-1">
-          使用独立主页图库，不会与文章/头像混用；上传后压缩至 2K（短边最高 1080px，如 1920×1080）。
+          使用独立主页图库，不会与文章/头像混用；新上传会同时生成清晰桌面版和最长边 1280px 的移动版。
         </p>
       </div>
       <label class="inline-flex items-center gap-2 text-sm text-slate-600 cursor-pointer">
@@ -159,7 +171,13 @@ onMounted(loadImages)
           :class="config.image_ids.includes(image.id) ? 'border-indigo-500' : 'border-transparent'"
         >
           <button type="button" class="block h-full w-full" @click="toggleImage(image.id)">
-            <img :src="image.url" alt="" class="h-full w-full object-cover" />
+            <img
+              :src="image.mobile_url || image.url"
+              alt=""
+              loading="lazy"
+              decoding="async"
+              class="h-full w-full object-cover"
+            />
             <span
               v-if="config.image_ids.includes(image.id)"
               class="absolute left-2 top-2 rounded-full bg-indigo-500 px-2 py-0.5 text-[11px] font-medium text-white"
@@ -194,7 +212,8 @@ onMounted(loadImages)
 
       <label class="hero-field">
         <span>轮换间隔 {{ Math.round(config.interval_ms / 1000) }} 秒</span>
-        <input v-model.number="config.interval_ms" type="range" min="3000" max="30000" step="500" />
+        <input v-model.number="config.interval_ms" type="range" :min="minimumInterval" max="30000" step="500" />
+        <small v-if="minimumInterval === 5000">切片动画最低间隔为 5 秒，以降低连续 GPU 合成压力。</small>
       </label>
 
       <label class="hero-field">
@@ -255,5 +274,10 @@ onMounted(loadImages)
 .hero-field input[type='range'] {
   width: 100%;
   accent-color: #6366f1;
+}
+
+.hero-field small {
+  color: #94a3b8;
+  line-height: 1.4;
 }
 </style>

@@ -5,7 +5,6 @@ import (
 	"io"
 
 	"my-blog/backend/internal/domain"
-	"my-blog/backend/internal/dto"
 	"my-blog/backend/internal/repository"
 
 	"github.com/google/uuid"
@@ -21,7 +20,7 @@ var (
 )
 
 type homeThemeUploadManager interface {
-	SaveThemeImage(userID int64, ownerKey, filename string, size int64, r io.Reader) (*dto.UploadResponse, error)
+	SaveThemeImageVariants(userID int64, ownerKey, filename string, size int64, r io.Reader) (*ThemeImageUploadVariants, error)
 	Release(userID, referenceID int64) error
 }
 
@@ -55,20 +54,25 @@ func (s *HomeThemeImageService) Upload(userID int64, filename string, size int64
 		return nil, ErrHomeThemeImageLimit
 	}
 
-	ref, err := s.uploads.SaveThemeImage(userID, uuid.NewString(), filename, size, r)
+	refs, err := s.uploads.SaveThemeImageVariants(userID, uuid.NewString(), filename, size, r)
 	if err != nil {
 		return nil, err
 	}
 
 	image := &domain.HomeThemeImage{
-		UserID:   userID,
-		UploadID: ref.ReferenceID,
-		URL:      ref.URL,
+		UserID:         userID,
+		UploadID:       refs.Desktop.ReferenceID,
+		URL:            refs.Desktop.URL,
+		MobileUploadID: &refs.Mobile.ReferenceID,
+		MobileURL:      refs.Mobile.URL,
 	}
 	if err := s.images.CreateWithLimit(image, homeThemeImageLimit); err != nil {
-		releaseErr := s.uploads.Release(userID, ref.ReferenceID)
+		releaseErr := errors.Join(
+			s.uploads.Release(userID, refs.Desktop.ReferenceID),
+			s.uploads.Release(userID, refs.Mobile.ReferenceID),
+		)
 		if errors.Is(err, repository.ErrHomeThemeImageLimit) {
-			return nil, ErrHomeThemeImageLimit
+			return nil, errors.Join(ErrHomeThemeImageLimit, releaseErr)
 		}
 		if releaseErr != nil {
 			return nil, errors.Join(err, releaseErr)
@@ -89,5 +93,9 @@ func (s *HomeThemeImageService) Delete(userID, imageID int64) error {
 	if err := s.images.DeleteAndRemoveThemeReference(image); err != nil {
 		return err
 	}
-	return s.uploads.Release(userID, image.UploadID)
+	releaseErr := s.uploads.Release(userID, image.UploadID)
+	if image.MobileUploadID != nil {
+		releaseErr = errors.Join(releaseErr, s.uploads.Release(userID, *image.MobileUploadID))
+	}
+	return releaseErr
 }

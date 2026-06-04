@@ -83,7 +83,7 @@ async function onFileChange(e: Event) {
   try {
     const res = await uploadsApi.uploadImage(file)
     if (res.code === 0 && res.data?.url) {
-      chatStore.send(friendId.value, res.data.url, 'image')
+      chatStore.send(friendId.value, res.data.mobile_url || res.data.url, 'image')
       await nextTick()
       scrollToBottom()
     }

@@ -35,6 +35,10 @@ const (
 	ImageVariantDefault         = "image-v1"
 	ImageVariantAvatar          = "avatar-v1"
 	ImageVariantThemeBackground = "theme-bg-v1"
+	ImageVariantThemeDesktop    = "theme-bg-desktop-v2"
+	ImageVariantThemeMobile     = "theme-bg-mobile-v1"
+	ImageVariantPostDesktop     = "post-image-desktop-v2"
+	ImageVariantPostMobile      = "post-image-mobile-v1"
 )
 
 var allowedMimes = map[string]struct{}{
@@ -63,6 +67,11 @@ type UploadService struct {
 	maxBytes int64
 }
 
+type ThemeImageUploadVariants struct {
+	Desktop dto.UploadResponse
+	Mobile  dto.UploadResponse
+}
+
 func NewUploadService(storage *storage.LocalStorage, uploads UploadReferenceStore, maxMB int64) *UploadService {
 	return &UploadService{
 		storage:  storage,
@@ -72,13 +81,37 @@ func NewUploadService(storage *storage.LocalStorage, uploads UploadReferenceStor
 }
 
 func (s *UploadService) SaveImage(userID int64, filename string, size int64, r io.Reader, maxSize int64) (*dto.UploadResponse, error) {
-	return s.SaveImageWithPurpose(userID, filename, size, r, SaveImageOptions{
+	_, _, validatedMaxSize, err := s.validateImage(filename, size, maxSize)
+	if err != nil {
+		return nil, err
+	}
+	original, err := io.ReadAll(io.LimitReader(r, validatedMaxSize+1))
+	if err != nil || int64(len(original)) > validatedMaxSize || len(original) == 0 {
+		return nil, ErrInvalidUpload
+	}
+	ownerKey := uuid.NewString()
+	desktop, err := s.SaveImageWithPurpose(userID, filename, int64(len(original)), bytes.NewReader(original), SaveImageOptions{
 		Purpose:   ImagePurposePost,
 		OwnerType: "upload",
-		OwnerKey:  uuid.NewString(),
-		Variant:   ImageVariantDefault,
-		MaxSize:   maxSize,
+		OwnerKey:  ownerKey,
+		Variant:   ImageVariantPostDesktop,
+		MaxSize:   validatedMaxSize,
 	})
+	if err != nil {
+		return nil, err
+	}
+	mobile, err := s.SaveImageWithPurpose(userID, filename, int64(len(original)), bytes.NewReader(original), SaveImageOptions{
+		Purpose:   ImagePurposePost,
+		OwnerType: "upload",
+		OwnerKey:  ownerKey,
+		Variant:   ImageVariantPostMobile,
+		MaxSize:   validatedMaxSize,
+	})
+	if err != nil {
+		return nil, errors.Join(err, s.Release(userID, desktop.ReferenceID))
+	}
+	desktop.MobileURL = mobile.URL
+	return desktop, nil
 }
 
 func (s *UploadService) SaveAvatar(userID int64, filename string, size int64, r io.Reader) (*dto.UploadResponse, error) {
@@ -98,8 +131,39 @@ func (s *UploadService) SaveThemeImage(userID int64, ownerKey, filename string, 
 		Purpose:   ImagePurposeTheme,
 		OwnerType: "theme-gallery",
 		OwnerKey:  ownerKey,
-		Variant:   ImageVariantThemeBackground,
+		Variant:   ImageVariantThemeDesktop,
 	})
+}
+
+func (s *UploadService) SaveThemeImageVariants(userID int64, ownerKey, filename string, size int64, r io.Reader) (*ThemeImageUploadVariants, error) {
+	_, _, maxSize, err := s.validateImage(filename, size, 0)
+	if err != nil {
+		return nil, err
+	}
+	original, err := io.ReadAll(io.LimitReader(r, maxSize+1))
+	if err != nil || int64(len(original)) > maxSize || len(original) == 0 {
+		return nil, ErrInvalidUpload
+	}
+
+	desktop, err := s.SaveImageWithPurpose(userID, filename, int64(len(original)), bytes.NewReader(original), SaveImageOptions{
+		Purpose:   ImagePurposeTheme,
+		OwnerType: "theme-gallery",
+		OwnerKey:  ownerKey,
+		Variant:   ImageVariantThemeDesktop,
+	})
+	if err != nil {
+		return nil, err
+	}
+	mobile, err := s.SaveImageWithPurpose(userID, filename, int64(len(original)), bytes.NewReader(original), SaveImageOptions{
+		Purpose:   ImagePurposeTheme,
+		OwnerType: "theme-gallery",
+		OwnerKey:  ownerKey,
+		Variant:   ImageVariantThemeMobile,
+	})
+	if err != nil {
+		return nil, errors.Join(err, s.Release(userID, desktop.ReferenceID))
+	}
+	return &ThemeImageUploadVariants{Desktop: *desktop, Mobile: *mobile}, nil
 }
 
 // SaveBannerImage 主页 Banner 条图，与 Hero 背景共用 2K 级压缩策略。
@@ -147,6 +211,14 @@ func (s *UploadService) SaveImageWithPurpose(userID int64, filename string, size
 		processed, newExt, err = util.ProcessAvatar(bytes.NewReader(original))
 	case ImageVariantThemeBackground:
 		processed, newExt, err = util.ProcessThemeBackgroundImage(bytes.NewReader(original), ext)
+	case ImageVariantThemeDesktop:
+		processed, newExt, err = util.ProcessThemeBackgroundImage(bytes.NewReader(original), ext)
+	case ImageVariantThemeMobile:
+		processed, newExt, err = util.ProcessThemeMobileImage(bytes.NewReader(original), ext)
+	case ImageVariantPostDesktop:
+		processed, newExt, err = util.ProcessPostImage(bytes.NewReader(original))
+	case ImageVariantPostMobile:
+		processed, newExt, err = util.ProcessPostMobileImage(bytes.NewReader(original))
 	}
 	if err != nil || len(processed) == 0 {
 		return nil, ErrInvalidUpload
@@ -225,7 +297,7 @@ func validateSaveImageOptions(opts SaveImageOptions) error {
 		return ErrInvalidUpload
 	}
 	switch opts.Variant {
-	case ImageVariantDefault, ImageVariantAvatar, ImageVariantThemeBackground:
+	case ImageVariantDefault, ImageVariantAvatar, ImageVariantThemeBackground, ImageVariantThemeDesktop, ImageVariantThemeMobile, ImageVariantPostDesktop, ImageVariantPostMobile:
 		return nil
 	default:
 		return ErrInvalidUpload

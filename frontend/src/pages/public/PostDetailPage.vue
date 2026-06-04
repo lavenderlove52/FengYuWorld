@@ -8,6 +8,7 @@ import MarkdownViewer from '@/components/post/MarkdownViewer.vue'
 import ArticleToc from '@/components/post/ArticleToc.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ThemeEffects from '@/components/theme/ThemeEffects.vue'
+import ResponsivePostImage from '@/components/post/ResponsivePostImage.vue'
 import { extractTocItems } from '@/utils/markdownToc'
 
 const route = useRoute()
@@ -17,7 +18,8 @@ const notFound = ref(false)
 
 const containerRef = ref<HTMLElement | null>(null)
 const { theme, load: loadTheme } = useUserTheme(containerRef)
-const showToc = computed(() => post.value?.show_toc !== false && extractTocItems(post.value?.content_md || '').length > 0)
+const tocItems = computed(() => extractTocItems(post.value?.content_md || ''))
+const showToc = computed(() => post.value?.show_toc !== false && tocItems.value.length > 0)
 const articleContentWidth = computed(() => Math.min(1600, Math.max(600, theme.value.hero_config.article_list_width_px)))
 const articleWidthStyle = computed(() => {
   const layoutWidth = articleContentWidth.value + (showToc.value ? 244 : 0)
@@ -49,26 +51,25 @@ const loadPage = async () => {
   notFound.value = false
   const param = String(route.params.id)
 
+  let authorUsername = ''
   try {
     const data = await loadPost(param)
     if (data) {
       post.value = data
+      authorUsername = data.author.username
     } else {
       notFound.value = true
     }
   } catch {
     notFound.value = true
   } finally {
-    // 立即结束 loading，让文章内容先渲染出来
     loading.value = false
   }
 
-  // 第二阶段：文章渲染完毕后再加载主题（containerRef 此时已指向真实 DOM）
-  // 主题加载失败不影响文章内容的展示
-  if (post.value) {
+  if (authorUsername) {
     await nextTick()
     try {
-      await loadTheme(post.value.author.username)
+      await loadTheme(authorUsername)
     } catch {
       // 主题加载失败属于非致命错误，静默忽略
     }
@@ -80,7 +81,7 @@ watch(() => route.params.id, loadPage)
 </script>
 
 <template>
-  <div v-if="loading" class="text-center py-12">加载中...</div>
+  <div v-if="loading" class="text-center py-12 min-h-[40vh]" style="color: var(--theme-text, #64748b)">加载中...</div>
   <EmptyState v-else-if="notFound || !post" message="文章不存在或无权查看" />
   <div
     v-else
@@ -108,11 +109,16 @@ watch(() => route.params.id, loadPage)
         <p v-if="post.summary" class="text-base leading-relaxed mb-6" style="color: var(--theme-text, #64748b); opacity: 0.72">
           {{ post.summary }}
         </p>
-        <img v-if="post.cover_image_url" :src="post.cover_image_url" class="w-full rounded-lg mb-6" />
+        <ResponsivePostImage
+          v-if="post.cover_image_url"
+          :src="post.cover_image_url"
+          :alt="post.title"
+          class="w-full rounded-lg mb-6"
+        />
         <div v-if="showToc" class="lg:hidden mb-6 rounded-lg border px-4 py-3" style="border-color: var(--theme-border, #e2e8f0)">
-          <ArticleToc :content-md="post.content_md || ''" />
+          <ArticleToc :content-md="post.content_md || ''" :items="tocItems" />
         </div>
-        <MarkdownViewer :content-md="post.content_md || ''" />
+        <MarkdownViewer :content-md="post.content_md || ''" :toc-items="tocItems" />
         <div v-if="post.tags?.length" class="mt-8 flex gap-2 flex-wrap">
           <span
             v-for="tag in post.tags"
@@ -123,7 +129,7 @@ watch(() => route.params.id, loadPage)
         </div>
       </article>
       <aside v-if="showToc" class="hidden lg:block">
-        <ArticleToc :content-md="post.content_md || ''" />
+        <ArticleToc :content-md="post.content_md || ''" :items="tocItems" />
       </aside>
     </div>
   </div>

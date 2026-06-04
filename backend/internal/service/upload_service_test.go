@@ -119,7 +119,7 @@ func TestSaveImageWithPurposeKeepsDifferentVariantsIndependent(t *testing.T) {
 		switch asset.Variant {
 		case ImageVariantDefault:
 			postPath = asset.Path
-		case ImageVariantThemeBackground:
+		case ImageVariantThemeDesktop:
 			themePath = asset.Path
 		}
 	}
@@ -143,6 +143,53 @@ func TestSaveImageWithPurposeKeepsDifferentVariantsIndependent(t *testing.T) {
 	}
 }
 
+func TestSaveThemeImageVariantsCreatesDesktopAndMobileAssets(t *testing.T) {
+	baseDir := t.TempDir()
+	repo := newMemoryUploadStore()
+	svc := NewUploadService(storage.NewLocalStorage(baseDir, "/uploads"), repo, 5)
+	data := testPNG(t, 1600, 900)
+
+	variants, err := svc.SaveThemeImageVariants(1, "theme-1", "hero.png", int64(len(data)), bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if variants.Desktop.URL == variants.Mobile.URL {
+		t.Fatal("desktop and mobile variants unexpectedly share one URL")
+	}
+	if len(repo.assets) != 2 || len(repo.refs) != 2 {
+		t.Fatalf("unexpected assets/references: %d/%d", len(repo.assets), len(repo.refs))
+	}
+
+	foundDesktop, foundMobile := false, false
+	var mobilePath string
+	for _, asset := range repo.assets {
+		switch asset.Variant {
+		case ImageVariantThemeDesktop:
+			foundDesktop = true
+		case ImageVariantThemeMobile:
+			foundMobile = true
+			mobilePath = asset.Path
+		}
+	}
+	if !foundDesktop || !foundMobile {
+		t.Fatalf("missing theme variants: desktop=%v mobile=%v", foundDesktop, foundMobile)
+	}
+
+	mobileFile, err := os.Open(filepath.Join(baseDir, filepath.FromSlash(mobilePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mobileFile.Close()
+	mobileImage, _, err := image.Decode(mobileFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bounds := mobileImage.Bounds()
+	if bounds.Dx() != 1280 || bounds.Dy() != 720 {
+		t.Fatalf("expected 1280x720 mobile asset, got %dx%d", bounds.Dx(), bounds.Dy())
+	}
+}
+
 func TestSaveImageAndAvatarUseDifferentVariants(t *testing.T) {
 	repo := newMemoryUploadStore()
 	svc := NewUploadService(storage.NewLocalStorage(t.TempDir(), "/uploads"), repo, 5)
@@ -159,8 +206,11 @@ func TestSaveImageAndAvatarUseDifferentVariants(t *testing.T) {
 	if imageResult.URL == avatarResult.URL {
 		t.Fatal("image and avatar variants reused the same physical asset")
 	}
-	if len(repo.assets) != 2 {
-		t.Fatalf("expected two variant assets, got %d", len(repo.assets))
+	if imageResult.MobileURL == "" || imageResult.MobileURL == imageResult.URL {
+		t.Fatalf("missing distinct mobile image URL: %#v", imageResult)
+	}
+	if len(repo.assets) != 3 {
+		t.Fatalf("expected three variant assets, got %d", len(repo.assets))
 	}
 }
 
@@ -180,11 +230,11 @@ func TestSaveImageUsesDecodedFormatForStableDeduplication(t *testing.T) {
 	if first.URL != second.URL {
 		t.Fatalf("identical bytes with different filename extensions did not reuse asset: %q != %q", first.URL, second.URL)
 	}
-	if filepath.Ext(first.URL) != ".png" {
-		t.Fatalf("asset extension did not follow decoded format: %q", first.URL)
+	if filepath.Ext(first.URL) != ".jpg" || filepath.Ext(first.MobileURL) != ".jpg" {
+		t.Fatalf("responsive post variants were not JPEG: %#v", first)
 	}
-	if len(repo.assets) != 1 {
-		t.Fatalf("expected one asset, got %d", len(repo.assets))
+	if len(repo.assets) != 2 {
+		t.Fatalf("expected two responsive assets, got %d", len(repo.assets))
 	}
 }
 
@@ -205,8 +255,42 @@ func TestSaveImageTreatsDifferentOriginalBytesAsDifferentAssets(t *testing.T) {
 	if first.URL == second.URL {
 		t.Fatal("different original bytes reused the same physical asset")
 	}
-	if len(repo.assets) != 2 {
-		t.Fatalf("expected two assets, got %d", len(repo.assets))
+	if len(repo.assets) != 4 {
+		t.Fatalf("expected four responsive assets, got %d", len(repo.assets))
+	}
+}
+
+func TestSaveImageCreatesResponsivePostVariants(t *testing.T) {
+	baseDir := t.TempDir()
+	repo := newMemoryUploadStore()
+	svc := NewUploadService(storage.NewLocalStorage(baseDir, "/uploads"), repo, 20)
+	data := testPNG(t, 1600, 900)
+
+	result, err := svc.SaveImage(1, "post.png", int64(len(data)), bytes.NewReader(data), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.MobileURL == "" || result.MobileURL == result.URL {
+		t.Fatalf("missing responsive URLs: %#v", result)
+	}
+
+	var mobilePath string
+	for _, asset := range repo.assets {
+		if asset.Variant == ImageVariantPostMobile {
+			mobilePath = asset.Path
+		}
+	}
+	mobileFile, err := os.Open(filepath.Join(baseDir, filepath.FromSlash(mobilePath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mobileFile.Close()
+	mobileImage, _, err := image.Decode(mobileFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mobileImage.Bounds().Dx() != 1280 || mobileImage.Bounds().Dy() != 720 {
+		t.Fatalf("expected 1280x720 mobile asset, got %dx%d", mobileImage.Bounds().Dx(), mobileImage.Bounds().Dy())
 	}
 }
 

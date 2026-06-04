@@ -5,6 +5,7 @@ import type { PostSummary } from '@/types/post'
 import type { ThemeLayout } from '@/types/theme'
 import { getPostPath } from '@/utils/postPath'
 import PostCard from './PostCard.vue'
+import ResponsivePostImage from './ResponsivePostImage.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 
 const props = defineProps<{ posts: PostSummary[]; loading?: boolean; layout?: ThemeLayout }>()
@@ -44,7 +45,11 @@ const rows = computed(() => {
     >
       <RouterLink :to="getPostPath(post)" class="flex gap-4 items-start group">
         <div v-if="post.cover_image_url" class="w-24 h-18 sm:w-32 sm:h-24 rounded-lg overflow-hidden flex-shrink-0 bg-slate-100">
-          <img :src="post.cover_image_url" :alt="post.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <ResponsivePostImage
+            :src="post.cover_image_url"
+            :alt="post.title"
+            class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+          />
         </div>
         <div class="flex-1 min-w-0">
           <h2 class="post-list-title text-lg font-bold mb-2 transition-colors" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h2>
@@ -71,7 +76,11 @@ const rows = computed(() => {
       style="border-color: var(--theme-border, #e2e8f0); background: var(--theme-card-bg, #fff)"
     >
       <div v-if="post.cover_image_url" class="h-44 overflow-hidden">
-        <img :src="post.cover_image_url" :alt="post.title" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+        <ResponsivePostImage
+          :src="post.cover_image_url"
+          :alt="post.title"
+          class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        />
       </div>
       <div class="p-5">
         <h2 class="post-list-title text-base font-bold mb-2 transition-colors line-clamp-2" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h2>

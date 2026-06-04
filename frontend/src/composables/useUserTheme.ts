@@ -1,4 +1,5 @@
-import { ref, onUnmounted } from 'vue'
+import { ref, onUnmounted, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { getUserTheme } from '@/api/theme'
 import { DEFAULT_THEME, createDefaultEffectConfig, createDefaultHeroConfig } from '@/types/theme'
 import { setActivePageTheme } from '@/stores/pageTheme'
@@ -16,6 +17,21 @@ const THEME_COLOR_LOCK_ID_PREFIX = 'user-theme-color-lock-'
 const THEME_BG_LOCK_ID_PREFIX = 'user-theme-bg-lock-'
 
 const jsCleanups = new Map<string, Array<() => void>>()
+const themeCache = new Map<string, UserTheme>()
+const THEME_ROUTE_NAMES = new Set(['user-home', 'post-detail'])
+
+let activeThemeOwner = ''
+
+function isThemeRoute(name: unknown) {
+  return THEME_ROUTE_NAMES.has(String(name))
+}
+
+function clearThemeArtifacts(username: string) {
+  removeCustomCss(username)
+  removeCustomJs(username)
+  removeThemeColorLock(username)
+  removeThemeBackgroundLock(username)
+}
 
 function defaultTheme(): UserTheme {
   return {
@@ -26,10 +42,18 @@ function defaultTheme(): UserTheme {
 }
 
 function normalizeTheme(theme?: UserTheme | null): UserTheme {
+  const defaultEffects = createDefaultEffectConfig()
   return {
     ...defaultTheme(),
     ...theme,
-    effect_config: theme?.effect_config ?? createDefaultEffectConfig(),
+    effect_config: {
+      ...defaultEffects,
+      ...theme?.effect_config,
+      background: { ...defaultEffects.background, ...theme?.effect_config?.background },
+      orbit: { ...defaultEffects.orbit, ...theme?.effect_config?.orbit },
+      cursor: { ...defaultEffects.cursor, ...theme?.effect_config?.cursor },
+      click: { ...defaultEffects.click, ...theme?.effect_config?.click },
+    },
     hero_config: {
       ...createDefaultHeroConfig(),
       ...theme?.hero_config,
@@ -237,7 +261,40 @@ function applyThemeLocks(username: string, theme: UserTheme, root: HTMLElement |
   applyThemeBackgroundLock(username, theme, root)
 }
 
+function applyThemeArtifacts(username: string, t: UserTheme, root: HTMLElement | null) {
+  if (t.custom_css) {
+    try {
+      injectCustomCss(username, t.custom_css)
+    } catch (e) {
+      console.warn('[useUserTheme] injectCustomCss failed', e)
+    }
+  } else {
+    removeCustomCss(username)
+  }
+  if (t.custom_js) {
+    try {
+      injectCustomJs(username, t.custom_js, root)
+    } catch (e) {
+      console.warn('[useUserTheme] injectCustomJs failed', e)
+    }
+  } else {
+    removeCustomJs(username)
+  }
+  const applyLock = () => {
+    try {
+      applyThemeLocks(username, t, root)
+    } catch (e) {
+      console.warn('[useUserTheme] applyThemeLocks failed', e)
+    }
+  }
+  applyLock()
+  if (t.custom_js) {
+    requestAnimationFrame(applyLock)
+  }
+}
+
 export function useUserTheme(containerRef: { value: HTMLElement | null }) {
+  const router = useRouter()
   const theme = ref<UserTheme>(defaultTheme())
   const loading = ref(false)
   let currentUsername = ''
@@ -275,41 +332,57 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
     el.style.setProperty('min-height', '100%')
   }
 
-  const load = async (username: string) => {
-    if (currentUsername && currentUsername !== username) {
-      removeCustomCss(currentUsername)
-      removeCustomJs(currentUsername)
-      removeThemeColorLock(currentUsername)
-      removeThemeBackgroundLock(currentUsername)
+  const applyLoadedTheme = (username: string, t: UserTheme) => {
+    theme.value = t
+    currentUsername = username
+    activeThemeOwner = username
+    try {
+      applyToBody(t)
+    } catch (e) {
+      console.warn('[useUserTheme] applyToBody failed', e)
     }
+    try {
+      applyToContainer(t)
+    } catch (e) {
+      console.warn('[useUserTheme] applyToContainer failed', e)
+    }
+    applyThemeArtifacts(username, t, containerRef.value)
+  }
+
+  const load = async (username: string) => {
+    if (activeThemeOwner && activeThemeOwner !== username) {
+      clearThemeArtifacts(activeThemeOwner)
+    }
+
+    const cached = themeCache.get(username)
+    if (cached) {
+      loading.value = false
+      applyLoadedTheme(username, cached)
+      if (!containerRef.value) {
+        await nextTick()
+        try {
+          applyToContainer(cached)
+        } catch (e) {
+          console.warn('[useUserTheme] applyToContainer failed', e)
+        }
+        applyThemeArtifacts(username, cached, containerRef.value)
+      }
+      return
+    }
+
     currentUsername = username
     loading.value = true
     try {
       const res = await getUserTheme(username)
-      theme.value = res.code === 0 && res.data ? normalizeTheme(res.data) : defaultTheme()
+      const normalized = res.code === 0 && res.data ? normalizeTheme(res.data) : defaultTheme()
+      themeCache.set(username, normalized)
+      applyLoadedTheme(username, normalized)
     } catch {
-      theme.value = defaultTheme()
+      const fallback = defaultTheme()
+      themeCache.set(username, fallback)
+      applyLoadedTheme(username, fallback)
     } finally {
       loading.value = false
-      try { applyToBody(theme.value) } catch (e) { console.warn('[useUserTheme] applyToBody failed', e) }
-      try { applyToContainer(theme.value) } catch (e) { console.warn('[useUserTheme] applyToContainer failed', e) }
-      if (theme.value.custom_css) {
-        try { injectCustomCss(username, theme.value.custom_css) } catch (e) { console.warn('[useUserTheme] injectCustomCss failed', e) }
-      }
-      if (theme.value.custom_js) {
-        try { injectCustomJs(username, theme.value.custom_js, containerRef.value) } catch (e) { console.warn('[useUserTheme] injectCustomJs failed', e) }
-      }
-      const applyLock = () => {
-        try {
-          applyThemeLocks(username, theme.value, containerRef.value)
-        } catch (e) {
-          console.warn('[useUserTheme] applyThemeLocks failed', e)
-        }
-      }
-      applyLock()
-      if (theme.value.custom_js) {
-        requestAnimationFrame(applyLock)
-      }
     }
   }
 
@@ -324,13 +397,15 @@ export function useUserTheme(containerRef: { value: HTMLElement | null }) {
   }
 
   onUnmounted(() => {
-    if (currentUsername) {
-      removeCustomCss(currentUsername)
-      removeCustomJs(currentUsername)
-      removeThemeColorLock(currentUsername)
-      removeThemeBackgroundLock(currentUsername)
-      containerRef.value?.removeAttribute('data-theme-color-active')
-      containerRef.value?.removeAttribute('data-theme-bg-active')
+    containerRef.value?.removeAttribute('data-theme-color-active')
+    containerRef.value?.removeAttribute('data-theme-bg-active')
+
+    // 用户主页 ↔ 文章详情：保留 body/全局主题，避免切换时整页闪白
+    if (isThemeRoute(router.currentRoute.value.name)) return
+
+    if (activeThemeOwner) {
+      clearThemeArtifacts(activeThemeOwner)
+      activeThemeOwner = ''
     }
     restoreBody()
   })

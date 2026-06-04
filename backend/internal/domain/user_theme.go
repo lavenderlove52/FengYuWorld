@@ -5,6 +5,7 @@ import "time"
 type ThemeEffectConfig struct {
 	Scope      string                `json:"scope"`
 	Background ThemeBackgroundEffect `json:"background"`
+	Orbit      ThemeOrbitEffect      `json:"orbit"`
 	Cursor     ThemeCursorEffect     `json:"cursor"`
 	Click      ThemeClickEffect      `json:"click"`
 }
@@ -25,6 +26,16 @@ type ThemeCursorEffect struct {
 	Size     float64 `json:"size"`
 	Opacity  float64 `json:"opacity"`
 	Duration int     `json:"duration"`
+}
+
+type ThemeOrbitEffect struct {
+	Type    string  `json:"type"`
+	Color   string  `json:"color"`
+	Count   int     `json:"count"`
+	Size    float64 `json:"size"`
+	Opacity float64 `json:"opacity"`
+	Speed   float64 `json:"speed"`
+	Radius  float64 `json:"radius"`
 }
 
 type ThemeClickEffect struct {
@@ -69,6 +80,9 @@ func DefaultThemeEffectConfig() ThemeEffectConfig {
 		Scope: "all",
 		Background: ThemeBackgroundEffect{
 			Type: "off", Color: "#6366f1", Count: 20, Size: 20, Opacity: 0.25, Speed: 0.5,
+		},
+		Orbit: ThemeOrbitEffect{
+			Type: "off", Color: "#6366f1", Count: 8, Size: 5, Opacity: 0.8, Speed: 1, Radius: 48,
 		},
 		Cursor: ThemeCursorEffect{
 			Type: "off", Color: "#6366f1", Count: 16, Size: 5, Opacity: 0.7, Duration: 700,

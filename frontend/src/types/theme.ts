@@ -1,10 +1,18 @@
 export type ThemePreset = 'default' | 'minimal' | 'dark' | 'forest' | 'ocean' | 'warm'
 export type ThemeLayout = 'grid' | 'list' | 'magazine'
 export type ThemeEffectScope = 'home' | 'post' | 'all'
-export type ThemeBackgroundEffectType = 'off' | 'floating-shapes'
-export type ThemeCursorEffectType = 'off' | 'particle-trail'
-export type ThemeClickEffectType = 'off' | 'heart' | 'star' | 'dot'
-export type ThemeHeroTransition = 'off' | 'fade' | 'slices'
+export type ThemeBackgroundEffectType =
+  | 'off'
+  | 'floating-shapes'
+  | 'starfield'
+  | 'fireflies'
+  | 'bubbles'
+  | 'constellation'
+  | 'rain'
+export type ThemeOrbitEffectType = 'off' | 'rainbow-orbit' | 'atom-orbit' | 'spiral-orbit'
+export type ThemeCursorEffectType = 'off' | 'particle-trail' | 'comet-trail' | 'sparkle-trail'
+export type ThemeClickEffectType = 'off' | 'heart' | 'star' | 'dot' | 'ring' | 'diamond' | 'flower' | 'sparkle'
+export type ThemeHeroTransition = 'off' | 'fade' | 'slices' | 'interlaced'
 
 export interface ThemeHeroConfig {
   enabled: boolean
@@ -23,6 +31,7 @@ export interface ThemeHeroConfig {
 export interface ThemeImage {
   id: number
   url: string
+  mobile_url?: string
   file_name?: string
   created_at?: string
 }
@@ -36,6 +45,15 @@ export interface ThemeEffectConfig {
     size: number
     opacity: number
     speed: number
+  }
+  orbit: {
+    type: ThemeOrbitEffectType
+    color: string
+    count: number
+    size: number
+    opacity: number
+    speed: number
+    radius: number
   }
   cursor: {
     type: ThemeCursorEffectType
@@ -101,6 +119,15 @@ export const createDefaultEffectConfig = (): ThemeEffectConfig => ({
     size: 20,
     opacity: 0.25,
     speed: 0.5,
+  },
+  orbit: {
+    type: 'off',
+    color: '#6366f1',
+    count: 8,
+    size: 5,
+    opacity: 0.8,
+    speed: 1,
+    radius: 48,
   },
   cursor: {
     type: 'off',

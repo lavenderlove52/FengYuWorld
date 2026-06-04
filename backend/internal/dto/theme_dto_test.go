@@ -17,6 +17,14 @@ func TestThemeEffectConfigRequestRejectsUnknownFields(t *testing.T) {
 		`{
 			"scope":"all",
 			"background":{"type":"off","color":"#fff","count":1,"size":4,"opacity":1,"speed":1,"javascript":"alert(1)"},
+			"orbit":{"type":"off","color":"#fff","count":3,"size":1,"opacity":1,"speed":1,"radius":20},
+			"cursor":{"type":"off","color":"#fff","count":1,"size":1,"opacity":1,"duration":100},
+			"click":{"type":"off","color":"#fff","count":1,"size":4,"opacity":1,"duration":200}
+		}`,
+		`{
+			"scope":"all",
+			"background":{"type":"off","color":"#fff","count":1,"size":4,"opacity":1,"speed":1},
+			"orbit":{"type":"off","color":"#fff","count":3,"size":1,"opacity":1,"speed":1,"radius":20,"code":"alert(1)"},
 			"cursor":{"type":"off","color":"#fff","count":1,"size":1,"opacity":1,"duration":100},
 			"click":{"type":"off","color":"#fff","count":1,"size":4,"opacity":1,"duration":200}
 		}`,

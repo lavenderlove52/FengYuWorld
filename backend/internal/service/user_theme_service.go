@@ -110,6 +110,9 @@ func (s *UserThemeService) Update(userID int64, req dto.UpdateThemeRequest) (*do
 	theme.CustomJS = req.CustomJS
 	if req.EffectConfig != nil {
 		effectConfig := domain.ThemeEffectConfig(*req.EffectConfig)
+		if effectConfig.Orbit.Type == "" {
+			effectConfig.Orbit = domain.DefaultThemeEffectConfig().Orbit
+		}
 		if err := validateEffectConfig(effectConfig); err != nil {
 			return nil, err
 		}
@@ -172,10 +175,13 @@ func validateHeroConfig(config domain.ThemeHeroConfig) error {
 		}
 		seen[id] = struct{}{}
 	}
-	if !allowedValue(config.Transition, "off", "fade", "slices") {
+	if !allowedValue(config.Transition, "off", "fade", "slices", "interlaced") {
 		return invalidHeroConfig("transition")
 	}
 	if !withinInt(config.IntervalMS, 3000, 30000) {
+		return invalidHeroConfig("interval_ms")
+	}
+	if allowedValue(config.Transition, "slices", "interlaced") && config.IntervalMS < 5000 {
 		return invalidHeroConfig("interval_ms")
 	}
 	if !withinFloat(config.OverlayOpacity, 0, 0.9) {
@@ -202,7 +208,7 @@ func validateEffectConfig(config domain.ThemeEffectConfig) error {
 	}
 
 	background := config.Background
-	if !allowedValue(background.Type, "off", "floating-shapes") {
+	if !allowedValue(background.Type, "off", "floating-shapes", "starfield", "fireflies", "bubbles", "constellation", "rain") {
 		return invalidEffectConfig("background.type")
 	}
 	if !validEffectColor(background.Color) ||
@@ -213,8 +219,21 @@ func validateEffectConfig(config domain.ThemeEffectConfig) error {
 		return invalidEffectConfig("background")
 	}
 
+	orbit := config.Orbit
+	if !allowedValue(orbit.Type, "off", "rainbow-orbit", "atom-orbit", "spiral-orbit") {
+		return invalidEffectConfig("orbit.type")
+	}
+	if !validEffectColor(orbit.Color) ||
+		!withinInt(orbit.Count, 3, 24) ||
+		!withinFloat(orbit.Size, 1, 16) ||
+		!withinFloat(orbit.Opacity, 0.05, 1) ||
+		!withinFloat(orbit.Speed, 0.1, 3) ||
+		!withinFloat(orbit.Radius, 20, 120) {
+		return invalidEffectConfig("orbit")
+	}
+
 	cursor := config.Cursor
-	if !allowedValue(cursor.Type, "off", "particle-trail") {
+	if !allowedValue(cursor.Type, "off", "particle-trail", "comet-trail", "sparkle-trail") {
 		return invalidEffectConfig("cursor.type")
 	}
 	if !validEffectColor(cursor.Color) ||
@@ -226,7 +245,7 @@ func validateEffectConfig(config domain.ThemeEffectConfig) error {
 	}
 
 	click := config.Click
-	if !allowedValue(click.Type, "off", "heart", "star", "dot") {
+	if !allowedValue(click.Type, "off", "heart", "star", "dot", "ring", "diamond", "flower", "sparkle") {
 		return invalidEffectConfig("click.type")
 	}
 	if !validEffectColor(click.Color) ||

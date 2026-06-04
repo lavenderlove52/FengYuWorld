@@ -3,6 +3,7 @@ import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { PinnedPost } from '@/types/post'
 import { getPostPath } from '@/utils/postPath'
+import ResponsivePostImage from './ResponsivePostImage.vue'
 
 const props = defineProps<{
   pins: PinnedPost[]
@@ -51,7 +52,7 @@ onUnmounted(stopTimer)
 
           <!-- 移动端封面图（顶部） / 桌面端右侧 -->
           <div class="sm:hidden h-40 relative overflow-hidden">
-            <img
+            <ResponsivePostImage
               v-if="post?.cover_image_url"
               :src="post.cover_image_url"
               :alt="post?.title"
@@ -105,7 +106,7 @@ onUnmounted(stopTimer)
 
           <!-- 桌面端右侧封面图（sm 以上显示） -->
           <div class="hidden sm:block w-72 flex-shrink-0 relative overflow-hidden">
-            <img
+            <ResponsivePostImage
               v-if="post?.cover_image_url"
               :src="post.cover_image_url"
               :alt="post?.title"

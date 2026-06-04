@@ -5,6 +5,7 @@ import type {
   ThemeCursorEffectType,
   ThemeEffectConfig,
   ThemeEffectScope,
+  ThemeOrbitEffectType,
 } from '@/types/theme'
 
 const config = defineModel<ThemeEffectConfig>({ required: true })
@@ -18,11 +19,25 @@ const scopes: Array<{ value: ThemeEffectScope; label: string }> = [
 const backgroundTypes: Array<{ value: ThemeBackgroundEffectType; label: string }> = [
   { value: 'off', label: '关闭' },
   { value: 'floating-shapes', label: '漂浮图形' },
+  { value: 'starfield', label: '闪烁星空' },
+  { value: 'fireflies', label: '萤火微光' },
+  { value: 'bubbles', label: '上浮气泡' },
+  { value: 'constellation', label: '星座连线' },
+  { value: 'rain', label: '细雨' },
+]
+
+const orbitTypes: Array<{ value: ThemeOrbitEffectType; label: string }> = [
+  { value: 'off', label: '关闭' },
+  { value: 'rainbow-orbit', label: '彩色轨道' },
+  { value: 'atom-orbit', label: '原子环' },
+  { value: 'spiral-orbit', label: '螺旋光点' },
 ]
 
 const cursorTypes: Array<{ value: ThemeCursorEffectType; label: string }> = [
   { value: 'off', label: '关闭' },
   { value: 'particle-trail', label: '粒子轨迹' },
+  { value: 'comet-trail', label: '彗星尾迹' },
+  { value: 'sparkle-trail', label: '闪光轨迹' },
 ]
 
 const clickTypes: Array<{ value: ThemeClickEffectType; label: string }> = [
@@ -30,6 +45,10 @@ const clickTypes: Array<{ value: ThemeClickEffectType; label: string }> = [
   { value: 'heart', label: '爱心' },
   { value: 'star', label: '五角星' },
   { value: 'dot', label: '圆点' },
+  { value: 'ring', label: '圆环' },
+  { value: 'diamond', label: '菱形' },
+  { value: 'flower', label: '花瓣' },
+  { value: 'sparkle', label: '闪光' },
 ]
 </script>
 
@@ -54,7 +73,7 @@ const clickTypes: Array<{ value: ThemeClickEffectType; label: string }> = [
       <label class="effect-row">
         <span>
           <strong>背景特效</strong>
-          <small>缓慢漂浮的圆形、方形与三角形</small>
+          <small>漂浮图形、星空、萤火、气泡、星座与细雨</small>
         </span>
         <select v-model="config.background.type" class="effect-select">
           <option v-for="item in backgroundTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
@@ -72,8 +91,28 @@ const clickTypes: Array<{ value: ThemeClickEffectType; label: string }> = [
     <div class="effect-card">
       <label class="effect-row">
         <span>
+          <strong>环绕特效</strong>
+          <small>在指针周围旋转的彩色轨道、原子环与螺旋光点</small>
+        </span>
+        <select v-model="config.orbit.type" class="effect-select">
+          <option v-for="item in orbitTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
+        </select>
+      </label>
+      <div v-if="config.orbit.type !== 'off'" class="effect-controls">
+        <label>颜色 <input v-model="config.orbit.color" type="color" /></label>
+        <label>数量 {{ config.orbit.count }} <input v-model.number="config.orbit.count" type="range" min="3" max="24" /></label>
+        <label>大小 {{ config.orbit.size }} <input v-model.number="config.orbit.size" type="range" min="1" max="16" /></label>
+        <label>半径 {{ config.orbit.radius }} <input v-model.number="config.orbit.radius" type="range" min="20" max="120" /></label>
+        <label>透明度 {{ config.orbit.opacity.toFixed(2) }} <input v-model.number="config.orbit.opacity" type="range" min="0.05" max="1" step="0.05" /></label>
+        <label>速度 {{ config.orbit.speed.toFixed(1) }} <input v-model.number="config.orbit.speed" type="range" min="0.1" max="3" step="0.1" /></label>
+      </div>
+    </div>
+
+    <div class="effect-card">
+      <label class="effect-row">
+        <span>
           <strong>鼠标跟随</strong>
-          <small>指针移动时留下轻量粒子轨迹</small>
+          <small>指针移动时留下粒子、彗星或闪光轨迹</small>
         </span>
         <select v-model="config.cursor.type" class="effect-select">
           <option v-for="item in cursorTypes" :key="item.value" :value="item.value">{{ item.label }}</option>
@@ -92,7 +131,7 @@ const clickTypes: Array<{ value: ThemeClickEffectType; label: string }> = [
       <label class="effect-row">
         <span>
           <strong>点击特效</strong>
-          <small>点击页面时弹出可信预设图形</small>
+          <small>点击页面时弹出爱心、星星、圆环、花瓣等可信图形</small>
         </span>
         <select v-model="config.click.type" class="effect-select">
           <option v-for="item in clickTypes" :key="item.value" :value="item.value">{{ item.label }}</option>

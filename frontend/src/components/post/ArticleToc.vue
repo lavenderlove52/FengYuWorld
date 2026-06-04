@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { extractTocItems } from '@/utils/markdownToc'
+import type { TocItem } from '@/utils/markdownToc'
 
-const props = defineProps<{ contentMd: string }>()
+const props = defineProps<{ contentMd: string; items?: TocItem[] }>()
 
-const items = computed(() => extractTocItems(props.contentMd))
+const items = computed(() => props.items ?? extractTocItems(props.contentMd))
 </script>
 
 <template>

@@ -4,22 +4,43 @@ import { nextTick, ref, watch } from 'vue'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { extractTocItems } from '@/utils/markdownToc'
+import type { TocItem } from '@/utils/markdownToc'
+import { postMobileImageURL } from '@/utils/responsiveImage'
 
-const props = defineProps<{ contentMd: string }>()
+const props = defineProps<{ contentMd: string; tocItems?: TocItem[] }>()
 const rootRef = ref<HTMLElement | null>(null)
 
 const sanitizeHtml = (html: string) => DOMPurify.sanitize(html)
+
+const enhanceImages = () => {
+  const images = Array.from(rootRef.value?.querySelectorAll<HTMLImageElement>('.md-editor-preview img') ?? [])
+  for (const image of images) {
+    image.loading = 'lazy'
+    image.decoding = 'async'
+    const mobileURL = postMobileImageURL(image.getAttribute('src') || '')
+    if (!mobileURL || image.parentElement?.dataset.responsivePostImage === 'true') continue
+
+    const picture = document.createElement('picture')
+    picture.dataset.responsivePostImage = 'true'
+    const source = document.createElement('source')
+    source.media = '(max-width: 767px)'
+    source.srcset = mobileURL
+    image.before(picture)
+    picture.append(source, image)
+  }
+}
 
 watch(
   () => props.contentMd,
   async (content) => {
     await nextTick()
     const headings = Array.from(rootRef.value?.querySelectorAll<HTMLElement>('.md-editor-preview h1, .md-editor-preview h2, .md-editor-preview h3, .md-editor-preview h4, .md-editor-preview h5, .md-editor-preview h6') ?? [])
-    const items = extractTocItems(content)
+    const items = props.tocItems ?? extractTocItems(content)
     headings.forEach((heading, index) => {
       const item = items[index]
       if (item) heading.id = item.id
     })
+    enhanceImages()
   },
   { immediate: true, flush: 'post' },
 )

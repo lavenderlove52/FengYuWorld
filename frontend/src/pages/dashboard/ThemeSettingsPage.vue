@@ -32,6 +32,22 @@ const form = ref<UserTheme>({
 })
 const saving = ref(false)
 const uploadingBanner = ref(false)
+const activeSettingsTab = ref<'style' | 'home-layout'>('style')
+const selectedHomeLayout = ref<'layout-1'>('layout-1')
+
+const SETTINGS_TABS = [
+  { id: 'style', label: '主题样式', description: '颜色、字体、文章列表与高级设置' },
+  { id: 'home-layout', label: '主页布局', description: '选择并配置个人主页布局方案' },
+] as const
+
+const HOME_LAYOUTS = [
+  {
+    id: 'layout-1',
+    name: '布局 1',
+    title: '全屏大图',
+    description: '全屏轮播封面，下方展示文章列表',
+  },
+] as const
 
 const selectedPreset = computed(() => PRESETS.find((p) => p.id === form.value.preset) ?? PRESETS[0])
 
@@ -61,10 +77,18 @@ onMounted(async () => {
   try {
     const res = await getUserTheme(auth.user.username)
     if (res.code === 0 && res.data) {
+      const defaultEffects = createDefaultEffectConfig()
       form.value = {
         ...DEFAULT_THEME,
         ...res.data,
-        effect_config: res.data.effect_config ?? createDefaultEffectConfig(),
+        effect_config: {
+          ...defaultEffects,
+          ...res.data.effect_config,
+          background: { ...defaultEffects.background, ...res.data.effect_config?.background },
+          orbit: { ...defaultEffects.orbit, ...res.data.effect_config?.orbit },
+          cursor: { ...defaultEffects.cursor, ...res.data.effect_config?.cursor },
+          click: { ...defaultEffects.click, ...res.data.effect_config?.click },
+        },
         hero_config: {
           ...createDefaultHeroConfig(),
           ...res.data.hero_config,
@@ -169,9 +193,26 @@ const LAYOUTS = [
       </div>
     </div>
 
+    <div class="settings-tabs mb-8" role="tablist" aria-label="主页定制板块">
+      <button
+        v-for="tab in SETTINGS_TABS"
+        :key="tab.id"
+        type="button"
+        role="tab"
+        class="settings-tab"
+        :class="{ 'settings-tab--active': activeSettingsTab === tab.id }"
+        :aria-selected="activeSettingsTab === tab.id"
+        @click="activeSettingsTab = tab.id"
+      >
+        <strong>{{ tab.label }}</strong>
+        <span>{{ tab.description }}</span>
+      </button>
+    </div>
+
     <div class="grid grid-cols-5 gap-8">
       <!-- 左侧设置区 -->
       <div class="col-span-3 space-y-8">
+        <template v-if="activeSettingsTab === 'style'">
 
         <!-- 预设主题 -->
         <section>
@@ -321,8 +362,6 @@ const LAYOUTS = [
           </div>
         </section>
 
-        <ThemeHeroSettings v-model="form.hero_config" />
-
         <!-- 布局 -->
         <section>
           <h2 class="text-base font-semibold text-slate-700 mb-3">文章列表布局</h2>
@@ -397,6 +436,51 @@ const LAYOUTS = [
             </div>
           </div>
         </section>
+        </template>
+
+        <template v-else>
+          <section>
+            <div class="mb-4">
+              <h2 class="text-base font-semibold text-slate-700">选择主页布局</h2>
+              <p class="mt-1 text-xs text-slate-400">
+                当前提供布局 1，后续新增布局方案会继续显示在这里。
+              </p>
+            </div>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <button
+                v-for="layout in HOME_LAYOUTS"
+                :key="layout.id"
+                type="button"
+                class="home-layout-card"
+                :class="{ 'home-layout-card--active': selectedHomeLayout === layout.id }"
+                @click="selectedHomeLayout = layout.id"
+              >
+                <div class="home-layout-card__preview" aria-hidden="true">
+                  <div class="home-layout-card__hero">
+                    <span />
+                  </div>
+                  <div class="home-layout-card__articles">
+                    <span />
+                    <span />
+                    <span />
+                  </div>
+                </div>
+                <div class="flex items-start justify-between gap-3">
+                  <div class="text-left">
+                    <div class="text-xs font-medium text-indigo-500">{{ layout.name }}</div>
+                    <div class="mt-1 text-sm font-semibold text-slate-700">{{ layout.title }}</div>
+                    <div class="mt-1 text-xs text-slate-400">{{ layout.description }}</div>
+                  </div>
+                  <span class="home-layout-card__status">使用中</span>
+                </div>
+              </button>
+            </div>
+          </section>
+
+          <div class="rounded-2xl border border-slate-200 bg-white p-5">
+            <ThemeHeroSettings v-model="form.hero_config" />
+          </div>
+        </template>
 
       </div>
 
@@ -484,3 +568,117 @@ const LAYOUTS = [
     </div>
   </div>
 </template>
+
+<style scoped>
+.settings-tabs {
+  display: flex;
+  gap: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.settings-tab {
+  display: flex;
+  min-width: 12rem;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  color: #64748b;
+  text-align: left;
+  transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.settings-tab span {
+  color: #94a3b8;
+  font-size: 0.7rem;
+}
+
+.settings-tab:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.settings-tab--active {
+  border-color: #a5b4fc;
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.home-layout-card {
+  padding: 0.75rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 0.9rem;
+  background: #fff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.home-layout-card:hover,
+.home-layout-card--active {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgb(199 210 254 / 0.55);
+}
+
+.home-layout-card__preview {
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+  background: #f8fafc;
+}
+
+.home-layout-card__hero {
+  display: grid;
+  height: 5rem;
+  place-items: center;
+  background: linear-gradient(135deg, #1e293b, #475569);
+}
+
+.home-layout-card__hero span {
+  width: 2.5rem;
+  height: 0.4rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.75);
+}
+
+.home-layout-card__articles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.6rem;
+}
+
+.home-layout-card__articles span {
+  height: 0.3rem;
+  border-radius: 999px;
+  background: #cbd5e1;
+}
+
+.home-layout-card__articles span:nth-child(2) {
+  width: 82%;
+}
+
+.home-layout-card__articles span:nth-child(3) {
+  width: 64%;
+}
+
+.home-layout-card__status {
+  flex-shrink: 0;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  background: #eef2ff;
+  color: #6366f1;
+  font-size: 0.65rem;
+}
+
+@media (max-width: 640px) {
+  .settings-tabs {
+    flex-direction: column;
+  }
+
+  .settings-tab {
+    width: 100%;
+  }
+}
+</style>
