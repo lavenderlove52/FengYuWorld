@@ -85,15 +85,31 @@ watch(
   color: var(--theme-text, #3f4a54);
 }
 
+.blog-markdown-viewer :deep(.md-editor-preview) {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .blog-markdown-viewer :deep(.md-editor-preview table) {
   display: table;
   width: max-content;
   max-width: 100%;
   margin: 1.2em 0;
   border-collapse: collapse;
-  overflow-x: auto;
   color: var(--theme-text, #3f4a54);
   background: transparent;
+}
+
+@media (max-width: 767px) {
+  .blog-markdown-viewer :deep(.md-editor-preview table) {
+    font-size: 0.8125rem;
+  }
+
+  .blog-markdown-viewer :deep(.md-editor-preview table th),
+  .blog-markdown-viewer :deep(.md-editor-preview table td) {
+    padding: 0.4rem 0.5rem;
+    white-space: nowrap;
+  }
 }
 
 .blog-markdown-viewer :deep(.md-editor-preview table tr),
@@ -121,6 +137,69 @@ watch(
 
 .blog-markdown-viewer :deep(.md-editor-preview blockquote p) {
   color: var(--theme-text, #3f4a54);
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid']) {
+  color: #1f2937;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node rect),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node circle),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node ellipse),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node polygon),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node path),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .node rect),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .node circle),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .node ellipse),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .node polygon),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .node path) {
+  fill: color-mix(in srgb, var(--theme-card-bg, #ffffff) 92%, white) !important;
+  stroke: color-mix(in srgb, var(--theme-accent, #6366f1) 45%, #64748b) !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg text),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .label),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .nodeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .cluster-label),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] text),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .label),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .nodeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .cluster-label) {
+  color: #1f2937 !important;
+  fill: #1f2937 !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel rect),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .labelBkg),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel rect),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .labelBkg) {
+  background-color: color-mix(in srgb, var(--theme-card-bg, #ffffff) 92%, white) !important;
+  fill: color-mix(in srgb, var(--theme-card-bg, #ffffff) 92%, white) !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgePath path),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .flowchart-link),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg marker path),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgePath path),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .flowchart-link),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] marker path) {
+  stroke: color-mix(in srgb, var(--theme-text, #64748b) 55%, #94a3b8) !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg marker path),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] marker path) {
+  fill: color-mix(in srgb, var(--theme-text, #64748b) 55%, #94a3b8) !important;
 }
 
 .blog-markdown-viewer :deep(.md-editor-preview code:not(pre code)) {

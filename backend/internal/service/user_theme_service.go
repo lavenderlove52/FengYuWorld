@@ -76,7 +76,7 @@ func (s *UserThemeService) Update(userID int64, req dto.UpdateThemeRequest) (*do
 		if err != nil || user == nil {
 			return nil, ErrForbidden
 		}
-		if user.Role != "admin" && !user.CanCustomJS {
+		if !domain.IsAdminRole(user.Role) && !user.CanCustomJS {
 			return nil, ErrForbidden
 		}
 	}

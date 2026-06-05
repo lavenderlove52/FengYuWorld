@@ -57,6 +57,7 @@ func New(cfg *config.Config) (*App, error) {
 	emailCodeRepo := repository.NewEmailCodeRepository(database)
 	inviteCodeRepo := repository.NewInviteCodeRepository(database)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(database)
+	appSettingRepo := repository.NewAppSettingRepository(database)
 
 	mdRenderer := markdown.NewRenderer()
 	localStorage := storage.NewLocalStorage(cfg.UploadDir, cfg.PublicUploadBaseURL)
@@ -80,6 +81,7 @@ func New(cfg *config.Config) (*App, error) {
 	tagSvc := service.NewTagService(tagRepo)
 	uploadSvc := service.NewUploadService(localStorage, uploadRepo, cfg.MaxImageSizeMB)
 	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo, friendRepo, policy)
+	appSettingSvc := service.NewAppSettingService(appSettingRepo, userRepo)
 
 	userThemeRepo := repository.NewUserThemeRepository(database)
 	homeThemeImageRepo := repository.NewHomeThemeImageRepository(database)
@@ -101,13 +103,14 @@ func New(cfg *config.Config) (*App, error) {
 	inviteHandler := handler.NewInviteHandler(inviteSvc)
 	userThemeHandler := handler.NewUserThemeHandler(userThemeSvc)
 	homeThemeImageHandler := handler.NewHomeThemeImageHandler(homeThemeImageSvc)
+	settingsHandler := handler.NewSettingsHandler(appSettingSvc)
 
 	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database, middleware.NewUserCache())
 
 	hub := ws.NewHub()
 	msgRepo := repository.NewMessageRepository(database)
-	wsHandler := handler.NewWSHandler(hub, msgRepo, friendRepo, wsTicketStore)
-	chatHandler := handler.NewChatHandler(msgRepo, friendRepo)
+	wsHandler := handler.NewWSHandler(hub, msgRepo, friendRepo, wsTicketStore, appSettingSvc)
+	chatHandler := handler.NewChatHandler(msgRepo, friendRepo, appSettingSvc)
 
 	router := gin.New()
 	router.Use(gin.Logger(), middleware.ErrorRecovery(), middleware.CORS())
@@ -117,7 +120,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler)
+	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler, settingsHandler)
 
 	return &App{
 		Config: cfg,

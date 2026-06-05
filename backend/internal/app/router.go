@@ -25,6 +25,7 @@ func registerRoutes(
 	homeThemeImages *handler.HomeThemeImageHandler,
 	wsHandler *handler.WSHandler,
 	chat *handler.ChatHandler,
+	settings *handler.SettingsHandler,
 ) {
 	api := r.Group("/api")
 	{
@@ -51,6 +52,7 @@ func registerRoutes(
 		api.GET("/users/:username/posts", authMW.Optional(), users.GetUserPosts)
 		api.GET("/users/:username/pins", authMW.Optional(), pins.GetPublicUserPins)
 		api.GET("/users/:username/theme", theme.GetTheme)
+		api.GET("/settings/public", settings.GetPublicSettings)
 
 		authed := api.Group("")
 		authed.Use(authMW.Required())
@@ -113,6 +115,12 @@ func registerRoutes(
 			adminGroup.GET("/invite-codes", invite.ListInviteCodes)
 			adminGroup.POST("/invite-codes", invite.GenerateInviteCodes)
 			adminGroup.DELETE("/invite-codes/:id", invite.DeleteInviteCode)
+		}
+
+		superAdminGroup := api.Group("/super-admin")
+		superAdminGroup.Use(authMW.RequireSuperAdmin())
+		{
+			superAdminGroup.PUT("/settings/friend-chat", settings.UpdateFriendChat)
 		}
 	}
 }

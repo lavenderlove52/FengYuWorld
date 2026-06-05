@@ -87,7 +87,7 @@ func (s *UserService) RevokeCustomJS(userID int64) error {
 	if err != nil || user == nil {
 		return ErrUserNotFound
 	}
-	if user.Role == "admin" {
+	if domain.IsAdminRole(user.Role) {
 		return ErrAdminForbidden
 	}
 	return s.users.UpdateCanCustomJS(userID, false)

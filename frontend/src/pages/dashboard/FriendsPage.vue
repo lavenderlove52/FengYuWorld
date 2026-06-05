@@ -5,6 +5,7 @@ import * as friendsApi from '@/api/friends'
 import { useFriendStore } from '@/stores/friend'
 import { useChatStore } from '@/stores/chat'
 import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
 import FriendRequestList from '@/components/friend/FriendRequestList.vue'
 import FriendList from '@/components/friend/FriendList.vue'
 import ChatPanel from '@/components/chat/ChatPanel.vue'
@@ -16,6 +17,7 @@ const message = useMessage()
 const friendStore = useFriendStore()
 const chatStore = useChatStore()
 const authStore = useAuthStore()
+const settingsStore = useSettingsStore()
 const username = ref('')
 const selectedFriend = ref<FriendListItem | null>(null)
 const viewMode = ref<ViewMode>('list')
@@ -24,7 +26,9 @@ const showAddFriend = ref(false)
 
 const requestCount = computed(() => friendStore.received.length)
 const totalUnread = computed(() =>
-  Object.values(chatStore.unreadCounts).reduce((sum, n) => sum + (n || 0), 0),
+  settingsStore.friendChatEnabled
+    ? Object.values(chatStore.unreadCounts).reduce((sum, n) => sum + (n || 0), 0)
+    : 0,
 )
 
 const load = async () => {
@@ -32,8 +36,9 @@ const load = async () => {
 }
 
 onMounted(async () => {
+  await settingsStore.loadPublicSettings()
   await load()
-  if (authStore.user) {
+  if (authStore.user && settingsStore.friendChatEnabled) {
     chatStore.initWs(authStore.user.id)
   }
 })
@@ -78,6 +83,10 @@ const remove = async (id: number) => {
 }
 
 const openChat = (friend: FriendListItem) => {
+  if (!settingsStore.friendChatEnabled) {
+    message.warning('好友聊天已关闭')
+    return
+  }
   selectedFriend.value = friend
   viewMode.value = 'chat'
   chatStore.setActiveFriend(friend.id)
@@ -98,6 +107,10 @@ const closeChat = () => {
       <header class="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-[#f5f5f5] flex-shrink-0">
         <h1 class="text-lg font-semibold text-slate-800">好友</h1>
         <div class="flex items-center gap-2">
+          <span
+            v-if="!settingsStore.friendChatEnabled"
+            class="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full"
+          >聊天已关闭</span>
           <span
             v-if="totalUnread > 0"
             class="text-xs text-white bg-red-500 px-2 py-0.5 rounded-full"
@@ -153,6 +166,7 @@ const closeChat = () => {
         <FriendList
           :items="friendStore.friends"
           :unread-counts="chatStore.unreadCounts"
+          :chat-enabled="settingsStore.friendChatEnabled"
           @remove="remove"
           @chat="openChat"
         />

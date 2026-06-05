@@ -27,13 +27,22 @@ type WSHandler struct {
 	msgRepo    *repository.MessageRepository
 	friendRepo *repository.FriendshipRepository
 	tickets    *service.WSTicketStore
+	settings   *service.AppSettingService
 }
 
-func NewWSHandler(hub *ws.Hub, msgRepo *repository.MessageRepository, friendRepo *repository.FriendshipRepository, tickets *service.WSTicketStore) *WSHandler {
-	return &WSHandler{hub: hub, msgRepo: msgRepo, friendRepo: friendRepo, tickets: tickets}
+func NewWSHandler(hub *ws.Hub, msgRepo *repository.MessageRepository, friendRepo *repository.FriendshipRepository, tickets *service.WSTicketStore, settings *service.AppSettingService) *WSHandler {
+	return &WSHandler{hub: hub, msgRepo: msgRepo, friendRepo: friendRepo, tickets: tickets, settings: settings}
 }
 
 func (h *WSHandler) HandleWS(c *gin.Context) {
+	if enabled, err := h.settings.IsFriendChatEnabled(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "system error"})
+		return
+	} else if !enabled {
+		c.JSON(http.StatusForbidden, gin.H{"error": "friend chat is disabled"})
+		return
+	}
+
 	userID, ok := h.tickets.Consume(c.Query("ticket"))
 	if !ok || userID == 0 {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "未登录"})
@@ -89,6 +98,11 @@ func (h *WSHandler) HandleWS(c *gin.Context) {
 }
 
 func (h *WSHandler) handleMsg(client *ws.Client, in ws.InMsg) {
+	if enabled, err := h.settings.IsFriendChatEnabled(); err != nil || !enabled {
+		client.Send <- marshalOut(ws.OutMsg{Type: "error", Payload: "friend chat is disabled"})
+		return
+	}
+
 	if in.To == 0 || in.Content == "" {
 		return
 	}

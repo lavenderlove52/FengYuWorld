@@ -17,6 +17,7 @@ import type { UserInfo } from '@/types/auth'
 
 const message = useMessage()
 const activeTab = ref<'pins' | 'grant'>('pins')
+const isAdminRole = (role?: string) => role === 'admin' || role === 'super_admin'
 
 // ── 置顶管理 ──────────────────────────────────────────
 const pins = ref<PinnedPost[]>([])
@@ -321,16 +322,18 @@ const formatDate = (d: string) => d?.slice(0, 10) ?? ''
                 <span class="text-sm font-semibold text-slate-800">{{ user.nickname }}</span>
                 <span v-if="user.role === 'admin'"
                   class="text-[10px] px-1.5 py-0.5 bg-amber-50 text-amber-600 border border-amber-100 rounded-full">admin</span>
-                <span v-if="user.can_site_pin && user.role !== 'admin'"
+                <span v-if="user.role === 'super_admin'"
+                  class="text-[10px] px-1.5 py-0.5 bg-purple-50 text-purple-600 border border-purple-100 rounded-full">super</span>
+                <span v-if="user.can_site_pin && !isAdminRole(user.role)"
                   class="text-[10px] px-1.5 py-0.5 bg-indigo-50 text-indigo-500 border border-indigo-100 rounded-full">置顶</span>
-                <span v-if="user.can_custom_js && user.role !== 'admin'"
+                <span v-if="user.can_custom_js && !isAdminRole(user.role)"
                   class="text-[10px] px-1.5 py-0.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-full">JS</span>
               </div>
               <div class="text-xs text-slate-400 mt-0.5">@{{ user.username }}</div>
             </div>
 
             <!-- 授权按钮 -->
-            <div v-if="user.role === 'admin'" class="text-xs text-slate-300">内置权限</div>
+            <div v-if="isAdminRole(user.role)" class="text-xs text-slate-300">内置权限</div>
             <div v-else class="flex items-center gap-2 flex-shrink-0">
               <!-- 首页置顶授权 -->
               <button

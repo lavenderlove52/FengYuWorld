@@ -92,8 +92,14 @@ watch(() => route.params.id, loadPage)
     :style="articleWidthStyle"
   >
     <ThemeEffects :config="theme.effect_config" page-scope="post" />
-    <div class="article-detail-layout grid gap-6" :class="showToc ? 'lg:grid-cols-[minmax(0,1fr)_220px]' : ''">
-      <article class="article-detail-card rounded-xl border px-4 py-5 sm:px-6 sm:py-7 md:px-8 md:py-10" style="background: var(--theme-card-bg, #fff); border-color: var(--theme-border, #e2e8f0)">
+    <div
+      class="article-detail-layout relative z-[1] grid gap-6"
+      :class="showToc ? 'lg:grid-cols-[minmax(0,1fr)_220px]' : ''"
+    >
+      <article
+        class="article-detail-card relative rounded-xl border px-4 py-5 sm:px-6 sm:py-7 md:px-8 md:py-10"
+        style="background: var(--theme-card-bg, #fff); border-color: var(--theme-border, #e2e8f0)"
+      >
         <h1 class="text-2xl sm:text-3xl font-bold mb-4" style="color: var(--theme-text, #0f172a)">{{ post.title }}</h1>
         <div class="text-sm mb-5 sm:mb-6 flex flex-wrap gap-2 sm:gap-4" style="color: var(--theme-text, #64748b); opacity: 0.7">
           <RouterLink
@@ -137,15 +143,25 @@ watch(() => route.params.id, loadPage)
 
 <style scoped>
 .article-detail-root {
+  position: relative;
+  isolation: isolate;
   box-sizing: border-box;
   width: 100vw;
+  max-width: 100vw;
   margin-left: calc(50% - 50vw);
-  padding: 0 1rem;
+  overflow-x: clip;
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  .article-detail-root {
+    padding: 0 1rem;
+  }
 }
 
 .article-detail-root.article-detail-root > .article-detail-layout.article-detail-layout {
   width: min(100%, var(--article-layout-width)) !important;
-  max-width: var(--article-layout-width) !important;
+  max-width: min(100%, var(--article-layout-width)) !important;
   height: auto !important;
   min-height: 0 !important;
   max-height: none !important;
@@ -159,7 +175,7 @@ watch(() => route.params.id, loadPage)
 
 .article-detail-root.article-detail-root .article-detail-card.article-detail-card {
   width: 100% !important;
-  max-width: var(--article-content-width) !important;
+  max-width: min(100%, var(--article-content-width)) !important;
 }
 
 .article-detail-root.article-detail-root > .article-detail-layout.article-detail-layout::after {

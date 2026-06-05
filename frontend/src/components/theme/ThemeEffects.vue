@@ -74,9 +74,17 @@ let pointerIsMoving = false
 let pointerIdleTimer = 0
 let hueOrbiters: HueOrbiter[] = []
 let lastContinuousFrameAt = 0
+let isNarrowViewport = false
+let isTouchLike = false
+let narrowMediaQuery: MediaQueryList | null = null
+let coarsePointerQuery: MediaQueryList | null = null
 const CONTINUOUS_FRAME_MS = 1000 / 30
+const MOBILE_BREAKPOINT = 768
 
 const scopeMatches = () => props.config.scope === 'all' || props.config.scope === props.pageScope
+const isMobileProfile = () => isNarrowViewport || isTouchLike
+/** 触摸端不跟指针画轨道/拖尾，避免滑动时粒子落在正文上 */
+const supportsPointerFollow = () => !isTouchLike && !reducedMotion
 const hasAnyEffect = () =>
   props.config.background.type !== 'off' ||
   props.config.orbit.type !== 'off' ||
@@ -91,17 +99,45 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
+function viewportSize() {
+  const visualViewport = window.visualViewport
+  return {
+    width: Math.ceil(visualViewport?.width ?? window.innerWidth),
+    height: Math.ceil(visualViewport?.height ?? window.innerHeight),
+  }
+}
+
+function eventPoint(event: PointerEvent) {
+  const visualViewport = window.visualViewport
+  return {
+    x: event.clientX - (visualViewport?.offsetLeft ?? 0),
+    y: event.clientY - (visualViewport?.offsetTop ?? 0),
+  }
+}
+
+function refreshDeviceProfile() {
+  isNarrowViewport = narrowMediaQuery?.matches ?? viewportSize().width < MOBILE_BREAKPOINT
+  isTouchLike = coarsePointerQuery?.matches ?? false
+}
+
+function effectCountScale() {
+  if (reducedMotion) return 0
+  if (isMobileProfile()) return props.pageScope === 'post' ? 0.35 : 0.5
+  return 1
+}
+
 function resizeCanvas() {
   const canvas = canvasRef.value
   if (!canvas) return
-  const ratio = Math.min(window.devicePixelRatio || 1, 1.25)
-  const width = Math.floor(window.innerWidth * ratio)
-  const height = Math.floor(window.innerHeight * ratio)
+  const viewport = viewportSize()
+  const ratio = Math.min(window.devicePixelRatio || 1, isMobileProfile() ? 1 : 1.25)
+  const width = Math.floor(viewport.width * ratio)
+  const height = Math.floor(viewport.height * ratio)
   if (context && canvas.width === width && canvas.height === height) return
   canvas.width = width
   canvas.height = height
-  canvas.style.width = `${window.innerWidth}px`
-  canvas.style.height = `${window.innerHeight}px`
+  canvas.style.width = `${viewport.width}px`
+  canvas.style.height = `${viewport.height}px`
   context = canvas.getContext('2d')
   context?.setTransform(ratio, 0, 0, ratio, 0, 0)
 }
@@ -110,6 +146,7 @@ function scheduleResizeCanvas() {
   if (resizeFrame) return
   resizeFrame = requestAnimationFrame(() => {
     resizeFrame = 0
+    refreshDeviceProfile()
     resizeCanvas()
   })
 }
@@ -118,17 +155,22 @@ function createBackgroundParticles() {
   const effect = props.config.background
   // 星座连线每帧 O(n²)，粒子过多会明显拖慢滚动
   const maxCount = effect.type === 'constellation' ? 35 : 60
-  const count = Math.floor(clamp(effect.count, 0, maxCount))
+  const count = Math.floor(clamp(effect.count, 0, maxCount) * effectCountScale())
+  if (count <= 0) {
+    backgroundParticles = []
+    return
+  }
   const size = clamp(effect.size, 4, 80)
   const configuredSpeed = clamp(effect.speed, 0.1, 2)
+  const viewport = viewportSize()
   backgroundParticles = Array.from({ length: count }, (_, index) => {
     const speed = configuredSpeed * randomBetween(0.15, 0.45)
     let vx = randomBetween(-speed, speed)
     let vy = randomBetween(-speed, speed)
     if (effect.type === 'magnetic-shapes') {
       return {
-        x: Math.random() * window.innerWidth,
-        y: Math.random() * window.innerHeight,
+        x: Math.random() * viewport.width,
+        y: Math.random() * viewport.height,
         size: size * randomBetween(0.55, 1.15),
         vx: randomBetween(-0.5, 0.5) * configuredSpeed,
         vy: randomBetween(-0.5, 0.5) * configuredSpeed,
@@ -149,8 +191,8 @@ function createBackgroundParticles() {
       vy = randomBetween(0.02, 0.12) * configuredSpeed
     }
     return {
-      x: Math.random() * window.innerWidth,
-      y: Math.random() * window.innerHeight,
+      x: Math.random() * viewport.width,
+      y: Math.random() * viewport.height,
       size: size * randomBetween(0.45, 1),
       vx,
       vy,
@@ -355,9 +397,12 @@ function createHueOrbiters() {
 }
 
 function addPointerParticle(event: PointerEvent) {
+  if (!supportsPointerFollow()) return
   const effect = props.config.cursor
   const now = performance.now()
-  if (now - lastPointerParticleAt < 24) return
+  const point = eventPoint(event)
+  const throttleMs = isMobileProfile() ? 48 : 24
+  if (now - lastPointerParticleAt < throttleMs) return
   lastPointerParticleAt = now
   if (cursorParticleCount >= clamp(effect.count, 0, 50) || transientParticles.length >= MAX_TRANSIENT_PARTICLES) return
 
@@ -365,8 +410,8 @@ function addPointerParticle(event: PointerEvent) {
     for (let i = 0; i < 2; i += 1) {
       if (transientParticles.length >= MAX_TRANSIENT_PARTICLES) break
       transientParticles.push({
-        x: event.clientX,
-        y: event.clientY,
+        x: point.x,
+        y: point.y,
         vx: randomBetween(-1.25, 1.25),
         vy: randomBetween(-1.25, 1.25) - 1,
         size: clamp(effect.size, 1, 20) * randomBetween(0.75, 1.25),
@@ -385,8 +430,8 @@ function addPointerParticle(event: PointerEvent) {
   }
 
   transientParticles.push({
-    x: event.clientX,
-    y: event.clientY,
+    x: point.x,
+    y: point.y,
     vx: randomBetween(-0.12, 0.12),
     vy: randomBetween(-0.25, -0.05),
     size: clamp(effect.size, 1, 20) * randomBetween(0.65, 1),
@@ -405,8 +450,10 @@ function addPointerParticle(event: PointerEvent) {
 }
 
 function onPointerMove(event: PointerEvent) {
-  pointerX = event.clientX
-  pointerY = event.clientY
+  if (!supportsPointerFollow()) return
+  const point = eventPoint(event)
+  pointerX = point.x
+  pointerY = point.y
   pointerIsMoving = true
   window.clearTimeout(pointerIdleTimer)
   pointerIdleTimer = window.setTimeout(() => {
@@ -423,12 +470,13 @@ function addClickParticles(event: PointerEvent) {
   const available = MAX_TRANSIENT_PARTICLES - transientParticles.length
   const count = Math.floor(clamp(effect.count, 0, Math.min(24, available)))
   const now = performance.now()
+  const point = eventPoint(event)
   for (let i = 0; i < count; i += 1) {
     const angle = (Math.PI * 2 * i) / count + randomBetween(-0.2, 0.2)
     const speed = randomBetween(0.7, 2.2)
     transientParticles.push({
-      x: event.clientX,
-      y: event.clientY,
+      x: point.x,
+      y: point.y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed - 1,
       size: clamp(effect.size, 4, 60) * randomBetween(0.7, 1.15),
@@ -443,19 +491,25 @@ function addClickParticles(event: PointerEvent) {
 }
 
 function updateBackgroundParticle(particle: BackgroundParticle) {
+  const viewport = viewportSize()
   particle.x += particle.vx
   particle.y += particle.vy
   particle.rotation += particle.rotationSpeed
-  if (particle.x < -particle.size) particle.x = window.innerWidth + particle.size
-  if (particle.x > window.innerWidth + particle.size) particle.x = -particle.size
-  if (particle.y < -particle.size) particle.y = window.innerHeight + particle.size
-  if (particle.y > window.innerHeight + particle.size) particle.y = -particle.size
+  if (particle.x < -particle.size) particle.x = viewport.width + particle.size
+  if (particle.x > viewport.width + particle.size) particle.x = -particle.size
+  if (particle.y < -particle.size) particle.y = viewport.height + particle.size
+  if (particle.y > viewport.height + particle.size) particle.y = -particle.size
 }
 
 function drawBackground(ctx: CanvasRenderingContext2D, now: number) {
   const effect = props.config.background
   if (effect.type === 'off') return
-  const opacity = clamp(effect.opacity, 0.05, 1)
+  let opacity = clamp(effect.opacity, 0.05, 1)
+  if (isMobileProfile() && props.pageScope === 'post') {
+    opacity = Math.min(opacity, 0.12)
+  } else if (isMobileProfile()) {
+    opacity = Math.min(opacity, 0.2)
+  }
   ctx.save()
   ctx.fillStyle = effect.color
   ctx.strokeStyle = effect.color
@@ -487,11 +541,12 @@ function drawBackground(ctx: CanvasRenderingContext2D, now: number) {
 
   for (const particle of backgroundParticles) {
     if (effect.type === 'magnetic-shapes') {
+      const viewport = viewportSize()
       applyMagneticForce(particle, clamp(effect.speed, 0.1, 2))
-      if (particle.x < -50) particle.x = window.innerWidth + 50
-      if (particle.x > window.innerWidth + 50) particle.x = -50
-      if (particle.y < -50) particle.y = window.innerHeight + 50
-      if (particle.y > window.innerHeight + 50) particle.y = -50
+      if (particle.x < -50) particle.x = viewport.width + 50
+      if (particle.x > viewport.width + 50) particle.x = -50
+      if (particle.y < -50) particle.y = viewport.height + 50
+      if (particle.y > viewport.height + 50) particle.y = -50
       ctx.globalAlpha = opacity
       drawMagneticShape(ctx, particle.shape, particle.x, particle.y, particle.size, particle.rotation)
       continue
@@ -558,7 +613,7 @@ function drawParticleOrbit(ctx: CanvasRenderingContext2D) {
 
 function drawOrbit(ctx: CanvasRenderingContext2D, now: number) {
   const effect = props.config.orbit
-  if (effect.type === 'off') return
+  if (effect.type === 'off' || !supportsPointerFollow()) return
   if (effect.type === 'particle-orbit') {
     drawParticleOrbit(ctx)
     return
@@ -650,7 +705,8 @@ function render(now: number) {
     return
   }
   if (hasContinuous) lastContinuousFrameAt = now
-  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight)
+  const viewport = viewportSize()
+  ctx.clearRect(0, 0, viewport.width, viewport.height)
 
   drawBackground(ctx, now)
   drawOrbit(ctx, now)
@@ -693,7 +749,12 @@ function render(now: number) {
   transientParticles.length = nextParticleIndex
 
   ctx.globalAlpha = 1
-  if (props.config.background.type !== 'off' || props.config.orbit.type !== 'off' || transientParticles.length > 0) {
+  const orbitActive = props.config.orbit.type !== 'off' && supportsPointerFollow()
+  if (
+    (props.config.background.type !== 'off' && backgroundParticles.length > 0)
+    || orbitActive
+    || transientParticles.length > 0
+  ) {
     animationFrame = requestAnimationFrame(render)
   }
 }
@@ -717,17 +778,31 @@ function stopEffects() {
   transientParticles = []
   orbitPoints = []
   cursorParticleCount = 0
-  context?.clearRect(0, 0, window.innerWidth, window.innerHeight)
+  const viewport = viewportSize()
+  context?.clearRect(0, 0, viewport.width, viewport.height)
+}
+
+function onDeviceProfileChange() {
+  refreshDeviceProfile()
+  startEffects()
 }
 
 function startEffects() {
   stopEffects()
+  refreshDeviceProfile()
   if (document.hidden || reducedMotion || !scopeMatches() || !hasAnyEffect()) return
   resizeCanvas()
 
   if (props.config.background.type !== 'off') createBackgroundParticles()
-  createHueOrbiters()
-  if (props.config.cursor.type !== 'off' || props.config.orbit.type !== 'off') {
+  if (supportsPointerFollow()) {
+    createHueOrbiters()
+  } else {
+    hueOrbiters = []
+  }
+  if (
+    supportsPointerFollow()
+    && (props.config.cursor.type !== 'off' || props.config.orbit.type !== 'off')
+  ) {
     window.addEventListener('pointermove', onPointerMove, { passive: true })
     effectCleanups.push(() => window.removeEventListener('pointermove', onPointerMove))
   }
@@ -737,7 +812,14 @@ function startEffects() {
   }
   window.addEventListener('resize', scheduleResizeCanvas, { passive: true })
   effectCleanups.push(() => window.removeEventListener('resize', scheduleResizeCanvas))
-  if (props.config.background.type !== 'off' || props.config.orbit.type !== 'off') ensureAnimation()
+  window.visualViewport?.addEventListener('resize', scheduleResizeCanvas, { passive: true })
+  effectCleanups.push(() => window.visualViewport?.removeEventListener('resize', scheduleResizeCanvas))
+  window.visualViewport?.addEventListener('scroll', scheduleResizeCanvas, { passive: true })
+  effectCleanups.push(() => window.visualViewport?.removeEventListener('scroll', scheduleResizeCanvas))
+  const orbitActive = props.config.orbit.type !== 'off' && supportsPointerFollow()
+  if (props.config.background.type !== 'off' && backgroundParticles.length > 0 || orbitActive) {
+    ensureAnimation()
+  }
 }
 
 function onMotionPreferenceChange(event: MediaQueryListEvent) {
@@ -756,6 +838,11 @@ onMounted(() => {
   mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   reducedMotion = mediaQuery.matches
   mediaQuery.addEventListener('change', onMotionPreferenceChange)
+  narrowMediaQuery = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`)
+  coarsePointerQuery = window.matchMedia('(pointer: coarse)')
+  refreshDeviceProfile()
+  narrowMediaQuery.addEventListener('change', onDeviceProfileChange)
+  coarsePointerQuery.addEventListener('change', onDeviceProfileChange)
   document.addEventListener('visibilitychange', onVisibilityChange)
   startEffects()
 })
@@ -763,6 +850,8 @@ onMounted(() => {
 onUnmounted(() => {
   stopEffects()
   mediaQuery?.removeEventListener('change', onMotionPreferenceChange)
+  narrowMediaQuery?.removeEventListener('change', onDeviceProfileChange)
+  coarsePointerQuery?.removeEventListener('change', onDeviceProfileChange)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
@@ -771,6 +860,6 @@ onUnmounted(() => {
   <canvas
     ref="canvasRef"
     aria-hidden="true"
-    class="pointer-events-none fixed inset-0 z-[5]"
+    class="theme-effects-canvas pointer-events-none fixed inset-0 z-0"
   />
 </template>

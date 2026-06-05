@@ -12,7 +12,7 @@ export interface UserInfo {
   nickname: string
   avatar_url: string
   bio?: string
-  role?: string
+  role?: 'user' | 'admin' | 'super_admin' | string
   can_site_pin?: boolean
   can_custom_js?: boolean
 }

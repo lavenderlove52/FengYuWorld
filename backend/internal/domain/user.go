@@ -5,8 +5,9 @@ import "time"
 type UserRole string
 
 const (
-	UserRoleUser  UserRole = "user"
-	UserRoleAdmin UserRole = "admin"
+	UserRoleUser       UserRole = "user"
+	UserRoleAdmin      UserRole = "admin"
+	UserRoleSuperAdmin UserRole = "super_admin"
 )
 
 type UserStatus string
@@ -33,3 +34,11 @@ type User struct {
 }
 
 func (User) TableName() string { return "users" }
+
+func IsAdminRole(role UserRole) bool {
+	return role == UserRoleAdmin || role == UserRoleSuperAdmin
+}
+
+func IsSuperAdminRole(role UserRole) bool {
+	return role == UserRoleSuperAdmin
+}

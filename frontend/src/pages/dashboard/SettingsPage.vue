@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { NForm, NFormItem, NInput, NButton, useMessage, NModal } from 'naive-ui'
+import { NForm, NFormItem, NInput, NButton, useMessage, NModal, NSwitch } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
 import { uploadAvatar } from '@/api/uploads'
 import AvatarCropperModal from '@/components/upload/AvatarCropperModal.vue'
 
 const auth = useAuthStore()
+const settingsStore = useSettingsStore()
 const message = useMessage()
 
 const form = ref({
@@ -20,6 +22,7 @@ const applyingFor = ref('')
 const avatarInput = ref<HTMLInputElement | null>(null)
 const showAvatarCropModal = ref(false)
 const avatarCropFile = ref<File | null>(null)
+const isSuperAdmin = computed(() => auth.user?.role === 'super_admin')
 
 const save = async () => {
   loading.value = true
@@ -30,6 +33,19 @@ const save = async () => {
     message.error(e.message)
   } finally {
     loading.value = false
+  }
+}
+
+const toggleFriendChat = async (enabled: boolean) => {
+  try {
+    const res = await settingsStore.setFriendChatEnabled(enabled)
+    if (res.code === 0) {
+      message.success(enabled ? '好友聊天已开启' : '好友聊天已关闭')
+    } else {
+      message.error(res.message || '操作失败')
+    }
+  } catch (e: any) {
+    message.error(e?.message || '操作失败')
   }
 }
 
@@ -100,10 +116,17 @@ const permissions = computed(() => [
     applyable: false,
   },
   {
+    key: 'friend_chat',
+    label: '好友聊天',
+    desc: settingsStore.friendChatEnabled ? '好友之间可以实时聊天' : '好友聊天已被超级管理员关闭',
+    granted: settingsStore.friendChatEnabled,
+    applyable: false,
+  },
+  {
     key: 'site_pin',
     label: '首页置顶管理',
     desc: '在全站首页轮播中添加或移除置顶文章',
-    granted: auth.user?.role === 'admin' || !!auth.user?.can_site_pin,
+    granted: auth.user?.role === 'admin' || auth.user?.role === 'super_admin' || !!auth.user?.can_site_pin,
     applyable: true,
     applyLabel: '首页置顶管理权限',
   },
@@ -111,7 +134,7 @@ const permissions = computed(() => [
     key: 'custom_js',
     label: '自定义 JS',
     desc: '在个人主页加载自己编写的 JavaScript 脚本',
-    granted: auth.user?.role === 'admin' || !!auth.user?.can_custom_js,
+    granted: auth.user?.role === 'admin' || auth.user?.role === 'super_admin' || !!auth.user?.can_custom_js,
     applyable: true,
     applyLabel: '自定义 JS 权限',
   },
@@ -119,12 +142,13 @@ const permissions = computed(() => [
     key: 'admin',
     label: '管理员',
     desc: '管理全站用户、授权、内容等所有后台功能',
-    granted: auth.user?.role === 'admin',
+    granted: auth.user?.role === 'admin' || auth.user?.role === 'super_admin',
     applyable: false,
   },
 ])
 
 const roleLabel = computed(() => {
+  if (auth.user?.role === 'super_admin') return { text: 'Super Admin', cls: 'bg-purple-50 text-purple-600 border-purple-200' }
   if (auth.user?.role === 'admin') return { text: 'Admin', cls: 'bg-amber-50 text-amber-600 border-amber-200' }
   if (auth.user?.can_site_pin) return { text: '授权用户', cls: 'bg-indigo-50 text-indigo-500 border-indigo-200' }
   return { text: '普通用户', cls: 'bg-slate-100 text-slate-500 border-slate-200' }
@@ -144,6 +168,24 @@ const copyApplyText = () => {
 
 <template>
   <div class="max-w-2xl space-y-10">
+    <div v-if="isSuperAdmin">
+      <h2 class="text-lg font-bold text-slate-800 mb-4">超级管理员配置</h2>
+      <div class="bg-white border border-slate-100 rounded-2xl p-5">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="font-semibold text-slate-800">好友聊天</div>
+            <div class="text-sm text-slate-400 mt-1">
+              关闭后，用户仍可管理好友关系，但不能打开聊天、收发消息或连接聊天 WebSocket。
+            </div>
+          </div>
+          <NSwitch
+            :value="settingsStore.friendChatEnabled"
+            :loading="settingsStore.loading"
+            @update:value="toggleFriendChat"
+          />
+        </div>
+      </div>
+    </div>
 
     <!-- 账号权限卡片 -->
     <div>

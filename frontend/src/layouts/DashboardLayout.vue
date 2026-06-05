@@ -3,6 +3,7 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { NMenu, NButton, NSpace, NSpin } from 'naive-ui'
 import { useAuthStore } from '@/stores/auth'
+import { useSettingsStore } from '@/stores/settings'
 import { useInactivityLogout } from '@/composables/useInactivityLogout'
 import { setActivePageTheme } from '@/stores/pageTheme'
 import { clearTokens } from '@/api/http'
@@ -10,6 +11,7 @@ import { clearTokens } from '@/api/http'
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const settingsStore = useSettingsStore()
 useInactivityLogout()
 
 /** 有 token 但尚未拿到 user（刷新后首屏） */
@@ -46,7 +48,7 @@ const menuOptions = computed(() => {
     { label: () => h(RouterLink, { to: '/dashboard/friends' }, { default: () => '好友' }), key: 'friends' },
     { label: () => h(RouterLink, { to: '/dashboard/settings' }, { default: () => '设置' }), key: 'settings' },
   ]
-  const isAdmin = auth.user?.role === 'admin' || auth.user?.can_site_pin
+  const isAdmin = auth.user?.role === 'admin' || auth.user?.role === 'super_admin' || auth.user?.can_site_pin
   if (isAdmin) {
     items.push({
       label: () => h(RouterLink, { to: '/dashboard/admin/pins' }, { default: () => '🔒 首页置顶' }),
@@ -81,6 +83,7 @@ onMounted(() => {
   document.body.style.backgroundColor = ''
   document.body.style.color = ''
   document.body.style.fontFamily = ''
+  settingsStore.loadPublicSettings()
   if (authBooting.value) ensureUser()
 })
 </script>

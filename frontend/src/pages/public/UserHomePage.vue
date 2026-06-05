@@ -96,13 +96,13 @@ watch(() => route.params.username, loadPage)
     ref="containerRef"
     :data-theme-user="String(route.params.username)"
     data-theme-page="user-home"
-    class="min-h-screen"
+    class="relative isolate min-h-screen"
     style="color: var(--theme-text)"
   >
     <ThemeEffects :config="theme.effect_config" page-scope="home" />
-    <div v-if="loading && !user" class="text-center py-20 text-slate-400">加载中...</div>
-    <EmptyState v-else-if="!loading && !user" message="用户不存在" />
-    <template v-else-if="user">
+    <div v-if="loading && !user" class="relative z-[1] text-center py-20 text-slate-400">加载中...</div>
+    <EmptyState v-else-if="!loading && !user" class="relative z-[1]" message="用户不存在" />
+    <div v-else-if="user" class="relative z-[1]">
       <ThemeHomeHero
         v-if="showFullscreenHero"
         :config="theme.hero_config"
@@ -190,15 +190,21 @@ watch(() => route.params.username, loadPage)
           </div>
         </div>
       </div>
-    </template>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .home-content-shell {
-  width: 100vw;
-  margin-left: calc(50% - 50vw);
+  width: 100%;
   background: var(--theme-bg);
+}
+
+@media (min-width: 640px) {
+  .home-content-shell {
+    width: 100vw;
+    margin-left: calc(50% - 50vw);
+  }
 }
 
 .home-content-inner {

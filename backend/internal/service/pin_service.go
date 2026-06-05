@@ -65,7 +65,7 @@ func (s *PinService) SitePinPost(operatorID int64, postID int64) error {
 	if err != nil || operator == nil {
 		return ErrUserNotFound
 	}
-	if operator.Role != domain.UserRoleAdmin && !operator.CanSitePin {
+	if !domain.IsAdminRole(operator.Role) && !operator.CanSitePin {
 		return ErrPinForbidden
 	}
 
@@ -101,7 +101,7 @@ func (s *PinService) SiteUnpinPost(operatorID int64, postID int64) error {
 	if err != nil || operator == nil {
 		return ErrUserNotFound
 	}
-	if operator.Role != domain.UserRoleAdmin && !operator.CanSitePin {
+	if !domain.IsAdminRole(operator.Role) && !operator.CanSitePin {
 		return ErrPinForbidden
 	}
 
@@ -233,7 +233,7 @@ func (s *PinService) GrantSitePinPermission(adminID int64, targetUserID int64) e
 	if err != nil || admin == nil {
 		return ErrUserNotFound
 	}
-	if admin.Role != domain.UserRoleAdmin {
+	if !domain.IsAdminRole(admin.Role) {
 		return ErrPinForbidden
 	}
 	target, err := s.users.FindByID(targetUserID)
@@ -249,7 +249,7 @@ func (s *PinService) RevokeSitePinPermission(adminID int64, targetUserID int64) 
 	if err != nil || admin == nil {
 		return ErrUserNotFound
 	}
-	if admin.Role != domain.UserRoleAdmin {
+	if !domain.IsAdminRole(admin.Role) {
 		return ErrPinForbidden
 	}
 	target, err := s.users.FindByID(targetUserID)

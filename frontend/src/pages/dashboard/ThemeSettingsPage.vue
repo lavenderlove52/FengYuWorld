@@ -420,7 +420,7 @@ const LAYOUTS = [
             <h2 class="text-base font-semibold text-slate-700">自定义 JS</h2>
             <span class="text-xs text-slate-400">高级 · 需要管理员授权 · 最大 10000 字符</span>
           </div>
-          <div v-if="auth.user?.role === 'admin' || auth.user?.can_custom_js" class="relative">
+          <div v-if="auth.user?.role === 'admin' || auth.user?.role === 'super_admin' || auth.user?.can_custom_js" class="relative">
             <textarea
               v-model="form.custom_js"
               rows="8"

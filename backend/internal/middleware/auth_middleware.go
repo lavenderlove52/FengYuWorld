@@ -148,8 +148,35 @@ func (m *AuthMiddleware) RequireAdmin() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "权限不足"))
 			return
 		}
-		if user.Role != domain.UserRoleAdmin {
+		if !domain.IsAdminRole(user.Role) {
 			c.AbortWithStatusJSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "需要管理员权限"))
+			return
+		}
+		c.Next()
+	}
+}
+
+func (m *AuthMiddleware) RequireSuperAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid, username, ok := m.parseBearer(c)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, dto.Err(dto.CodeUnauthorized, "未登录"))
+			return
+		}
+		c.Set(ContextUserIDKey, uid)
+		c.Set(ContextUsernameKey, username)
+
+		if m.db == nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "system error"))
+			return
+		}
+		var user domain.User
+		if err := m.db.Select("id, role").First(&user, uid).Error; err != nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "permission denied"))
+			return
+		}
+		if !domain.IsSuperAdminRole(user.Role) {
+			c.AbortWithStatusJSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "requires super admin permission"))
 			return
 		}
 		c.Next()

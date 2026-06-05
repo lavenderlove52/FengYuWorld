@@ -8,6 +8,7 @@ import type { UnreadCounts } from '@/types/chat'
 defineProps<{
   items: FriendListItem[]
   unreadCounts?: UnreadCounts
+  chatEnabled?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -34,14 +35,15 @@ function onMoreSelect(key: string | number, item: FriendListItem) {
     <li
       v-for="item in items"
       :key="item.id"
-      class="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-slate-50 active:bg-slate-100 transition-colors"
-      @click="emit('chat', item)"
+      class="flex items-center gap-3 px-3 py-3 hover:bg-slate-50 active:bg-slate-100 transition-colors"
+      :class="chatEnabled === false ? 'cursor-default' : 'cursor-pointer'"
+      @click="chatEnabled === false ? undefined : emit('chat', item)"
     >
       <!-- 头像 + 未读 -->
       <NBadge
         :value="unreadCounts?.[item.id] ?? 0"
         :max="99"
-        :show="(unreadCounts?.[item.id] ?? 0) > 0"
+        :show="chatEnabled !== false && (unreadCounts?.[item.id] ?? 0) > 0"
         :offset="[-2, 2]"
       >
         <div class="w-12 h-12 rounded-full flex-shrink-0 overflow-hidden bg-slate-100">
