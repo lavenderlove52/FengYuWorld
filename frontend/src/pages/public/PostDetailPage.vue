@@ -149,7 +149,7 @@ watch(() => route.params.id, loadPage)
   width: 100vw;
   max-width: 100vw;
   margin-left: calc(50% - 50vw);
-  overflow-x: clip;
+  overflow-x: visible;
   padding: 0;
 }
 

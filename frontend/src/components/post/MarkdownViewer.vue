@@ -76,6 +76,9 @@ watch(
   padding: 0;
   color: var(--theme-text, #3f4a54);
   background: transparent;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .blog-markdown-viewer :deep(.md-editor-preview p),
@@ -86,8 +89,67 @@ watch(
 }
 
 .blog-markdown-viewer :deep(.md-editor-preview) {
-  overflow-x: auto;
+  overflow-x: visible;
   -webkit-overflow-scrolling: touch;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview p),
+.blog-markdown-viewer :deep(.md-editor-preview li) {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-code),
+.blog-markdown-viewer :deep(.md-editor-preview pre) {
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview pre code) {
+  display: block;
+  min-width: max-content;
+  max-width: none;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+@media (max-width: 767px) {
+  .blog-markdown-viewer :deep(.md-editor-preview) {
+    overflow-x: hidden;
+  }
+
+  .blog-markdown-viewer :deep(.md-editor-preview p),
+  .blog-markdown-viewer :deep(.md-editor-preview li),
+  .blog-markdown-viewer :deep(.md-editor-preview h1),
+  .blog-markdown-viewer :deep(.md-editor-preview h2),
+  .blog-markdown-viewer :deep(.md-editor-preview h3),
+  .blog-markdown-viewer :deep(.md-editor-preview h4),
+  .blog-markdown-viewer :deep(.md-editor-preview h5),
+  .blog-markdown-viewer :deep(.md-editor-preview h6) {
+    white-space: normal !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
+  .blog-markdown-viewer :deep(.md-editor-preview .md-editor-code),
+  .blog-markdown-viewer :deep(.md-editor-preview pre) {
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .blog-markdown-viewer :deep(.md-editor-preview pre code),
+  .blog-markdown-viewer :deep(.md-editor-preview pre code .md-editor-code-block) {
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    white-space: pre-wrap !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
 }
 
 .blog-markdown-viewer :deep(.md-editor-preview table) {
