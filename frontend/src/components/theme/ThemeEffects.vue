@@ -860,6 +860,6 @@ onUnmounted(() => {
   <canvas
     ref="canvasRef"
     aria-hidden="true"
-    class="theme-effects-canvas pointer-events-none fixed inset-0 z-0"
+    class="theme-effects-canvas pointer-events-none fixed inset-0 z-[2]"
   />
 </template>

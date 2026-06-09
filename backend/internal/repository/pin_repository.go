@@ -16,11 +16,13 @@ func NewPinRepository(db *gorm.DB) *PinRepository {
 
 func (r *PinRepository) GetSitePins() ([]domain.SitePin, error) {
 	var pins []domain.SitePin
-	err := r.db.Preload("Post").Preload("Post.Author").
+	err := r.db.Model(&domain.SitePin{}).
+		Select("site_pins.*").
+		Preload("Post").Preload("Post.Author").
 		Joins("JOIN posts ON posts.id = site_pins.post_id").
 		Where("posts.is_deleted = ? AND posts.status = ? AND posts.visibility = ?",
 			false, domain.PostStatusPublished, domain.PostVisibilityPublic).
-		Order("display_order ASC, id ASC").
+		Order("site_pins.display_order ASC, site_pins.id ASC").
 		Find(&pins).Error
 	return pins, err
 }
@@ -67,11 +69,13 @@ func (r *PinRepository) SitePinExists(postID int64) (bool, error) {
 
 func (r *PinRepository) GetUserPins(userID int64) ([]domain.UserPin, error) {
 	var pins []domain.UserPin
-	err := r.db.Preload("Post").Preload("Post.Author").
+	err := r.db.Model(&domain.UserPin{}).
+		Select("user_pins.*").
+		Preload("Post").Preload("Post.Author").
 		Joins("JOIN posts ON posts.id = user_pins.post_id").
-		Where("user_id = ?", userID).
+		Where("user_pins.user_id = ?", userID).
 		Where("posts.is_deleted = ?", false).
-		Order("display_order ASC, id ASC").
+		Order("user_pins.display_order ASC, user_pins.id ASC").
 		Find(&pins).Error
 	return pins, err
 }
@@ -100,7 +104,7 @@ func (r *PinRepository) CountUserPins(userID int64) (int64, error) {
 	var count int64
 	err := r.db.Model(&domain.UserPin{}).
 		Joins("JOIN posts ON posts.id = user_pins.post_id").
-		Where("user_id = ?", userID).
+		Where("user_pins.user_id = ?", userID).
 		Where("posts.is_deleted = ?", false).
 		Count(&count).Error
 	return count, err
