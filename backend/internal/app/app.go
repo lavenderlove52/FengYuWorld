@@ -49,6 +49,7 @@ func New(cfg *config.Config) (*App, error) {
 
 	userRepo := repository.NewUserRepository(database)
 	postRepo := repository.NewPostRepository(database)
+	postTreeRepo := repository.NewPostTreeRepository(database)
 	friendRepo := repository.NewFriendshipRepository(database)
 	categoryRepo := repository.NewCategoryRepository(database)
 	tagRepo := repository.NewTagRepository(database)
@@ -76,6 +77,7 @@ func New(cfg *config.Config) (*App, error) {
 	userSvc := service.NewUserService(userRepo)
 	policy := service.NewPostPolicy(friendRepo, postRepo)
 	postSvc := service.NewPostService(postRepo, tagRepo, categoryRepo, friendRepo, policy, mdRenderer)
+	postTreeSvc := service.NewPostTreeService(postTreeRepo, postRepo)
 	friendSvc := service.NewFriendshipService(friendRepo, userRepo)
 	categorySvc := service.NewCategoryService(categoryRepo)
 	tagSvc := service.NewTagService(tagRepo)
@@ -94,6 +96,7 @@ func New(cfg *config.Config) (*App, error) {
 	captchaHandler := handler.NewCaptchaHandler(captchaSvc)
 	userHandler := handler.NewUserHandler(userSvc, postSvc)
 	postHandler := handler.NewPostHandler(postSvc)
+	postTreeHandler := handler.NewPostTreeHandler(postTreeSvc)
 	friendHandler := handler.NewFriendshipHandler(friendSvc)
 	categoryHandler := handler.NewCategoryHandler(categorySvc)
 	tagHandler := handler.NewTagHandler(tagSvc)
@@ -120,7 +123,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler, settingsHandler)
+	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, postTreeHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler, settingsHandler)
 
 	return &App{
 		Config: cfg,

@@ -269,9 +269,24 @@ func (s *PostService) GetDetail(viewerID *int64, postID int64) (*dto.PostDetail,
 	return s.toDetail(post, deref(viewerID), isAuthor), nil
 }
 
-func (s *PostService) ListPublic(page, pageSize int) (*util.PageResult[dto.PostSummary], error) {
+func (s *PostService) ListPublic(keyword string, page, pageSize int) (*util.PageResult[dto.PostSummary], error) {
 	p := util.NormalizePageParams(page, pageSize)
-	posts, total, err := s.posts.ListPublic(p)
+	posts, total, err := s.posts.SearchPublic(strings.TrimSpace(keyword), p)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]dto.PostSummary, 0, len(posts))
+	for i := range posts {
+		items = append(items, s.toSummary(&posts[i]))
+	}
+	return &util.PageResult[dto.PostSummary]{
+		Items: items, Total: total, Page: p.Page, PageSize: p.PageSize,
+	}, nil
+}
+
+func (s *PostService) SearchLinkable(userID int64, keyword string, page, pageSize int) (*util.PageResult[dto.PostSummary], error) {
+	p := util.NormalizePageParams(page, pageSize)
+	posts, total, err := s.posts.SearchLinkable(userID, strings.TrimSpace(keyword), p)
 	if err != nil {
 		return nil, err
 	}

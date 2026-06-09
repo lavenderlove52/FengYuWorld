@@ -40,12 +40,19 @@ const filteredPosts = computed(() => {
 const loadPins = async () => {
   loadingPins.value = true
   loadingPosts.value = true
+  getSitePins()
+    .then((pinsRes) => {
+      if (pinsRes?.code === 0 && pinsRes.data) pins.value = pinsRes.data
+    })
+    .catch(() => {})
+    .finally(() => {
+      loadingPins.value = false
+    })
+
   try {
-    const [pinsRes, postsRes] = await Promise.all([getSitePins(), listPublicPosts(1, 100)])
-    if (pinsRes.code === 0 && pinsRes.data) pins.value = pinsRes.data
-    if (postsRes.code === 0 && postsRes.data) allPosts.value = postsRes.data.items
+    const postsRes = await listPublicPosts(1, 100)
+    if (postsRes?.code === 0 && postsRes.data) allPosts.value = postsRes.data.items
   } finally {
-    loadingPins.value = false
     loadingPosts.value = false
   }
 }

@@ -20,17 +20,18 @@ const auth = useAuthStore()
 
 const load = async () => {
   loading.value = true
+  getSitePins()
+    .then((res) => {
+      if (res.code === 0 && res.data) {
+        pins.value = res.data
+      }
+    })
+    .catch(() => {})
   try {
-    const [postsRes, pinsRes] = await Promise.all([
-      listPublicPosts(page.value, pageSize),
-      getSitePins(),
-    ])
-    if (postsRes.code === 0 && postsRes.data) {
+    const postsRes = await listPublicPosts(page.value, pageSize)
+    if (postsRes?.code === 0 && postsRes.data) {
       posts.value = postsRes.data.items
       total.value = postsRes.data.total
-    }
-    if (pinsRes.code === 0 && pinsRes.data) {
-      pins.value = pinsRes.data
     }
   } finally {
     loading.value = false

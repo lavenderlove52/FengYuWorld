@@ -22,7 +22,8 @@ func NewPostHandler(posts *service.PostService) *PostHandler {
 func (h *PostHandler) ListPublic(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "12"))
-	result, err := h.posts.ListPublic(page, pageSize)
+	keyword := c.Query("keyword")
+	result, err := h.posts.ListPublic(keyword, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
 		return
@@ -160,6 +161,19 @@ func (h *PostHandler) ListMine(c *gin.Context) {
 	status := c.Query("status")
 	visibility := c.Query("visibility")
 	result, err := h.posts.ListMine(userID, status, visibility, page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(result))
+}
+
+func (h *PostHandler) SearchLinkable(c *gin.Context) {
+	userID := middleware.MustUserID(c)
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	keyword := c.Query("keyword")
+	result, err := h.posts.SearchLinkable(userID, keyword, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
 		return

@@ -55,21 +55,25 @@ const load = async () => {
   loading.value = true
   const username = String(route.params.username)
   try {
-    const requests: Promise<any>[] = [
-      getUserProfile(username),
-      listUserPosts(username, page.value, pageSize),
-    ]
-    if (isOwner.value || theme.value.show_pins_public) {
-      requests.push(isOwner.value ? getMyPins() : getUserPins(username))
-    }
-    const [profile, list, pinsRes] = await Promise.all(requests)
-    if (profile.code === 0) user.value = profile.data || null
-    if (list.code === 0 && list.data) {
+    const pinsRequest = isOwner.value || theme.value.show_pins_public
+      ? (isOwner.value ? getMyPins() : getUserPins(username))
+          .then((res) => {
+            if (res.code === 0 && res.data) {
+              pins.value = res.data
+            }
+          })
+          .catch(() => {})
+      : null
+
+    void pinsRequest
+    const requests: Promise<any>[] = [getUserProfile(username), listUserPosts(username, page.value, pageSize)]
+    const [profileResult, listResult] = await Promise.allSettled(requests)
+    const profile = profileResult.status === 'fulfilled' ? profileResult.value : null
+    const list = listResult.status === 'fulfilled' ? listResult.value : null
+    if (profile?.code === 0) user.value = profile.data || null
+    if (list?.code === 0 && list.data) {
       posts.value = list.data.items
       total.value = list.data.total
-    }
-    if (pinsRes?.code === 0 && pinsRes.data) {
-      pins.value = pinsRes.data
     }
   } finally {
     loading.value = false

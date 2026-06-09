@@ -14,6 +14,7 @@ func registerRoutes(
 	captcha *handler.CaptchaHandler,
 	users *handler.UserHandler,
 	posts *handler.PostHandler,
+	postTree *handler.PostTreeHandler,
 	friends *handler.FriendshipHandler,
 	categories *handler.CategoryHandler,
 	tags *handler.TagHandler,
@@ -65,6 +66,12 @@ func registerRoutes(
 			authed.DELETE("/me/theme-images/:id", homeThemeImages.Delete)
 
 			authed.GET("/me/posts", posts.ListMine)
+			authed.GET("/me/post-links", posts.SearchLinkable)
+			authed.GET("/me/post-tree", postTree.List)
+			authed.POST("/me/post-tree/folders", postTree.CreateFolder)
+			authed.POST("/me/post-tree/posts", postTree.AddPost)
+			authed.PUT("/me/post-tree/nodes/:id", postTree.Update)
+			authed.DELETE("/me/post-tree/nodes/:id", postTree.Delete)
 			authed.POST("/posts", posts.Create)
 			authed.PUT("/posts/:id", posts.Update)
 			authed.DELETE("/posts/:id", posts.Delete)

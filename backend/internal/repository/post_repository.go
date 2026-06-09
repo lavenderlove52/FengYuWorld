@@ -64,6 +64,67 @@ func (r *PostRepository) ListPublic(page util.PageParams) ([]domain.Post, int64,
 	return posts, total, err
 }
 
+func (r *PostRepository) SearchPublic(keyword string, page util.PageParams) ([]domain.Post, int64, error) {
+	var posts []domain.Post
+	var total int64
+	q := r.db.Model(&domain.Post{}).
+		Where("status = ? AND visibility = ? AND is_deleted = ?", domain.PostStatusPublished, domain.PostVisibilityPublic, false)
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		q = q.Where("title ILIKE ? OR summary ILIKE ?", like, like)
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := q.Preload("Author").Preload("Tags").
+		Order("published_at DESC NULLS LAST, id DESC").
+		Offset(util.Offset(page)).Limit(page.PageSize).
+		Find(&posts).Error
+	return posts, total, err
+}
+
+func (r *PostRepository) SearchLinkable(viewerID int64, keyword string, page util.PageParams) ([]domain.Post, int64, error) {
+	var posts []domain.Post
+	var total int64
+	q := r.db.Model(&domain.Post{}).
+		Joins("JOIN users ON users.id = posts.author_id").
+		Where("posts.is_deleted = ?", false).
+		Where(`(
+			posts.author_id = ? OR
+			(users.status = ? AND posts.status = ? AND (
+				posts.visibility = ? OR
+				(posts.visibility = ? AND EXISTS (
+					SELECT 1 FROM friendships
+					WHERE status = ?
+					AND ((user_id = posts.author_id AND friend_id = ?) OR (user_id = ? AND friend_id = posts.author_id))
+				)) OR
+				(posts.visibility = ? AND EXISTS (
+					SELECT 1 FROM post_visible_users
+					WHERE post_id = posts.id AND user_id = ?
+				))
+			))
+		)`,
+			viewerID,
+			domain.UserStatusActive,
+			domain.PostStatusPublished,
+			domain.PostVisibilityPublic,
+			domain.PostVisibilityFriends, string(domain.FriendshipStatusAccepted), viewerID, viewerID,
+			domain.PostVisibilitySpecified, viewerID,
+		)
+	if keyword != "" {
+		like := "%" + keyword + "%"
+		q = q.Where("posts.title ILIKE ? OR posts.summary ILIKE ? OR users.username ILIKE ? OR users.nickname ILIKE ?", like, like, like, like)
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := q.Preload("Author").Preload("Tags").
+		Order("posts.updated_at DESC, posts.id DESC").
+		Offset(util.Offset(page)).Limit(page.PageSize).
+		Find(&posts).Error
+	return posts, total, err
+}
+
 func (r *PostRepository) ListByAuthor(authorID int64, status, visibility string, page util.PageParams) ([]domain.Post, int64, error) {
 	var posts []domain.Post
 	var total int64

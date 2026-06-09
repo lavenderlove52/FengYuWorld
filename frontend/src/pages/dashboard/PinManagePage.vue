@@ -16,13 +16,14 @@ const pinnedPostIds = () => new Set(pins.value.map((p) => p.post_id))
 
 const load = async () => {
   loadingPosts.value = true
+  getMyPins()
+    .then((res) => {
+      if (res.code === 0 && res.data) pins.value = res.data
+    })
+    .catch(() => {})
   try {
-    const [postsRes, pinsRes] = await Promise.all([
-      listMyPosts({ status: 'published', visibility: 'public', page: 1, page_size: 50 }),
-      getMyPins(),
-    ])
-    if (postsRes.code === 0 && postsRes.data) posts.value = postsRes.data.items
-    if (pinsRes.code === 0 && pinsRes.data) pins.value = pinsRes.data
+    const postsRes = await listMyPosts({ status: 'published', visibility: 'public', page: 1, page_size: 50 })
+    if (postsRes?.code === 0 && postsRes.data) posts.value = postsRes.data.items
   } finally {
     loadingPosts.value = false
   }
