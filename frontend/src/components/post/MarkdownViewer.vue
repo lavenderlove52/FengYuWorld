@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify'
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { extractTocItems } from '@/utils/markdownToc'
 import type { TocItem } from '@/utils/markdownToc'
+import { ensureMarkdownExtensions } from '@/utils/markdownExtensions'
 import { postMobileImageURL } from '@/utils/responsiveImage'
 
 const props = defineProps<{ contentMd: string; tocItems?: TocItem[] }>()
 const rootRef = ref<HTMLElement | null>(null)
+const markdownReady = ref(false)
 let mermaidObserver: MutationObserver | null = null
 
 const sanitizeHtml = (html: string) => DOMPurify.sanitize(html)
@@ -105,6 +107,25 @@ const observeMermaidRender = () => {
   mermaidObserver.observe(root, { childList: true, subtree: true })
 }
 
+const refreshRenderedMarkdown = async (content: string) => {
+  await nextTick()
+  const headings = Array.from(rootRef.value?.querySelectorAll<HTMLElement>('.md-editor-preview h1, .md-editor-preview h2, .md-editor-preview h3, .md-editor-preview h4, .md-editor-preview h5, .md-editor-preview h6') ?? [])
+  const items = props.tocItems ?? extractTocItems(content)
+  headings.forEach((heading, index) => {
+    const item = items[index]
+    if (item) heading.id = item.id
+  })
+  enhanceImages()
+  observeMermaidRender()
+  scheduleMermaidEnhance()
+}
+
+onMounted(async () => {
+  await ensureMarkdownExtensions()
+  markdownReady.value = true
+  await refreshRenderedMarkdown(props.contentMd)
+})
+
 onBeforeUnmount(() => {
   mermaidObserver?.disconnect()
   mermaidObserver = null
@@ -113,16 +134,8 @@ onBeforeUnmount(() => {
 watch(
   () => props.contentMd,
   async (content) => {
-    await nextTick()
-    const headings = Array.from(rootRef.value?.querySelectorAll<HTMLElement>('.md-editor-preview h1, .md-editor-preview h2, .md-editor-preview h3, .md-editor-preview h4, .md-editor-preview h5, .md-editor-preview h6') ?? [])
-    const items = props.tocItems ?? extractTocItems(content)
-    headings.forEach((heading, index) => {
-      const item = items[index]
-      if (item) heading.id = item.id
-    })
-    enhanceImages()
-    observeMermaidRender()
-    scheduleMermaidEnhance()
+    if (!markdownReady.value) return
+    await refreshRenderedMarkdown(content)
   },
   { immediate: true, flush: 'post' },
 )
@@ -131,16 +144,23 @@ watch(
 <template>
   <div ref="rootRef">
     <MdPreview
+      v-if="markdownReady"
       :model-value="contentMd"
       language="zh-CN"
       preview-theme="default"
       class="blog-markdown-viewer"
       :sanitize="sanitizeHtml"
     />
+    <div v-else class="markdown-viewer-loading">内容加载中...</div>
   </div>
 </template>
 
 <style scoped>
+.markdown-viewer-loading {
+  padding: 2rem 0;
+  color: var(--theme-muted, #64748b);
+}
+
 .blog-markdown-viewer {
   --md-color: var(--theme-text, #3f4a54);
   --md-bk-color: transparent;
