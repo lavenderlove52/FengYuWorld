@@ -12,6 +12,8 @@ import (
 	"my-blog/backend/internal/markdown"
 	"my-blog/backend/internal/repository"
 	"my-blog/backend/internal/util"
+
+	"gorm.io/gorm"
 )
 
 var (
@@ -25,6 +27,7 @@ var slugValidRe = regexp.MustCompile(`^[a-z0-9-]+$`)
 
 type PostService struct {
 	posts       *repository.PostRepository
+	postTrees   *repository.PostTreeRepository
 	tags        *repository.TagRepository
 	categories  *repository.CategoryRepository
 	friendships *repository.FriendshipRepository
@@ -34,6 +37,7 @@ type PostService struct {
 
 func NewPostService(
 	posts *repository.PostRepository,
+	postTrees *repository.PostTreeRepository,
 	tags *repository.TagRepository,
 	categories *repository.CategoryRepository,
 	friendships *repository.FriendshipRepository,
@@ -42,6 +46,7 @@ func NewPostService(
 ) *PostService {
 	return &PostService{
 		posts:       posts,
+		postTrees:   postTrees,
 		tags:        tags,
 		categories:  categories,
 		friendships: friendships,
@@ -51,7 +56,7 @@ func NewPostService(
 }
 
 func (s *PostService) Create(authorID int64, req dto.CreatePostRequest) (*dto.PostDetail, error) {
-	if err := s.validatePostInput(authorID, req.Visibility, req.VisibleUserIDs, req.CategoryID); err != nil {
+	if err := s.validatePostInput(authorID, req.Visibility, req.VisibleUserIDs, req.CategoryID, req.TreeParentID); err != nil {
 		return nil, err
 	}
 
@@ -128,6 +133,13 @@ func (s *PostService) Create(authorID int64, req dto.CreatePostRequest) (*dto.Po
 		}
 	}
 
+	if req.TreeParentID != nil {
+		if err := s.placePostInTree(tx, authorID, post, req.TreeParentID); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+
 	if err := tx.Commit().Error; err != nil {
 		return nil, err
 	}
@@ -148,7 +160,7 @@ func (s *PostService) Update(authorID, postID int64, req dto.UpdatePostRequest) 
 		return nil, ErrPostForbidden
 	}
 
-	if err := s.validatePostInput(authorID, req.Visibility, req.VisibleUserIDs, req.CategoryID); err != nil {
+	if err := s.validatePostInput(authorID, req.Visibility, req.VisibleUserIDs, req.CategoryID, req.TreeParentID); err != nil {
 		return nil, err
 	}
 
@@ -224,6 +236,46 @@ func (s *PostService) Update(authorID, postID int64, req dto.UpdatePostRequest) 
 		}
 	}
 
+	if req.TreeParentID != nil {
+		if err := s.placePostInTree(tx, authorID, post, req.TreeParentID); err != nil {
+			tx.Rollback()
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit().Error; err != nil {
+		return nil, err
+	}
+
+	updated, err := s.posts.FindByID(post.ID)
+	if err != nil || updated == nil {
+		return nil, ErrPostNotFound
+	}
+	return s.toDetail(updated, authorID, true), nil
+}
+
+func (s *PostService) UpdateContent(authorID, postID int64, req dto.UpdatePostContentRequest) (*dto.PostDetail, error) {
+	post, err := s.posts.FindByID(postID)
+	if err != nil || post == nil || post.IsDeleted {
+		return nil, ErrPostNotFound
+	}
+	if post.AuthorID != authorID {
+		return nil, ErrPostForbidden
+	}
+
+	html, err := s.md.Render(req.ContentMD)
+	if err != nil {
+		return nil, err
+	}
+
+	post.ContentMD = req.ContentMD
+	post.ContentHTML = html
+
+	tx := s.posts.DB().Begin()
+	if err := s.posts.Update(tx, post); err != nil {
+		tx.Rollback()
+		return nil, err
+	}
 	if err := tx.Commit().Error; err != nil {
 		return nil, err
 	}
@@ -329,7 +381,7 @@ func (s *PostService) ListByUsername(viewerID *int64, username string, page, pag
 	}, nil
 }
 
-func (s *PostService) validatePostInput(authorID int64, visibility string, visibleUserIDs []int64, categoryID *int64) error {
+func (s *PostService) validatePostInput(authorID int64, visibility string, visibleUserIDs []int64, categoryID *int64, treeParentID *int64) error {
 	if visibility == string(domain.PostVisibilitySpecified) {
 		if len(visibleUserIDs) == 0 {
 			return ErrInvalidPostData
@@ -354,7 +406,48 @@ func (s *PostService) validatePostInput(authorID int64, visibility string, visib
 			return ErrInvalidPostData
 		}
 	}
+	if treeParentID != nil {
+		if err := s.validateLeafFolder(authorID, *treeParentID); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (s *PostService) validateLeafFolder(authorID, folderID int64) error {
+	folder, err := s.postTrees.FindByIDAndUser(folderID, authorID)
+	if err != nil || folder == nil || folder.NodeType != domain.PostTreeNodeTypeFolder {
+		return ErrInvalidPostData
+	}
+	hasFolderChildren, err := s.postTrees.HasFolderChildren(folderID, authorID)
+	if err != nil {
+		return err
+	}
+	if hasFolderChildren {
+		return ErrInvalidPostData
+	}
+	return nil
+}
+
+func (s *PostService) placePostInTree(tx *gorm.DB, authorID int64, post *domain.Post, parentID *int64) error {
+	existing, err := s.postTrees.FindPostNodeByPostID(authorID, post.ID)
+	if err != nil {
+		return err
+	}
+	if existing != nil {
+		existing.ParentID = parentID
+		existing.Name = ""
+		return s.postTrees.UpdateWithTx(tx, existing)
+	}
+	postID := post.ID
+	sortOrder := 10
+	return s.postTrees.CreateWithTx(tx, &domain.PostTreeNode{
+		UserID:    authorID,
+		ParentID:  parentID,
+		NodeType:  domain.PostTreeNodeTypePost,
+		PostID:    &postID,
+		SortOrder: sortOrder,
+	})
 }
 
 func (s *PostService) toSummary(post *domain.Post) dto.PostSummary {
@@ -394,6 +487,11 @@ func (s *PostService) toDetail(post *domain.Post, viewerID int64, isAuthor bool)
 		ContentHTML:  post.ContentHTML,
 		CategoryID:   post.CategoryID,
 		AllowComment: post.AllowComment,
+	}
+	if isAuthor {
+		if node, err := s.postTrees.FindPostNodeByPostID(post.AuthorID, post.ID); err == nil && node != nil {
+			detail.TreeParentID = node.ParentID
+		}
 	}
 	if isAuthor && post.Visibility == domain.PostVisibilitySpecified {
 		ids, _ := s.posts.GetVisibleUserIDs(post.ID)

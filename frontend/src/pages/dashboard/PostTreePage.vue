@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { NButton, NEmpty, NInput, NModal, NSelect, NSpin, useDialog, useMessage } from 'naive-ui'
 import { listMyPosts } from '@/api/posts'
 import {
@@ -12,9 +13,12 @@ import {
 import type { PostSummary } from '@/types/post'
 import type { PostTreeNode } from '@/types/postTree'
 import PostTreeNodeView from '@/components/post-tree/PostTreeNode.vue'
+import { getPostPath } from '@/utils/postPath'
 
+const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
+const ROOT_PARENT_ID = 0
 
 const tree = ref<PostTreeNode[]>([])
 const posts = ref<PostSummary[]>([])
@@ -32,6 +36,9 @@ const postParentId = ref<number | null>(null)
 const selectedPostId = ref<number | null>(null)
 
 const moveParentId = ref<number | null>(null)
+const draggingNode = ref<PostTreeNode | null>(null)
+const dragTargetKey = ref('')
+const rootDropActive = ref(false)
 
 const flattenNodes = (nodes: PostTreeNode[]): PostTreeNode[] =>
   nodes.flatMap((node) => [node, ...flattenNodes(node.children || [])])
@@ -39,17 +46,20 @@ const flattenNodes = (nodes: PostTreeNode[]): PostTreeNode[] =>
 const allNodes = computed(() => flattenNodes(tree.value))
 const selectedNode = computed(() => allNodes.value.find((node) => node.id === selectedId.value) || null)
 const selectedFolder = computed(() => selectedNode.value?.node_type === 'folder' ? selectedNode.value : null)
+const selectedFolderHasPosts = computed(() => (selectedFolder.value?.children || []).some((child) => child.node_type === 'post'))
 const usedPostIds = computed(() => new Set(allNodes.value.filter((node) => node.node_type === 'post' && node.post_id).map((node) => node.post_id!)))
 const availablePosts = computed(() => posts.value.filter((post) => !usedPostIds.value.has(post.id)))
 
 const folderOptions = computed<any[]>(() => [
-  { label: '根目录', value: null as number | null },
+  { label: '根目录', value: ROOT_PARENT_ID },
   ...allNodes.value
     .filter((node) => node.node_type === 'folder')
     .map((node) => ({
       label: buildFolderLabel(node),
-      value: node.id as number | null,
-      disabled: selectedNode.value?.node_type === 'folder' && isDescendantOrSelf(node.id, selectedNode.value.id),
+      value: node.id,
+      disabled:
+        (selectedNode.value?.node_type === 'folder' && isDescendantOrSelf(node.id, selectedNode.value.id)) ||
+        (node.children || []).some((child) => child.node_type === 'post'),
     })),
 ])
 
@@ -94,7 +104,7 @@ const expandAllFolders = (nodes: PostTreeNode[]) => {
 
 const selectNode = (node: PostTreeNode) => {
   selectedId.value = node.id
-  moveParentId.value = node.parent_id ?? null
+  moveParentId.value = node.parent_id ?? ROOT_PARENT_ID
 }
 
 const toggleNode = (node: PostTreeNode) => {
@@ -104,17 +114,19 @@ const toggleNode = (node: PostTreeNode) => {
   expandedIds.value = next
 }
 
+const normalizeParentId = (value: number | null) => value === ROOT_PARENT_ID ? null : value
+
 const openCreateFolder = (parent?: PostTreeNode | null) => {
   editingFolder.value = null
   folderName.value = ''
-  folderParentId.value = parent?.id ?? selectedFolder.value?.id ?? null
+  folderParentId.value = parent?.id ?? selectedFolder.value?.id ?? ROOT_PARENT_ID
   folderModalVisible.value = true
 }
 
 const openRenameFolder = (node: PostTreeNode) => {
   editingFolder.value = node
   folderName.value = node.name
-  folderParentId.value = node.parent_id ?? null
+  folderParentId.value = node.parent_id ?? ROOT_PARENT_ID
   folderModalVisible.value = true
 }
 
@@ -124,7 +136,7 @@ const submitFolder = async () => {
     message.warning('目录名称不能为空')
     return
   }
-  const parentId = folderParentId.value
+  const parentId = normalizeParentId(folderParentId.value)
   const res = editingFolder.value
     ? await updatePostTreeNode(editingFolder.value.id, {
         name,
@@ -146,7 +158,7 @@ const submitFolder = async () => {
 }
 
 const openAddPost = (parent?: PostTreeNode | null) => {
-  postParentId.value = parent?.id ?? selectedFolder.value?.id ?? null
+  postParentId.value = parent?.id ?? selectedFolder.value?.id ?? ROOT_PARENT_ID
   selectedPostId.value = null
   postModalVisible.value = true
 }
@@ -156,10 +168,11 @@ const submitPost = async () => {
     message.warning('请选择文章')
     return
   }
+  const parentId = normalizeParentId(postParentId.value)
   const res = await addPostTreePost({
-    parent_id: postParentId.value,
+    parent_id: parentId,
     post_id: selectedPostId.value,
-    sort_order: nextSortOrder(postParentId.value),
+    sort_order: nextSortOrder(parentId),
   })
   if (res.code === 0) {
     message.success('文章已加入目录')
@@ -195,10 +208,11 @@ const removeNode = (node: PostTreeNode) => {
 const moveNode = async () => {
   if (!selectedNode.value) return
   const node = selectedNode.value
+  const parentId = normalizeParentId(moveParentId.value)
   const res = await updatePostTreeNode(node.id, {
-    parent_id: moveParentId.value,
+    parent_id: parentId,
     name: node.name,
-    sort_order: nextSortOrder(moveParentId.value),
+    sort_order: nextSortOrder(parentId),
   })
   if (res.code === 0) {
     message.success('节点已移动')
@@ -208,25 +222,103 @@ const moveNode = async () => {
   }
 }
 
-const moveSibling = async (node: PostTreeNode, direction: -1 | 1) => {
-  const siblings = getChildren(node.parent_id ?? null)
-  const index = siblings.findIndex((item) => item.id === node.id)
-  const target = siblings[index + direction]
-  if (!target) return
+const openPostNode = (node: PostTreeNode) => {
+  if (!node.post) return
+  router.push(getPostPath(node.post))
+}
 
-  const currentSort = node.sort_order
-  const targetSort = target.sort_order
-  const currentPayload = { parent_id: node.parent_id ?? null, name: node.name, sort_order: targetSort }
-  const targetPayload = { parent_id: target.parent_id ?? null, name: target.name, sort_order: currentSort }
-  const [a, b] = await Promise.all([
-    updatePostTreeNode(node.id, currentPayload),
-    updatePostTreeNode(target.id, targetPayload),
-  ])
-  if (a.code === 0 && b.code === 0) {
-    await load()
-  } else {
-    message.error(a.message || b.message || '排序失败')
+const editPostNode = (node: PostTreeNode) => {
+  if (!node.post_id) return
+  router.push(`/dashboard/posts/${node.post_id}/edit`)
+}
+
+const onDragStart = (node: PostTreeNode, event: DragEvent) => {
+  draggingNode.value = node
+  selectedId.value = node.id
+  event.dataTransfer?.setData('text/plain', String(node.id))
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
   }
+}
+
+const clearDragState = () => {
+  draggingNode.value = null
+  dragTargetKey.value = ''
+  rootDropActive.value = false
+}
+
+const onDragOverNode = (target: PostTreeNode, position: 'before' | 'inside' | 'after', event: DragEvent) => {
+  if (!canDrop(target, position)) return
+  event.preventDefault()
+  dragTargetKey.value = `${target.id}:${position}`
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+}
+
+const onDropNode = async (target: PostTreeNode, position: 'before' | 'inside' | 'after', event: DragEvent) => {
+  event.preventDefault()
+  if (!canDrop(target, position) || !draggingNode.value) return
+  const dragged = draggingNode.value
+  clearDragState()
+
+  if (position === 'inside') {
+    await persistOrder(target.id, [...getChildren(target.id).filter((node) => node.id !== dragged.id), dragged])
+    expandedIds.value = new Set(expandedIds.value).add(target.id)
+    return
+  }
+
+  const parentId = target.parent_id ?? null
+  const siblings = getChildren(parentId).filter((node) => node.id !== dragged.id)
+  const targetIndex = siblings.findIndex((node) => node.id === target.id)
+  const insertIndex = position === 'before' ? targetIndex : targetIndex + 1
+  siblings.splice(insertIndex, 0, dragged)
+  await persistOrder(parentId, siblings)
+}
+
+const onRootDragOver = (event: DragEvent) => {
+  if (!draggingNode.value || wouldMoveInto(draggingNode.value, null)) return
+  event.preventDefault()
+  rootDropActive.value = true
+  dragTargetKey.value = 'root'
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+}
+
+const onRootDrop = async (event: DragEvent) => {
+  event.preventDefault()
+  if (!draggingNode.value) return
+  const dragged = draggingNode.value
+  clearDragState()
+  await persistOrder(null, [...tree.value.filter((node) => node.id !== dragged.id), dragged])
+}
+
+const canDrop = (target: PostTreeNode, position: 'before' | 'inside' | 'after') => {
+  const dragged = draggingNode.value
+  if (!dragged || dragged.id === target.id) return false
+  const nextParentId = position === 'inside' ? target.id : target.parent_id ?? null
+  if (position === 'inside' && target.node_type !== 'folder') return false
+  return !wouldMoveInto(dragged, nextParentId)
+}
+
+const wouldMoveInto = (dragged: PostTreeNode, parentId: number | null) => {
+  return dragged.node_type === 'folder' && parentId !== null && isDescendantOrSelf(parentId, dragged.id)
+}
+
+const persistOrder = async (parentId: number | null, orderedNodes: PostTreeNode[]) => {
+  const updates = orderedNodes.map((node, index) =>
+    updatePostTreeNode(node.id, {
+      parent_id: parentId,
+      name: node.name,
+      sort_order: (index + 1) * 10,
+    }),
+  )
+  const results = await Promise.all(updates)
+  const failed = results.find((res) => res.code !== 0)
+  if (failed) {
+    message.error(failed.message || '移动失败')
+    await load()
+    return
+  }
+  message.success('目录已更新')
+  await load()
 }
 
 const getChildren = (parentId: number | null) => {
@@ -268,8 +360,8 @@ onMounted(load)
   <div class="post-tree-page">
     <div class="page-head">
       <div>
-        <h1>目录规划</h1>
-        <p>把文章整理成只属于自己的路径树，中间节点是目录，文章作为叶子节点。</p>
+        <h1>文章目录</h1>
+        <p>把文章整理成只属于自己的路径树。拖动目录或文章即可调整层级和顺序。</p>
       </div>
       <div class="head-actions">
         <NButton @click="load">刷新</NButton>
@@ -281,11 +373,18 @@ onMounted(load)
     <div class="planner-shell">
       <section class="tree-panel">
         <div class="panel-title">
-          <span>目录树</span>
+          <span>文章目录</span>
           <span>{{ allNodes.length }} 个节点</span>
         </div>
         <NSpin :show="loading">
-          <div v-if="tree.length" class="tree-list">
+          <div
+            v-if="tree.length"
+            class="tree-list"
+            :class="{ 'tree-list-root-drop': rootDropActive }"
+            @dragover.prevent="onRootDragOver"
+            @dragleave="rootDropActive = false"
+            @drop.prevent="onRootDrop"
+          >
             <PostTreeNodeView
               v-for="node in tree"
               :key="node.id"
@@ -293,14 +392,19 @@ onMounted(load)
               :depth="0"
               :selected-id="selectedId"
               :expanded-ids="expandedIds"
+              :drag-target-key="dragTargetKey"
               @select="selectNode"
               @toggle="toggleNode"
               @add-folder="openCreateFolder"
               @add-post="openAddPost"
               @rename="openRenameFolder"
               @remove="removeNode"
-              @move-up="moveSibling($event, -1)"
-              @move-down="moveSibling($event, 1)"
+              @open-post="openPostNode"
+              @edit-post="editPostNode"
+              @drag-start="onDragStart"
+              @drag-end="clearDragState"
+              @drag-over="onDragOverNode"
+              @drop-node="onDropNode"
             />
           </div>
           <div v-else-if="!loading" class="empty-tree">
@@ -326,9 +430,11 @@ onMounted(load)
           <p v-else class="muted">当前目录下可以继续创建目录或加入文章。</p>
 
           <div class="detail-actions">
-            <NButton v-if="selectedNode.node_type === 'folder'" @click="openCreateFolder(selectedNode)">新建子目录</NButton>
+            <NButton v-if="selectedNode.node_type === 'folder' && !selectedFolderHasPosts" @click="openCreateFolder(selectedNode)">新建子目录</NButton>
             <NButton v-if="selectedNode.node_type === 'folder'" @click="openAddPost(selectedNode)">加入文章</NButton>
             <NButton v-if="selectedNode.node_type === 'folder'" @click="openRenameFolder(selectedNode)">重命名</NButton>
+            <NButton v-if="selectedNode.node_type === 'post'" type="primary" secondary @click="openPostNode(selectedNode)">查看文章</NButton>
+            <NButton v-if="selectedNode.node_type === 'post'" @click="editPostNode(selectedNode)">编辑文章</NButton>
             <NButton type="error" ghost @click="removeNode(selectedNode)">移除</NButton>
           </div>
 
@@ -469,7 +575,17 @@ onMounted(load)
 
 .tree-list {
   display: grid;
+  align-content: start;
   gap: 2px;
+  min-height: 440px;
+  padding: 4px;
+  border: 1px dashed transparent;
+  border-radius: 8px;
+}
+
+.tree-list-root-drop {
+  border-color: #6366f1;
+  background: #f8fafc;
 }
 
 .empty-tree {

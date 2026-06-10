@@ -20,6 +20,7 @@ export interface PostDetail extends PostSummary {
   content_md?: string
   content_html: string
   category_id?: number
+  tree_parent_id?: number
   allow_comment: boolean
   visible_user_ids?: number[]
 }
@@ -48,6 +49,7 @@ export interface CreatePostPayload {
   summary?: string
   content_md: string
   category_id?: number
+  tree_parent_id?: number
   tag_names?: string[]
   status: PostStatus
   visibility: PostVisibility

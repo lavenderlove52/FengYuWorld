@@ -74,6 +74,7 @@ func registerRoutes(
 			authed.DELETE("/me/post-tree/nodes/:id", postTree.Delete)
 			authed.POST("/posts", posts.Create)
 			authed.PUT("/posts/:id", posts.Update)
+			authed.PATCH("/posts/:id/content", posts.UpdateContent)
 			authed.DELETE("/posts/:id", posts.Delete)
 
 			authed.POST("/friends/requests", friends.SendRequest)

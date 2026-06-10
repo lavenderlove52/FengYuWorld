@@ -42,7 +42,7 @@ const menuOptions = computed(() => {
     { label: () => h(RouterLink, { to: '/dashboard' }, { default: () => '概览' }), key: 'dashboard' },
     { label: () => h(RouterLink, { to: '/dashboard/posts/new' }, { default: () => '写文章' }), key: 'post-new' },
     { label: () => h(RouterLink, { to: '/dashboard/posts' }, { default: () => '我的文章' }), key: 'my-posts' },
-    { label: () => h(RouterLink, { to: '/dashboard/post-tree' }, { default: () => '目录规划' }), key: 'post-tree' },
+    { label: () => h(RouterLink, { to: '/dashboard/post-tree' }, { default: () => '文章目录' }), key: 'post-tree' },
     { label: () => h(RouterLink, { to: '/dashboard/drafts' }, { default: () => '草稿箱' }), key: 'drafts' },
     { label: () => h(RouterLink, { to: '/dashboard/pins' }, { default: () => '置顶管理' }), key: 'pin-manage' },
     { label: () => h(RouterLink, { to: '/dashboard/theme' }, { default: () => '主页定制' }), key: 'theme-settings' },
@@ -143,6 +143,15 @@ onMounted(() => {
           <div class="font-medium text-slate-700">用户中心</div>
         </div>
         <NSpace align="center">
+          <RouterLink
+            to="/article-directory"
+            class="w-9 h-9 rounded-full flex items-center justify-center text-slate-400 hover:text-indigo-500 hover:bg-slate-100 transition-colors"
+            title="我的文章"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+              <path d="M4.75 3A1.75 1.75 0 0 0 3 4.75v10.5C3 16.216 3.784 17 4.75 17h10.5A1.75 1.75 0 0 0 17 15.25V4.75A1.75 1.75 0 0 0 15.25 3H4.75Zm.75 2.5h4.25v1.25H5.5V5.5Zm0 3.25h9v1.25h-9V8.75Zm0 3.25h9v1.25h-9V12Z" />
+            </svg>
+          </RouterLink>
           <RouterLink
             v-if="auth.user?.username"
             :to="`/u/${auth.user.username}`"

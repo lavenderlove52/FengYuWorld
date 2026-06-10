@@ -34,6 +34,12 @@ const router = createRouter({
       meta: { guest: true },
     },
     {
+      path: '/article-directory',
+      name: 'article-directory',
+      component: () => import('@/pages/dashboard/ArticleDirectoryPage.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
       path: '/dashboard',
       component: () => import('@/layouts/DashboardLayout.vue'),
       meta: { requiresAuth: true },
@@ -43,6 +49,7 @@ const router = createRouter({
         { path: 'posts/new', name: 'post-new', component: () => import('@/pages/dashboard/PostEditorPage.vue') },
         { path: 'posts/:id/edit', name: 'post-edit', component: () => import('@/pages/dashboard/PostEditorPage.vue') },
         { path: 'post-tree', name: 'post-tree', component: () => import('@/pages/dashboard/PostTreePage.vue') },
+        { path: 'article-directory', redirect: '/article-directory' },
         { path: 'drafts', name: 'drafts', component: () => import('@/pages/dashboard/DraftsPage.vue') },
         { path: 'friends', name: 'friends', component: () => import('@/pages/dashboard/FriendsPage.vue') },
         { path: 'pins', name: 'pin-manage', component: () => import('@/pages/dashboard/PinManagePage.vue') },

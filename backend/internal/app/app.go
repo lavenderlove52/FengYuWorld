@@ -76,7 +76,7 @@ func New(cfg *config.Config) (*App, error) {
 	authSvc := service.NewAuthService(database, userRepo, jwtManager, refreshTokenRepo, cfg.JWTRefreshExpires, emailCodeSvc, inviteSvc)
 	userSvc := service.NewUserService(userRepo)
 	policy := service.NewPostPolicy(friendRepo, postRepo)
-	postSvc := service.NewPostService(postRepo, tagRepo, categoryRepo, friendRepo, policy, mdRenderer)
+	postSvc := service.NewPostService(postRepo, postTreeRepo, tagRepo, categoryRepo, friendRepo, policy, mdRenderer)
 	postTreeSvc := service.NewPostTreeService(postTreeRepo, postRepo)
 	friendSvc := service.NewFriendshipService(friendRepo, userRepo)
 	categorySvc := service.NewCategoryService(categoryRepo)

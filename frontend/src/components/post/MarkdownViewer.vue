@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import DOMPurify from 'dompurify'
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { MdPreview } from 'md-editor-v3'
 import 'md-editor-v3/lib/preview.css'
 import { extractTocItems } from '@/utils/markdownToc'
@@ -9,6 +9,7 @@ import { postMobileImageURL } from '@/utils/responsiveImage'
 
 const props = defineProps<{ contentMd: string; tocItems?: TocItem[] }>()
 const rootRef = ref<HTMLElement | null>(null)
+let mermaidObserver: MutationObserver | null = null
 
 const sanitizeHtml = (html: string) => DOMPurify.sanitize(html)
 
@@ -30,6 +31,85 @@ const enhanceImages = () => {
   }
 }
 
+const forceMermaidLightTheme = () => {
+  const root = rootRef.value
+  if (!root) return
+  const diagrams = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      '.md-editor-preview .mermaid, .md-editor-preview .md-editor-mermaid, .md-editor-preview .mermaid-fallback',
+    ),
+  )
+  const svgs = Array.from(
+    root.querySelectorAll<SVGSVGElement>(
+      ".md-editor-preview svg[id^='mermaid'], .md-editor-preview .md-editor-mermaid > svg, .md-editor-preview .mermaid > svg",
+    ),
+  )
+
+  for (const diagram of diagrams) {
+    diagram.style.setProperty('color', '#0f172a', 'important')
+    diagram.style.setProperty('background', '#ffffff', 'important')
+    diagram.style.setProperty('border-color', '#d7dee8', 'important')
+  }
+
+  for (const svg of svgs) {
+    svg.style.setProperty('color', '#0f172a', 'important')
+    svg.style.setProperty('background', '#ffffff', 'important')
+
+    svg.querySelectorAll<SVGElement>('text, tspan, .label, .nodeLabel, .edgeLabel, .cluster-label').forEach((el) => {
+      el.style.setProperty('fill', '#0f172a', 'important')
+      el.style.setProperty('color', '#0f172a', 'important')
+    })
+
+    svg.querySelectorAll<HTMLElement>('foreignObject .nodeLabel, foreignObject .edgeLabel, foreignObject span, foreignObject div').forEach((el) => {
+      el.style.setProperty('color', '#0f172a', 'important')
+      el.style.setProperty('background', 'transparent', 'important')
+    })
+
+    svg
+      .querySelectorAll<SVGElement>('.node rect, .node circle, .node ellipse, .node polygon, .node path')
+      .forEach((el) => {
+        el.style.setProperty('fill', '#f8fafc', 'important')
+        el.style.setProperty('stroke', '#64748b', 'important')
+      })
+
+    svg.querySelectorAll<SVGElement>('.edgePath path, .flowchart-link, marker path').forEach((el) => {
+      el.style.setProperty('stroke', '#475569', 'important')
+    })
+
+    svg.querySelectorAll<SVGElement>('marker path').forEach((el) => {
+      el.style.setProperty('fill', '#475569', 'important')
+    })
+
+    svg.querySelectorAll<SVGElement>('.edgeLabel rect, .labelBkg').forEach((el) => {
+      el.style.setProperty('fill', '#ffffff', 'important')
+    })
+  }
+}
+
+const scheduleMermaidEnhance = () => {
+  forceMermaidLightTheme()
+  requestAnimationFrame(() => {
+    forceMermaidLightTheme()
+  })
+  window.setTimeout(() => {
+    forceMermaidLightTheme()
+  }, 800)
+}
+
+const observeMermaidRender = () => {
+  const root = rootRef.value
+  if (!root || mermaidObserver) return
+  mermaidObserver = new MutationObserver(() => {
+    forceMermaidLightTheme()
+  })
+  mermaidObserver.observe(root, { childList: true, subtree: true })
+}
+
+onBeforeUnmount(() => {
+  mermaidObserver?.disconnect()
+  mermaidObserver = null
+})
+
 watch(
   () => props.contentMd,
   async (content) => {
@@ -41,6 +121,8 @@ watch(
       if (item) heading.id = item.id
     })
     enhanceImages()
+    observeMermaidRender()
+    scheduleMermaidEnhance()
   },
   { immediate: true, flush: 'post' },
 )
@@ -203,7 +285,8 @@ watch(
 
 .blog-markdown-viewer :deep(.md-editor-preview .mermaid),
 .blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid > svg),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid']) {
   color: #0f172a !important;
 }
@@ -221,8 +304,8 @@ watch(
   -webkit-overflow-scrolling: touch;
 }
 
-.blog-markdown-viewer :deep(.md-editor-preview .mermaid svg),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid > svg),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid']) {
   display: block;
   max-width: 100%;
@@ -232,11 +315,34 @@ watch(
   background: #ffffff !important;
 }
 
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node rect),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node circle),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node ellipse),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node polygon),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .node path),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid-action) {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid:hover),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid:hover) {
+  cursor: default !important;
+  transform: none !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid > svg),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid > svg:hover),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg:hover),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid']),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid']:hover) {
+  transform: none !important;
+  transform-origin: center center !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .node rect),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .node circle),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .node ellipse),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .node polygon),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .node path),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .node rect),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .node circle),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .node ellipse),
@@ -246,13 +352,13 @@ watch(
   stroke: #64748b !important;
 }
 
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg text),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .label),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .nodeLabel),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .nodeLabel *),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel *),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .cluster-label),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg text),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .label),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .nodeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .cluster-label),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] text),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .label),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .nodeLabel),
@@ -264,14 +370,14 @@ watch(
   fill: #0f172a !important;
 }
 
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg foreignObject),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg foreignObject *),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .nodeLabel div),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .nodeLabel span),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel div),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel span),
-.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] foreignObject),
-.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] foreignObject *),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg foreignObject .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg foreignObject .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .nodeLabel div),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .nodeLabel span),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgeLabel div),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgeLabel span),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] foreignObject .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] foreignObject .edgeLabel),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .nodeLabel div),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .nodeLabel span),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel div),
@@ -280,17 +386,17 @@ watch(
   line-height: 1.35 !important;
 }
 
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .label-container),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel .label),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .label-container),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgeLabel .label),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .label-container),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel .label) {
   color: #0f172a !important;
   background: transparent !important;
 }
 
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgeLabel rect),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .labelBkg),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgeLabel rect),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .labelBkg),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel rect),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .labelBkg) {
@@ -298,18 +404,57 @@ watch(
   fill: #ffffff !important;
 }
 
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .edgePath path),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg .flowchart-link),
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg marker path),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgePath path),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .flowchart-link),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg marker path),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgePath path),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .flowchart-link),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] marker path) {
   stroke: #475569 !important;
 }
 
-.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid svg marker path),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg marker path),
 .blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] marker path) {
   fill: #475569 !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid *),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg *) {
+  text-shadow: none !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid text),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid tspan),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg text),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg tspan),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid > svg .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] text),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] tspan),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel) {
+  color: #0f172a !important;
+  fill: #0f172a !important;
+  stroke: none !important;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid .nodeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .mermaid .edgeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid .nodeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview .md-editor-mermaid .edgeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .nodeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .nodeLabel *),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel),
+.blog-markdown-viewer :deep(.md-editor-preview svg[id^='mermaid'] .edgeLabel *) {
+  color: #0f172a !important;
+  fill: #0f172a !important;
+  background: transparent !important;
 }
 
 .blog-markdown-viewer :deep(.md-editor-preview code:not(pre code)) {

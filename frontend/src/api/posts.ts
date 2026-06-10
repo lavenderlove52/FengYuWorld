@@ -29,6 +29,9 @@ export const createPost = (payload: CreatePostPayload) =>
 export const updatePost = (id: number, payload: CreatePostPayload) =>
   http.put<ApiResponse<PostDetail>>(`/posts/${id}`, payload).then((r) => r.data)
 
+export const updatePostContent = (id: number, contentMd: string) =>
+  http.patch<ApiResponse<PostDetail>>(`/posts/${id}/content`, { content_md: contentMd }).then((r) => r.data)
+
 export const deletePost = (id: number) =>
   http.delete<ApiResponse<null>>(`/posts/${id}`).then((r) => r.data)
 

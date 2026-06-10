@@ -59,6 +59,15 @@ func (s *PostTreeService) CreateFolder(userID int64, req dto.CreatePostTreeFolde
 	if err := s.ensureFolderParent(userID, req.ParentID); err != nil {
 		return nil, err
 	}
+	if req.ParentID != nil {
+		hasPostChildren, err := s.nodes.HasPostChildren(*req.ParentID, userID)
+		if err != nil {
+			return nil, err
+		}
+		if hasPostChildren {
+			return nil, ErrInvalidPostTreeNode
+		}
+	}
 	node := &domain.PostTreeNode{
 		UserID:    userID,
 		ParentID:  req.ParentID,
@@ -75,6 +84,11 @@ func (s *PostTreeService) CreateFolder(userID int64, req dto.CreatePostTreeFolde
 func (s *PostTreeService) AddPost(userID int64, req dto.AddPostTreePostRequest) (*dto.PostTreeNodeResponse, error) {
 	if err := s.ensureFolderParent(userID, req.ParentID); err != nil {
 		return nil, err
+	}
+	if req.ParentID != nil {
+		if err := s.validateLeafFolder(userID, *req.ParentID); err != nil {
+			return nil, err
+		}
 	}
 	post, err := s.posts.FindByID(req.PostID)
 	if err != nil || post == nil || post.IsDeleted || post.AuthorID != userID {
@@ -144,6 +158,21 @@ func (s *PostTreeService) ensureFolderParent(userID int64, parentID *int64) erro
 		return ErrInvalidPostTreeNode
 	}
 	if parent.NodeType != domain.PostTreeNodeTypeFolder {
+		return ErrInvalidPostTreeNode
+	}
+	return nil
+}
+
+func (s *PostTreeService) validateLeafFolder(userID, folderID int64) error {
+	folder, err := s.nodes.FindByIDAndUser(folderID, userID)
+	if err != nil || folder == nil || folder.NodeType != domain.PostTreeNodeTypeFolder {
+		return ErrInvalidPostTreeNode
+	}
+	hasFolderChildren, err := s.nodes.HasFolderChildren(folderID, userID)
+	if err != nil {
+		return err
+	}
+	if hasFolderChildren {
 		return ErrInvalidPostTreeNode
 	}
 	return nil

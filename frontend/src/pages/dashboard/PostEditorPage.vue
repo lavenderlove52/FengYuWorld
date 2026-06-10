@@ -1,11 +1,23 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { NForm, NFormItem, NInput, NButton, NSpace, NSelect, NSwitch, NCollapse, NCollapseItem, useMessage } from 'naive-ui'
+import {
+  NButton,
+  NCollapse,
+  NCollapseItem,
+  NForm,
+  NFormItem,
+  NInput,
+  NModal,
+  NSelect,
+  NSpace,
+  NSwitch,
+  useMessage,
+} from 'naive-ui'
 import { createPost, getPost, updatePost } from '@/api/posts'
-import { listCategories, createCategory } from '@/api/categories'
-import type { Category } from '@/types/category'
+import { createPostTreeFolder, listPostTree, updatePostTreeNode } from '@/api/postTree'
 import type { CreatePostPayload, PostVisibility } from '@/types/post'
+import type { PostTreeNode } from '@/types/postTree'
 import MarkdownEditor from '@/components/post/MarkdownEditor.vue'
 import VisibilitySelect from '@/components/post/VisibilitySelect.vue'
 import FriendMultiSelect from '@/components/post/FriendMultiSelect.vue'
@@ -15,6 +27,7 @@ import { validatePostSlug } from '@/utils/postSlug'
 const route = useRoute()
 const router = useRouter()
 const message = useMessage()
+const ROOT_PARENT_ID = 0
 
 const isEdit = computed(() => !!route.params.id)
 const postId = computed(() => Number(route.params.id))
@@ -34,56 +47,71 @@ const form = ref<CreatePostPayload>({
 })
 
 const tagInput = ref('')
-const categories = ref<Category[]>([])
 const loading = ref(false)
+const tree = ref<PostTreeNode[]>([])
 
-// 新建分类
-const showNewCat = ref(false)
-const newCatName = ref('')
-const addingCat = ref(false)
+const directoryModalVisible = ref(false)
+const newDirectoryName = ref('')
+const newDirectoryParentId = ref<number | null>(null)
+const renameDirectoryId = ref<number | null>(null)
+const renameDirectoryName = ref('')
+const savingDirectory = ref(false)
 
-const openNewCat = () => {
-  newCatName.value = ''
-  showNewCat.value = true
-}
-
-const cancelNewCat = () => {
-  showNewCat.value = false
-  newCatName.value = ''
-}
-
-const submitNewCat = async () => {
-  const name = newCatName.value.trim()
-  if (!name) {
-    message.warning('分类名称不能为空')
-    return
-  }
-  addingCat.value = true
-  try {
-    const res = await createCategory({ name })
-    if (res.code === 0 && res.data) {
-      categories.value.push(res.data)
-      form.value.category_id = res.data.id
-      message.success(`分类「${res.data.name}」已创建`)
-      showNewCat.value = false
-      newCatName.value = ''
-    } else {
-      message.error(res.message || '创建失败')
-    }
-  } finally {
-    addingCat.value = false
-  }
-}
-
-const categoryOptions = computed(() => [
-  { label: '无分类', value: undefined as number | undefined },
-  ...categories.value.map((c) => ({ label: c.name, value: c.id as number | undefined })),
-])
 const slugWarning = computed(() => validatePostSlug(form.value.slug || ''))
 
+const flattenNodes = (nodes: PostTreeNode[]): PostTreeNode[] =>
+  nodes.flatMap((node) => [node, ...flattenNodes(node.children || [])])
+
+const allNodes = computed(() => flattenNodes(tree.value))
+const folderNodes = computed(() => allNodes.value.filter((node) => node.node_type === 'folder'))
+const leafFolderNodes = computed(() =>
+  folderNodes.value.filter((folder) => !(folder.children || []).some((child) => child.node_type === 'folder')),
+)
+
+const folderPath = (folder: PostTreeNode) => {
+  const names = [folder.name]
+  let parentId = folder.parent_id ?? null
+  while (parentId) {
+    const parent = folderNodes.value.find((item) => item.id === parentId)
+    if (!parent) break
+    names.unshift(parent.name)
+    parentId = parent.parent_id ?? null
+  }
+  return names.join(' / ')
+}
+
+const directoryOptions = computed<any[]>(() =>
+  leafFolderNodes.value.map((folder) => ({
+    label: folderPath(folder),
+    value: folder.id,
+  })),
+)
+
+const parentDirectoryOptions = computed<any[]>(() => [
+  { label: '根目录', value: ROOT_PARENT_ID },
+  ...folderNodes.value.map((folder) => ({
+    label: folderPath(folder),
+    value: folder.id,
+    disabled: (folder.children || []).some((child) => child.node_type === 'post'),
+  })),
+])
+
+const renameDirectoryOptions = computed<any[]>(() =>
+  folderNodes.value.map((folder) => ({
+    label: folderPath(folder),
+    value: folder.id,
+  })),
+)
+
+const loadTree = async () => {
+  const res = await listPostTree()
+  if (res.code === 0 && res.data) {
+    tree.value = res.data
+  }
+}
+
 onMounted(async () => {
-  const catRes = await listCategories()
-  if (catRes.code === 0 && catRes.data) categories.value = catRes.data
+  await loadTree()
 
   if (isEdit.value) {
     const res = await getPost(postId.value)
@@ -95,7 +123,7 @@ onMounted(async () => {
         cover_image_url: p.cover_image_url,
         summary: p.summary || '',
         content_md: p.content_md || '',
-        category_id: p.category_id,
+        tree_parent_id: p.tree_parent_id,
         tag_names: p.tags || [],
         status: p.status as any,
         visibility: p.visibility as PostVisibility,
@@ -108,6 +136,77 @@ onMounted(async () => {
   }
 })
 
+const openDirectoryModal = () => {
+  newDirectoryName.value = ''
+  newDirectoryParentId.value = ROOT_PARENT_ID
+  renameDirectoryId.value = form.value.tree_parent_id || null
+  const current = folderNodes.value.find((folder) => folder.id === renameDirectoryId.value)
+  renameDirectoryName.value = current?.name || ''
+  directoryModalVisible.value = true
+}
+
+const normalizeParentId = (value: number | null) => value === ROOT_PARENT_ID ? null : value
+
+const submitNewDirectory = async () => {
+  const name = newDirectoryName.value.trim()
+  if (!name) {
+    message.warning('目录名称不能为空')
+    return
+  }
+  savingDirectory.value = true
+  try {
+    const res = await createPostTreeFolder({
+      name,
+      parent_id: normalizeParentId(newDirectoryParentId.value),
+      sort_order: 10,
+    })
+    if (res.code === 0 && res.data) {
+      message.success('目录已创建')
+      newDirectoryName.value = ''
+      await loadTree()
+      form.value.tree_parent_id = res.data.id
+    } else {
+      message.error(res.message || '创建失败')
+    }
+  } finally {
+    savingDirectory.value = false
+  }
+}
+
+const onRenameDirectoryChange = (id: number | null) => {
+  const node = folderNodes.value.find((folder) => folder.id === id)
+  renameDirectoryName.value = node?.name || ''
+}
+
+const submitRenameDirectory = async () => {
+  if (!renameDirectoryId.value) {
+    message.warning('请选择目录')
+    return
+  }
+  const node = folderNodes.value.find((folder) => folder.id === renameDirectoryId.value)
+  const name = renameDirectoryName.value.trim()
+  if (!node || !name) {
+    message.warning('目录名称不能为空')
+    return
+  }
+  savingDirectory.value = true
+  try {
+    const res = await updatePostTreeNode(node.id, {
+      name,
+      parent_id: node.parent_id ?? null,
+      sort_order: node.sort_order,
+    })
+    if (res.code === 0) {
+      message.success('目录已重命名')
+      await loadTree()
+    } else {
+      message.error(res.message || '重命名失败')
+    }
+  } finally {
+    savingDirectory.value = false
+  }
+}
+
 const buildPayload = (status: 'draft' | 'published'): CreatePostPayload => {
   const payload: CreatePostPayload = {
     ...form.value,
@@ -117,7 +216,6 @@ const buildPayload = (status: 'draft' | 'published'): CreatePostPayload => {
       .map((s) => s.trim())
       .filter(Boolean),
   }
-  // 未填 slug 则不传，由后端自动生成
   if (!payload.slug?.trim()) {
     delete payload.slug
   }
@@ -127,6 +225,10 @@ const buildPayload = (status: 'draft' | 'published'): CreatePostPayload => {
 const validate = () => {
   if (!form.value.title.trim()) {
     message.warning('标题不能为空')
+    return false
+  }
+  if (!form.value.tree_parent_id) {
+    message.warning('请选择文章所属的最底层目录')
     return false
   }
   if (!form.value.content_md.trim()) {
@@ -185,35 +287,18 @@ const save = async (status: 'draft' | 'published') => {
           placeholder="可选；留空时首页和列表不会展示简介"
         />
       </NFormItem>
-      <NFormItem label="分类">
+      <NFormItem label="所属目录">
         <div class="w-full flex items-center gap-2">
           <NSelect
-            v-model:value="form.category_id"
-            :options="categoryOptions"
-            placeholder="无分类"
-            clearable
+            v-model:value="form.tree_parent_id"
+            :options="directoryOptions"
+            placeholder="请选择最底层目录"
+            filterable
             class="flex-1"
           />
-          <button
-            type="button"
-            title="新建分类"
-            class="w-8 h-8 flex-shrink-0 flex items-center justify-center rounded border border-dashed border-slate-400 text-slate-500 hover:border-indigo-500 hover:text-indigo-500 transition-colors text-lg leading-none"
-            @click="openNewCat"
-          >+</button>
+          <NButton @click="openDirectoryModal">编辑目录</NButton>
         </div>
-        <!-- 内联新建分类 -->
-        <div v-if="showNewCat" class="flex items-center gap-2 mt-2 w-full">
-          <NInput
-            v-model:value="newCatName"
-            placeholder="输入分类名称"
-            size="small"
-            class="flex-1"
-            @keyup.enter="submitNewCat"
-            @keyup.esc="cancelNewCat"
-          />
-          <NButton size="small" type="primary" :loading="addingCat" @click="submitNewCat">确认</NButton>
-          <NButton size="small" @click="cancelNewCat">取消</NButton>
-        </div>
+        <p class="mt-1 text-xs text-slate-400">文章只能归属到没有子目录的最底层目录。</p>
       </NFormItem>
       <NFormItem label="标签（逗号分隔）">
         <NInput v-model:value="tagInput" placeholder="生活, 随笔" />
@@ -233,7 +318,6 @@ const save = async (status: 'draft' | 'published') => {
       <NFormItem label="正文">
         <MarkdownEditor v-model="form.content_md" />
       </NFormItem>
-      <!-- 高级选项（折叠） -->
       <NCollapse class="mb-4">
         <NCollapseItem title="高级选项" name="advanced">
           <NFormItem label="链接标识（Slug）" style="margin-bottom:0">
@@ -250,5 +334,39 @@ const save = async (status: 'draft' | 'published') => {
         <NButton type="primary" :loading="loading" @click="save('published')">发布</NButton>
       </NSpace>
     </NForm>
+
+    <NModal v-model:show="directoryModalVisible" preset="card" class="directory-modal" title="编辑文章目录">
+      <div class="grid gap-5">
+        <section class="grid gap-2">
+          <h2 class="text-base font-semibold text-slate-800">新增目录</h2>
+          <NInput v-model:value="newDirectoryName" placeholder="目录名称" />
+          <NSelect v-model:value="newDirectoryParentId" :options="parentDirectoryOptions" placeholder="选择上级目录" />
+          <NButton type="primary" :loading="savingDirectory" @click="submitNewDirectory">新增目录</NButton>
+        </section>
+        <section class="grid gap-2">
+          <h2 class="text-base font-semibold text-slate-800">修改目录名称</h2>
+          <NSelect
+            v-model:value="renameDirectoryId"
+            :options="renameDirectoryOptions"
+            filterable
+            placeholder="选择目录"
+            @update:value="onRenameDirectoryChange"
+          />
+          <NInput v-model:value="renameDirectoryName" placeholder="新的目录名称" />
+          <NButton :loading="savingDirectory" @click="submitRenameDirectory">保存名称</NButton>
+        </section>
+      </div>
+      <template #footer>
+        <div class="flex justify-end">
+          <NButton @click="directoryModalVisible = false">关闭</NButton>
+        </div>
+      </template>
+    </NModal>
   </div>
 </template>
+
+<style scoped>
+.directory-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+</style>

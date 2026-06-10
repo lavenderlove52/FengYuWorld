@@ -112,6 +112,34 @@ func (h *PostHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.OK(post))
 }
 
+func (h *PostHandler) UpdateContent(c *gin.Context) {
+	userID := middleware.MustUserID(c)
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "请求参数错误"))
+		return
+	}
+	var req dto.UpdatePostContentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "请求参数错误"))
+		return
+	}
+	post, err := h.posts.UpdateContent(userID, id, req)
+	if err == service.ErrPostNotFound {
+		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "资源不存在"))
+		return
+	}
+	if err == service.ErrPostForbidden {
+		c.JSON(http.StatusForbidden, dto.Err(dto.CodeForbidden, "无权操作"))
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		return
+	}
+	c.JSON(http.StatusOK, dto.OK(post))
+}
+
 func (h *PostHandler) Delete(c *gin.Context) {
 	userID := middleware.MustUserID(c)
 	id, err := strconv.ParseInt(c.Param("id"), 10, 64)

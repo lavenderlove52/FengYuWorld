@@ -11,6 +11,9 @@ const route = useRoute()
 const logoUrl = `${appBase}logo.png`
 
 const hasToken = computed(() => auth.tokenExists)
+const showMyArticleLink = computed(() =>
+  hasToken.value && ['home', 'user-home', 'post-detail'].includes(String(route.name)),
+)
 const showMyHomeLink = computed(() => route.name === 'post-detail' && !!auth.user?.username)
 const avatarUrl = computed(() => auth.user?.avatar_url || '')
 const avatarInitial = computed(() => auth.user?.nickname?.[0]?.toUpperCase() || 'U')
@@ -34,6 +37,18 @@ const headerText = computed(() => activePageTheme.enabled ? activePageTheme.text
         <img :src="logoUrl" alt="风雨世界" class="h-9 w-auto object-contain" />
       </RouterLink>
       <div class="flex items-center gap-1 sm:gap-2">
+        <RouterLink
+          v-if="showMyArticleLink"
+          to="/article-directory"
+          class="w-9 h-9 rounded-full flex items-center justify-center hover:opacity-80 transition-opacity"
+          :style="{ color: activePageTheme.themeColorActive ? activePageTheme.accent : headerText }"
+          title="我的文章"
+          aria-label="我的文章"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+            <path d="M4.75 3A1.75 1.75 0 0 0 3 4.75v10.5C3 16.216 3.784 17 4.75 17h10.5A1.75 1.75 0 0 0 17 15.25V4.75A1.75 1.75 0 0 0 15.25 3H4.75Zm.75 2.5h4.25v1.25H5.5V5.5Zm0 3.25h9v1.25h-9V8.75Zm0 3.25h9v1.25h-9V12Z" />
+          </svg>
+        </RouterLink>
         <RouterLink
           v-if="showMyHomeLink"
           :to="`/u/${auth.user!.username}`"

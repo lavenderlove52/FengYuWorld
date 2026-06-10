@@ -7,6 +7,7 @@ const props = defineProps<{
   depth: number
   selectedId?: number | null
   expandedIds: Set<number>
+  dragTargetKey?: string
 }>()
 
 const emit = defineEmits<{
@@ -16,8 +17,12 @@ const emit = defineEmits<{
   addPost: [node: PostTreeNode]
   rename: [node: PostTreeNode]
   remove: [node: PostTreeNode]
-  moveUp: [node: PostTreeNode]
-  moveDown: [node: PostTreeNode]
+  openPost: [node: PostTreeNode]
+  editPost: [node: PostTreeNode]
+  dragStart: [node: PostTreeNode, event: DragEvent]
+  dragEnd: []
+  dragOver: [node: PostTreeNode, position: 'before' | 'inside' | 'after', event: DragEvent]
+  dropNode: [node: PostTreeNode, position: 'before' | 'inside' | 'after', event: DragEvent]
 }>()
 
 const isFolder = computed(() => props.node.node_type === 'folder')
@@ -28,15 +33,39 @@ const statusText = computed(() => {
   if (!props.node.post) return ''
   return props.node.post.status === 'draft' ? '草稿' : '已发布'
 })
+const hasPostChildren = computed(() => (props.node.children || []).some((child) => child.node_type === 'post'))
+const targetKey = (position: 'before' | 'inside' | 'after') => `${props.node.id}:${position}`
+
+const onRowClick = () => {
+  if (isFolder.value) emit('select', props.node)
+  else emit('openPost', props.node)
+}
 </script>
 
 <template>
   <div class="tree-node">
     <div
+      class="drop-line"
+      :class="{ 'drop-line-active': dragTargetKey === targetKey('before') }"
+      :style="{ marginLeft: `${depth * 18 + 28}px` }"
+      @dragover.prevent.stop="emit('dragOver', node, 'before', $event)"
+      @drop.prevent.stop="emit('dropNode', node, 'before', $event)"
+    />
+
+    <div
       class="tree-row group"
-      :class="{ 'tree-row-selected': isSelected }"
+      :class="{
+        'tree-row-selected': isSelected,
+        'tree-row-drop-inside': dragTargetKey === targetKey('inside'),
+        'tree-row-post': !isFolder,
+      }"
       :style="{ paddingLeft: `${depth * 18 + 8}px` }"
-      @click="emit('select', node)"
+      draggable="true"
+      @click="onRowClick"
+      @dragstart="emit('dragStart', node, $event)"
+      @dragend="emit('dragEnd')"
+      @dragover.prevent.stop="isFolder && emit('dragOver', node, 'inside', $event)"
+      @drop.prevent.stop="isFolder && emit('dropNode', node, 'inside', $event)"
     >
       <button
         v-if="isFolder"
@@ -54,11 +83,10 @@ const statusText = computed(() => {
       <span v-if="statusText" class="tree-badge">{{ statusText }}</span>
 
       <span class="tree-actions">
-        <button type="button" title="上移" @click.stop="emit('moveUp', node)">↑</button>
-        <button type="button" title="下移" @click.stop="emit('moveDown', node)">↓</button>
-        <button v-if="isFolder" type="button" title="新建子目录" @click.stop="emit('addFolder', node)">＋</button>
+        <button v-if="isFolder && !hasPostChildren" type="button" title="新建子目录" @click.stop="emit('addFolder', node)">＋</button>
         <button v-if="isFolder" type="button" title="加入文章" @click.stop="emit('addPost', node)">◇</button>
         <button v-if="isFolder" type="button" title="重命名" @click.stop="emit('rename', node)">✎</button>
+        <button v-if="!isFolder" type="button" title="编辑文章" @click.stop="emit('editPost', node)">✎</button>
         <button type="button" title="移除" @click.stop="emit('remove', node)">×</button>
       </span>
     </div>
@@ -71,16 +99,29 @@ const statusText = computed(() => {
         :depth="depth + 1"
         :selected-id="selectedId"
         :expanded-ids="expandedIds"
+        :drag-target-key="dragTargetKey"
         @select="emit('select', $event)"
         @toggle="emit('toggle', $event)"
         @add-folder="emit('addFolder', $event)"
         @add-post="emit('addPost', $event)"
         @rename="emit('rename', $event)"
         @remove="emit('remove', $event)"
-        @move-up="emit('moveUp', $event)"
-        @move-down="emit('moveDown', $event)"
+        @open-post="emit('openPost', $event)"
+        @edit-post="emit('editPost', $event)"
+        @drag-start="(child, event) => emit('dragStart', child, event)"
+        @drag-end="emit('dragEnd')"
+        @drag-over="(child, position, event) => emit('dragOver', child, position, event)"
+        @drop-node="(child, position, event) => emit('dropNode', child, position, event)"
       />
     </div>
+
+    <div
+      class="drop-line"
+      :class="{ 'drop-line-active': dragTargetKey === targetKey('after') }"
+      :style="{ marginLeft: `${depth * 18 + 28}px` }"
+      @dragover.prevent.stop="emit('dragOver', node, 'after', $event)"
+      @drop.prevent.stop="emit('dropNode', node, 'after', $event)"
+    />
   </div>
 </template>
 
@@ -89,12 +130,21 @@ const statusText = computed(() => {
   display: flex;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
+  min-height: 36px;
   padding-top: 4px;
   padding-bottom: 4px;
   padding-right: 8px;
+  border: 1px solid transparent;
   border-radius: 6px;
   color: #334155;
+  cursor: grab;
+}
+
+.tree-row:active {
+  cursor: grabbing;
+}
+
+.tree-row-post {
   cursor: pointer;
 }
 
@@ -102,6 +152,21 @@ const statusText = computed(() => {
 .tree-row-selected {
   background: #eef2ff;
   color: #0f172a;
+}
+
+.tree-row-drop-inside {
+  border-color: #6366f1;
+  background: #eef2ff;
+  box-shadow: inset 0 0 0 1px #6366f1;
+}
+
+.drop-line {
+  height: 6px;
+  border-radius: 999px;
+}
+
+.drop-line-active {
+  background: #6366f1;
 }
 
 .tree-toggle,
