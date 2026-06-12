@@ -48,6 +48,7 @@ const menuOptions = computed(() => {
     { label: () => h(RouterLink, { to: '/dashboard/theme' }, { default: () => '主页定制' }), key: 'theme-settings' },
     { label: () => h(RouterLink, { to: '/dashboard/friends' }, { default: () => '好友' }), key: 'friends' },
     { label: () => h(RouterLink, { to: '/dashboard/settings' }, { default: () => '设置' }), key: 'settings' },
+    { label: () => h(RouterLink, { to: '/dashboard/phone-push' }, { default: () => '手机推送' }), key: 'phone-push' },
   ]
   const isAdmin = auth.user?.role === 'admin' || auth.user?.role === 'super_admin' || auth.user?.can_site_pin
   if (isAdmin) {

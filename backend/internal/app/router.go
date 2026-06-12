@@ -27,6 +27,7 @@ func registerRoutes(
 	wsHandler *handler.WSHandler,
 	chat *handler.ChatHandler,
 	settings *handler.SettingsHandler,
+	push *handler.PushHandler,
 ) {
 	api := r.Group("/api")
 	{
@@ -54,6 +55,8 @@ func registerRoutes(
 		api.GET("/users/:username/pins", authMW.Optional(), pins.GetPublicUserPins)
 		api.GET("/users/:username/theme", theme.GetTheme)
 		api.GET("/settings/public", settings.GetPublicSettings)
+		api.GET("/push/public/:token", push.GetPublicNtfy)
+		api.POST("/push/public/:token", push.SendPublicNtfy)
 
 		authed := api.Group("")
 		authed.Use(authMW.Required())
@@ -101,6 +104,13 @@ func registerRoutes(
 			authed.GET("/chat/unread", chat.GetUnreadCounts)
 			authed.GET("/chat/:friend_id", chat.GetHistory)
 			authed.POST("/chat/:friend_id/read", chat.MarkRead)
+
+			authed.GET("/me/push-settings", push.GetSetting)
+			authed.PUT("/me/push-settings", push.UpdateSetting)
+			authed.POST("/me/push/bark", push.SendBark)
+			authed.PUT("/me/push-settings/ntfy", push.UpdateNtfyTopic)
+			authed.PUT("/me/push-settings/ntfy/public", push.UpdateNtfyPublic)
+			authed.POST("/me/push/ntfy", push.SendNtfy)
 
 			authed.POST("/pins/site/:post_id", pins.SitePinPost)
 			authed.DELETE("/pins/site/:post_id", pins.SiteUnpinPost)

@@ -34,6 +34,11 @@ const router = createRouter({
       meta: { guest: true },
     },
     {
+      path: '/push/:token',
+      name: 'public-push',
+      component: () => import('@/pages/public/PublicPushPage.vue'),
+    },
+    {
       path: '/article-directory',
       name: 'article-directory',
       component: () => import('@/pages/dashboard/ArticleDirectoryPage.vue'),
@@ -57,6 +62,7 @@ const router = createRouter({
         { path: 'admin/pins', name: 'admin-pins', component: () => import('@/pages/dashboard/AdminPinPage.vue') },
         { path: 'admin/invite-codes', name: 'admin-invite-codes', component: () => import('@/pages/dashboard/InviteCodePage.vue') },
         { path: 'settings', name: 'settings', component: () => import('@/pages/dashboard/SettingsPage.vue') },
+        { path: 'phone-push', name: 'phone-push', component: () => import('@/pages/dashboard/PhonePushPage.vue') },
       ],
     },
   ],

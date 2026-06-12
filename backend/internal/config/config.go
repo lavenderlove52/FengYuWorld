@@ -26,6 +26,14 @@ type Config struct {
 	SMTPUser            string
 	SMTPPass            string
 	SMTPFrom            string
+	NtfyBaseURL         string
+	NtfyInternalURL     string
+	NtfyUsername        string
+	NtfyPassword        string
+	NtfyAccessToken     string
+	NtfyCLIPath         string
+	NtfyConfigFile      string
+	NtfyDockerContainer string
 }
 
 func Load() (*Config, error) {
@@ -45,6 +53,14 @@ func Load() (*Config, error) {
 		SMTPUser:            getEnv("SMTP_USER", ""),
 		SMTPPass:            getEnv("SMTP_PASS", ""),
 		SMTPFrom:            getEnv("SMTP_FROM", ""),
+		NtfyBaseURL:         getEnv("NTFY_BASE_URL", ""),
+		NtfyInternalURL:     getEnv("NTFY_INTERNAL_URL", ""),
+		NtfyUsername:        getEnv("NTFY_USERNAME", "blog"),
+		NtfyPassword:        getEnv("NTFY_PASSWORD", ""),
+		NtfyAccessToken:     getEnv("NTFY_ACCESS_TOKEN", ""),
+		NtfyCLIPath:         getEnv("NTFY_CLI_PATH", "ntfy"),
+		NtfyConfigFile:      getEnv("NTFY_CONFIG_FILE", ""),
+		NtfyDockerContainer: getEnv("NTFY_DOCKER_CONTAINER", ""),
 	}
 
 	var err error

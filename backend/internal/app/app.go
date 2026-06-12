@@ -59,6 +59,7 @@ func New(cfg *config.Config) (*App, error) {
 	inviteCodeRepo := repository.NewInviteCodeRepository(database)
 	refreshTokenRepo := repository.NewRefreshTokenRepository(database)
 	appSettingRepo := repository.NewAppSettingRepository(database)
+	userPushSettingRepo := repository.NewUserPushSettingRepository(database)
 
 	mdRenderer := markdown.NewRenderer()
 	localStorage := storage.NewLocalStorage(cfg.UploadDir, cfg.PublicUploadBaseURL)
@@ -84,6 +85,7 @@ func New(cfg *config.Config) (*App, error) {
 	uploadSvc := service.NewUploadService(localStorage, uploadRepo, cfg.MaxImageSizeMB)
 	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo, friendRepo, policy)
 	appSettingSvc := service.NewAppSettingService(appSettingRepo, userRepo)
+	pushSvc := service.NewPushService(userPushSettingRepo, cfg.NtfyBaseURL, cfg.NtfyInternalURL, cfg.NtfyUsername, cfg.NtfyPassword, cfg.NtfyAccessToken, cfg.NtfyCLIPath, cfg.NtfyConfigFile, cfg.NtfyDockerContainer)
 
 	userThemeRepo := repository.NewUserThemeRepository(database)
 	homeThemeImageRepo := repository.NewHomeThemeImageRepository(database)
@@ -107,6 +109,7 @@ func New(cfg *config.Config) (*App, error) {
 	userThemeHandler := handler.NewUserThemeHandler(userThemeSvc)
 	homeThemeImageHandler := handler.NewHomeThemeImageHandler(homeThemeImageSvc)
 	settingsHandler := handler.NewSettingsHandler(appSettingSvc)
+	pushHandler := handler.NewPushHandler(pushSvc)
 
 	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database, middleware.NewUserCache())
 
@@ -123,7 +126,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, postTreeHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler, settingsHandler)
+	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, postTreeHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler, settingsHandler, pushHandler)
 
 	return &App{
 		Config: cfg,
