@@ -15,9 +15,9 @@ func TestBuildBarkURL(t *testing.T) {
 	}{
 		{"message", "", "hello world", "https://push.example.com/bark/key/hello%20world"},
 		{"title", "News", "hello", "https://push.example.com/bark/key/News/hello"},
-		{"sound", "", "hello", "https://push.example.com/bark/key/hello?sound=minuet"},
+		{"sound", "", "hello", "https://push.example.com/bark/key/hello?sound=alarm"},
 		{"call", "", "hello", "https://push.example.com/bark/key/hello?call=1"},
-		{"critical", "", "hello", "https://push.example.com/bark/key/hello?level=critical&volume=5"},
+		{"critical", "", "hello", "https://push.example.com/bark/key/hello?call=1&level=critical&volume=5"},
 	}
 	for _, tt := range tests {
 		got, err := buildBarkURL("https://push.example.com/bark/key/", tt.mode, tt.title, tt.message)

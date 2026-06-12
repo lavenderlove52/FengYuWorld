@@ -400,12 +400,13 @@ func buildBarkURL(endpoint, mode, title, message string) (string, error) {
 		}
 		segments = []string{url.PathEscape(strings.TrimSpace(title)), segments[0]}
 	case "sound":
-		query.Set("sound", "minuet")
+		query.Set("sound", "alarm")
 	case "call":
 		query.Set("call", "1")
 	case "critical":
 		query.Set("level", "critical")
 		query.Set("volume", "5")
+		query.Set("call", "1")
 	default:
 		return "", ErrInvalidPushMessage
 	}

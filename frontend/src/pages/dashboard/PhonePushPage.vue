@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { NButton, NInput, NSpin, NSwitch, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { getPushSettings, sendBarkPush, updateNtfyPublic, updateNtfyTopic, updatePushSettings } from '@/api/push'
 import type { BarkMode } from '@/api/push'
@@ -7,6 +8,7 @@ import type { NtfyTopic } from '@/api/push'
 import NtfyPushForm from '@/components/push/NtfyPushForm.vue'
 
 const toast = useMessage()
+const router = useRouter()
 const provider = ref<'bark' | 'ntfy'>('bark')
 const mode = ref<BarkMode>('message')
 const endpoint = ref('')
@@ -25,14 +27,19 @@ const ntfyPublicSaving = ref(false)
 
 const selectedNtfyTopic = computed(() => ntfyTopics.value.find((item) => item.id === selectedNtfyTopicID.value) || null)
 const ntfySubscribeURL = computed(() => selectedNtfyTopic.value ? `${ntfyBaseURL.value.replace(/\/+$/, '')}/${selectedNtfyTopic.value.topic}` : '')
-const ntfyPublicURL = computed(() => selectedNtfyTopic.value?.public_token ? `${window.location.origin}/push/${selectedNtfyTopic.value.public_token}` : '')
+const ntfyPublicURL = computed(() => {
+  const token = selectedNtfyTopic.value?.public_token
+  if (!token) return ''
+  const route = router.resolve({ name: 'public-push', params: { token } })
+  return new URL(route.href, window.location.origin).toString()
+})
 
 const modes: Array<{ key: BarkMode; label: string; description: string }> = [
   { key: 'message', label: '普通消息', description: '发送一条只包含正文的通知' },
   { key: 'title', label: '标题消息', description: '发送带标题和正文的通知' },
-  { key: 'sound', label: '推送铃声', description: '使用 minuet 铃声发送通知' },
+  { key: 'sound', label: '推送铃声', description: '使用更明显的 alarm 铃声发送通知' },
   { key: 'call', label: '持续响铃', description: '持续响铃，直到打开通知或系统停止' },
-  { key: 'critical', label: '重要警告', description: '以 critical 级别、音量 5 发送重要警告' },
+  { key: 'critical', label: '重要警告', description: '以 critical 级别、音量 5 重复响铃约 30 秒' },
 ]
 
 const currentMode = computed(() => modes.find((item) => item.key === mode.value) ?? modes[0])
@@ -40,7 +47,7 @@ const previewURL = computed(() => {
   const base = endpoint.value.trim().replace(/\/+$/, '') || 'https://你的Bark服务/bark/设备Key'
   const messagePart = encodeURIComponent(content.value.trim() || '推送内容')
   if (mode.value === 'title') return `${base}/${encodeURIComponent(title.value.trim() || '推送标题')}/${messagePart}`
-  const query = mode.value === 'sound' ? '?sound=minuet' : mode.value === 'call' ? '?call=1' : mode.value === 'critical' ? '?level=critical&volume=5' : ''
+  const query = mode.value === 'sound' ? '?sound=alarm' : mode.value === 'call' ? '?call=1' : mode.value === 'critical' ? '?call=1&level=critical&volume=5' : ''
   return `${base}/${messagePart}${query}`
 })
 
@@ -114,8 +121,25 @@ const toggleNtfyPublic = async (enabled: boolean) => {
 
 const copyText = async (value: string, label: string) => {
   if (!value) return
-  await navigator.clipboard.writeText(value)
-  toast.success(`${label}已复制`)
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = value
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+      const copied = document.execCommand('copy')
+      textarea.remove()
+      if (!copied) throw new Error('copy command failed')
+    }
+    toast.success(`${label}已复制`)
+  } catch {
+    toast.error(`${label}复制失败，请手动复制`)
+  }
 }
 
 const send = async () => {
