@@ -2,7 +2,7 @@ import { onMounted, onUnmounted } from 'vue'
 import { getAccessToken } from '@/api/http'
 import { forceLogout } from '@/utils/auth'
 
-const INACTIVITY_MS = 60 * 60 * 1000 // 1 小时
+const INACTIVITY_MS = 7 * 24 * 60 * 60 * 1000 // 7 天
 
 export function useInactivityLogout() {
   let timer: ReturnType<typeof setTimeout> | null = null

@@ -286,13 +286,10 @@ func (s *PushService) ntfyAccessCommand(topic string) (string, []string, error) 
 		args = append(args, "exec", s.ntfyDockerContainer, s.ntfyCLIPath)
 	}
 	args = append(args, "access")
-	if s.ntfyConfigFile != "" {
-		args = append(args, "--config", s.ntfyConfigFile)
-	} else if s.ntfyAuthFile != "" {
-		args = append(args, "--auth-file", s.ntfyAuthFile)
-	} else {
-		return "", nil, fmt.Errorf("%w: set NTFY_AUTH_FILE to the auth-file used by the ntfy server, or set NTFY_CONFIG_FILE to an existing server config", ErrNtfyACLFailed)
+	if s.ntfyAuthFile == "" {
+		return "", nil, fmt.Errorf("%w: NTFY_AUTH_FILE is required for ntfy access; NTFY_CONFIG_FILE only configures ntfy serve", ErrNtfyACLFailed)
 	}
+	args = append(args, "--auth-file", s.ntfyAuthFile)
 	args = append(args, s.ntfyUsername, topic, "rw")
 	return executable, args, nil
 }
