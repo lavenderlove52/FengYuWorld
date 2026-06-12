@@ -43,13 +43,12 @@ type PushService struct {
 	ntfyInternalURL     string
 	ntfyUsername        string
 	ntfyPassword        string
-	ntfyAccessToken     string
 	ntfyCLIPath         string
 	ntfyAuthFile        string
 	ntfyDockerContainer string
 }
 
-func NewPushService(settings *repository.UserPushSettingRepository, topics *repository.UserNtfyTopicRepository, ntfyBaseURL, ntfyInternalURL, ntfyUsername, ntfyPassword, ntfyAccessToken, ntfyCLIPath, ntfyAuthFile, ntfyDockerContainer string) *PushService {
+func NewPushService(settings *repository.UserPushSettingRepository, topics *repository.UserNtfyTopicRepository, ntfyBaseURL, ntfyInternalURL, ntfyUsername, ntfyPassword, ntfyCLIPath, ntfyAuthFile, ntfyDockerContainer string) *PushService {
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -82,7 +81,6 @@ func NewPushService(settings *repository.UserPushSettingRepository, topics *repo
 		ntfyInternalURL:     internalURL,
 		ntfyUsername:        strings.TrimSpace(ntfyUsername),
 		ntfyPassword:        ntfyPassword,
-		ntfyAccessToken:     strings.TrimSpace(ntfyAccessToken),
 		ntfyCLIPath:         strings.TrimSpace(ntfyCLIPath),
 		ntfyAuthFile:        strings.TrimSpace(ntfyAuthFile),
 		ntfyDockerContainer: strings.TrimSpace(ntfyDockerContainer),
@@ -202,7 +200,7 @@ func (s *PushService) SendPublicNtfy(token, mode, title, message string, priorit
 }
 
 func (s *PushService) sendNtfy(topic, mode, title, message string, priority int, tags string) error {
-	if s.ntfyInternalURL == "" || (s.ntfyAccessToken == "" && (s.ntfyUsername == "" || s.ntfyPassword == "")) {
+	if s.ntfyInternalURL == "" || s.ntfyUsername == "" || s.ntfyPassword == "" {
 		return ErrNtfyNotConfigured
 	}
 	message = strings.TrimSpace(message)
@@ -243,11 +241,7 @@ func (s *PushService) sendNtfy(topic, mode, title, message string, priority int,
 		return ErrNtfyNotConfigured
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if s.ntfyAccessToken != "" {
-		req.Header.Set("Authorization", "Bearer "+s.ntfyAccessToken)
-	} else {
-		req.SetBasicAuth(s.ntfyUsername, s.ntfyPassword)
-	}
+	req.SetBasicAuth(s.ntfyUsername, s.ntfyPassword)
 	resp, err := s.ntfyClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPushFailed, err)

@@ -86,7 +86,7 @@ func New(cfg *config.Config) (*App, error) {
 	uploadSvc := service.NewUploadService(localStorage, uploadRepo, cfg.MaxImageSizeMB)
 	pinSvc := service.NewPinService(pinRepo, postRepo, userRepo, friendRepo, policy)
 	appSettingSvc := service.NewAppSettingService(appSettingRepo, userRepo)
-	pushSvc := service.NewPushService(userPushSettingRepo, userNtfyTopicRepo, cfg.NtfyBaseURL, cfg.NtfyInternalURL, cfg.NtfyUsername, cfg.NtfyPassword, cfg.NtfyAccessToken, cfg.NtfyCLIPath, cfg.NtfyAuthFile, cfg.NtfyDockerContainer)
+	pushSvc := service.NewPushService(userPushSettingRepo, userNtfyTopicRepo, cfg.NtfyBaseURL, cfg.NtfyInternalURL, cfg.NtfyUsername, cfg.NtfyPassword, cfg.NtfyCLIPath, cfg.NtfyAuthFile, cfg.NtfyDockerContainer)
 
 	userThemeRepo := repository.NewUserThemeRepository(database)
 	homeThemeImageRepo := repository.NewHomeThemeImageRepository(database)

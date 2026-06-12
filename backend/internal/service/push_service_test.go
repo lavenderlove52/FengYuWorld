@@ -97,6 +97,13 @@ func TestSendNtfyUrgentWithBasicAuth(t *testing.T) {
 	}
 }
 
+func TestSendNtfyRequiresPassword(t *testing.T) {
+	push := &PushService{ntfyInternalURL: "http://127.0.0.1:10002", ntfyUsername: "blog", ntfyClient: http.DefaultClient}
+	if !errors.Is(push.sendNtfy("blog-phone", "message", "", "hello", 0, ""), ErrNtfyNotConfigured) {
+		t.Fatal("expected missing password to reject ntfy send")
+	}
+}
+
 func TestNormalizeNtfyTags(t *testing.T) {
 	tags := normalizeNtfyTags(" warning, rotating_light, ,computer ")
 	if len(tags) != 3 || tags[0] != "warning" || tags[2] != "computer" {
