@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -44,12 +45,11 @@ type PushService struct {
 	ntfyPassword        string
 	ntfyAccessToken     string
 	ntfyCLIPath         string
-	ntfyConfigFile      string
 	ntfyAuthFile        string
 	ntfyDockerContainer string
 }
 
-func NewPushService(settings *repository.UserPushSettingRepository, topics *repository.UserNtfyTopicRepository, ntfyBaseURL, ntfyInternalURL, ntfyUsername, ntfyPassword, ntfyAccessToken, ntfyCLIPath, ntfyConfigFile, ntfyAuthFile, ntfyDockerContainer string) *PushService {
+func NewPushService(settings *repository.UserPushSettingRepository, topics *repository.UserNtfyTopicRepository, ntfyBaseURL, ntfyInternalURL, ntfyUsername, ntfyPassword, ntfyAccessToken, ntfyCLIPath, ntfyAuthFile, ntfyDockerContainer string) *PushService {
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -84,7 +84,6 @@ func NewPushService(settings *repository.UserPushSettingRepository, topics *repo
 		ntfyPassword:        ntfyPassword,
 		ntfyAccessToken:     strings.TrimSpace(ntfyAccessToken),
 		ntfyCLIPath:         strings.TrimSpace(ntfyCLIPath),
-		ntfyConfigFile:      strings.TrimSpace(ntfyConfigFile),
 		ntfyAuthFile:        strings.TrimSpace(ntfyAuthFile),
 		ntfyDockerContainer: strings.TrimSpace(ntfyDockerContainer),
 		client: &http.Client{
@@ -268,7 +267,9 @@ func (s *PushService) grantNtfyAccess(topic string) error {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, executable, args...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, executable, args...)
+	cmd.Env = environmentWithout(os.Environ(), "NTFY_CONFIG_FILE")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrNtfyACLFailed, strings.TrimSpace(string(output)))
 	}
@@ -286,15 +287,27 @@ func (s *PushService) ntfyAccessCommand(topic string) (string, []string, error) 
 		args = append(args, "exec", s.ntfyDockerContainer, s.ntfyCLIPath)
 	}
 	args = append(args, "access")
-	if s.ntfyConfigFile != "" {
-		args = append(args, "--config", s.ntfyConfigFile)
-	} else if s.ntfyAuthFile != "" {
-		args = append(args, "--auth-file", s.ntfyAuthFile)
-	} else {
-		return "", nil, fmt.Errorf("%w: set NTFY_AUTH_FILE to the auth-file used by the ntfy server, or set NTFY_CONFIG_FILE to an existing server config", ErrNtfyACLFailed)
+	if s.ntfyAuthFile == "" {
+		return "", nil, fmt.Errorf("%w: NTFY_AUTH_FILE is required for ntfy access", ErrNtfyACLFailed)
 	}
+	args = append(args, "--auth-file", s.ntfyAuthFile)
 	args = append(args, s.ntfyUsername, topic, "rw")
 	return executable, args, nil
+}
+
+func environmentWithout(environment []string, keys ...string) []string {
+	blocked := make(map[string]struct{}, len(keys))
+	for _, key := range keys {
+		blocked[key] = struct{}{}
+	}
+	filtered := make([]string, 0, len(environment))
+	for _, entry := range environment {
+		key, _, found := strings.Cut(entry, "=")
+		if _, remove := blocked[key]; !found || !remove {
+			filtered = append(filtered, entry)
+		}
+	}
+	return filtered
 }
 
 func normalizeNtfyTags(raw string) []string {

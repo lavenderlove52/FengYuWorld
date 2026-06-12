@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -28,17 +29,48 @@ func TestBuildBarkURL(t *testing.T) {
 
 func TestNtfyAccessCommandPlacesFlagsAfterSubcommand(t *testing.T) {
 	push := &PushService{
-		ntfyCLIPath:    "ntfy",
-		ntfyConfigFile: "/etc/ntfy/server.yml",
-		ntfyUsername:   "blog",
+		ntfyCLIPath:  "ntfy",
+		ntfyAuthFile: "/var/lib/ntfy/user.db",
+		ntfyUsername: "blog",
 	}
 	executable, args, err := push.ntfyAccessCommand("blog-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"access", "--config", "/etc/ntfy/server.yml", "blog", "blog-test", "rw"}
+	want := []string{"access", "--auth-file", "/var/lib/ntfy/user.db", "blog", "blog-test", "rw"}
 	if executable != "ntfy" || !reflect.DeepEqual(args, want) {
 		t.Fatalf("got %q %#v, want ntfy %#v", executable, args, want)
+	}
+}
+
+func TestNtfyAccessCommandRejectsConfigOnly(t *testing.T) {
+	push := &PushService{ntfyCLIPath: "ntfy", ntfyUsername: "blog"}
+	if _, _, err := push.ntfyAccessCommand("blog-test"); !errors.Is(err, ErrNtfyACLFailed) {
+		t.Fatalf("expected ErrNtfyACLFailed, got %v", err)
+	}
+}
+
+func TestNtfyAccessCommandPrefersAuthFile(t *testing.T) {
+	push := &PushService{
+		ntfyCLIPath:  "ntfy",
+		ntfyAuthFile: "/var/lib/ntfy/user.db",
+		ntfyUsername: "blog",
+	}
+	_, args, err := push.ntfyAccessCommand("blog-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"access", "--auth-file", "/var/lib/ntfy/user.db", "blog", "blog-test", "rw"}
+	if !reflect.DeepEqual(args, want) {
+		t.Fatalf("got %#v, want %#v", args, want)
+	}
+}
+
+func TestEnvironmentWithoutNtfyConfigFile(t *testing.T) {
+	got := environmentWithout([]string{"PATH=/usr/bin", "NTFY_CONFIG_FILE=/missing.yml", "HOME=/root"}, "NTFY_CONFIG_FILE")
+	want := []string{"PATH=/usr/bin", "HOME=/root"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %#v, want %#v", got, want)
 	}
 }
 
