@@ -33,6 +33,7 @@ type Config struct {
 	NtfyAccessToken     string
 	NtfyCLIPath         string
 	NtfyConfigFile      string
+	NtfyAuthFile        string
 	NtfyDockerContainer string
 }
 
@@ -60,6 +61,7 @@ func Load() (*Config, error) {
 		NtfyAccessToken:     getEnv("NTFY_ACCESS_TOKEN", ""),
 		NtfyCLIPath:         getEnv("NTFY_CLI_PATH", "ntfy"),
 		NtfyConfigFile:      getEnv("NTFY_CONFIG_FILE", ""),
+		NtfyAuthFile:        getEnv("NTFY_AUTH_FILE", ""),
 		NtfyDockerContainer: getEnv("NTFY_DOCKER_CONTAINER", ""),
 	}
 

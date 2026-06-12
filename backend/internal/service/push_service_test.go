@@ -7,20 +7,26 @@ import (
 	"testing"
 )
 
-func TestBuildBarkURL(t *testing.T) {
+func TestBuildBarkRequest(t *testing.T) {
 	tests := []struct {
-		mode, title, message, want string
+		mode, title, message string
+		want                 map[string]any
 	}{
-		{"message", "", "hello world", "https://push.example.com/bark/key/hello%20world"},
-		{"title", "News", "hello", "https://push.example.com/bark/key/News/hello"},
-		{"sound", "", "hello", "https://push.example.com/bark/key/hello?sound=minuet"},
-		{"call", "", "hello", "https://push.example.com/bark/key/hello?call=1"},
-		{"critical", "", "hello", "https://push.example.com/bark/key/hello?level=critical&volume=5"},
+		{"message", "", "hello world", map[string]any{"device_key": "key", "body": "hello world"}},
+		{"title", "News", "hello", map[string]any{"device_key": "key", "body": "hello", "title": "News"}},
+		{"sound", "", "hello", map[string]any{"device_key": "key", "body": "hello", "sound": "minuet"}},
+		{"call", "", "hello", map[string]any{"device_key": "key", "body": "hello", "call": "1"}},
+		{"critical", "", "hello", map[string]any{"device_key": "key", "body": "hello", "level": "critical", "volume": 5}},
 	}
 	for _, tt := range tests {
-		got, err := buildBarkURL("https://push.example.com/bark/key/", tt.mode, tt.title, tt.message)
-		if err != nil || got != tt.want {
-			t.Fatalf("mode %s: got %q, err %v; want %q", tt.mode, got, err, tt.want)
+		target, payload, err := buildBarkRequest("https://push.example.com/bark/key/", tt.mode, tt.title, tt.message)
+		if err != nil || target != "https://push.example.com/bark/push" {
+			t.Fatalf("mode %s: target %q, err %v", tt.mode, target, err)
+		}
+		got, _ := json.Marshal(payload)
+		want, _ := json.Marshal(tt.want)
+		if string(got) != string(want) {
+			t.Fatalf("mode %s: payload %s, want %s", tt.mode, got, want)
 		}
 	}
 }

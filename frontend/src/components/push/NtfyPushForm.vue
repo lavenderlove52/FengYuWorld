@@ -4,7 +4,7 @@ import { NButton, NInput, NInputNumber, NTabPane, NTabs, useMessage } from 'naiv
 import { sendNtfyPush, sendPublicNtfyPush } from '@/api/push'
 import type { NtfyMode } from '@/api/push'
 
-const props = defineProps<{ publicToken?: string }>()
+const props = defineProps<{ publicToken?: string; topicId?: number; disabled?: boolean }>()
 const toast = useMessage()
 const mode = ref<NtfyMode>('message')
 const title = ref('')
@@ -23,10 +23,12 @@ const modes: Array<{ key: NtfyMode; label: string; description: string }> = [
 const currentMode = computed(() => modes.find((item) => item.key === mode.value) ?? modes[0])
 
 const send = async () => {
+  if (props.disabled) { toast.warning('请先保存 ntfy 话题'); return }
   if (!content.value.trim()) { toast.warning('请输入推送内容'); return }
   if (mode.value === 'title' && !title.value.trim()) { toast.warning('请输入推送标题'); return }
   sending.value = true
   const payload = {
+    topic_id: props.topicId,
     mode: mode.value,
     title: title.value.trim(),
     message: content.value.trim(),
@@ -70,7 +72,7 @@ const send = async () => {
         <NInput v-model:value="content" type="textarea" :autosize="{ minRows: 4, maxRows: 9 }" maxlength="2000" show-count placeholder="请输入要发送到手机的消息" />
       </div>
       <div class="flex justify-end">
-        <NButton type="primary" size="large" :loading="sending" @click="send">发送通知</NButton>
+        <NButton type="primary" size="large" :loading="sending" :disabled="disabled" @click="send">发送通知</NButton>
       </div>
     </div>
   </section>

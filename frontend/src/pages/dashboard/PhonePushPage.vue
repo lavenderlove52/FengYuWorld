@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { NButton, NInput, NSpin, NSwitch, NTabPane, NTabs, useMessage } from 'naive-ui'
 import { getPushSettings, sendBarkPush, updateNtfyPublic, updateNtfyTopic, updatePushSettings } from '@/api/push'
 import type { BarkMode } from '@/api/push'
+import type { NtfyTopic } from '@/api/push'
 import NtfyPushForm from '@/components/push/NtfyPushForm.vue'
 
 const toast = useMessage()
@@ -16,15 +17,15 @@ const loading = ref(true)
 const saving = ref(false)
 const sending = ref(false)
 const ntfyBaseURL = ref('')
-const ntfyTopic = ref('')
+const ntfyTopics = ref<NtfyTopic[]>([])
+const selectedNtfyTopicID = ref<number | null>(null)
 const ntfyTopicSuffix = ref('')
-const ntfyPublicEnabled = ref(false)
-const ntfyPublicToken = ref('')
 const ntfySaving = ref(false)
 const ntfyPublicSaving = ref(false)
 
-const ntfySubscribeURL = computed(() => ntfyTopic.value ? `${ntfyBaseURL.value.replace(/\/+$/, '')}/${ntfyTopic.value}` : '')
-const ntfyPublicURL = computed(() => ntfyPublicToken.value ? `${window.location.origin}/push/${ntfyPublicToken.value}` : '')
+const selectedNtfyTopic = computed(() => ntfyTopics.value.find((item) => item.id === selectedNtfyTopicID.value) || null)
+const ntfySubscribeURL = computed(() => selectedNtfyTopic.value ? `${ntfyBaseURL.value.replace(/\/+$/, '')}/${selectedNtfyTopic.value.topic}` : '')
+const ntfyPublicURL = computed(() => selectedNtfyTopic.value?.public_token ? `${window.location.origin}/push/${selectedNtfyTopic.value.public_token}` : '')
 
 const modes: Array<{ key: BarkMode; label: string; description: string }> = [
   { key: 'message', label: '普通消息', description: '发送一条只包含正文的通知' },
@@ -57,10 +58,8 @@ onMounted(async () => {
     endpoint.value = response.data?.bark_endpoint || ''
     savedEndpoint.value = endpoint.value
     ntfyBaseURL.value = response.data?.ntfy_base_url || ''
-    ntfyTopic.value = response.data?.ntfy_topic || ''
-    ntfyTopicSuffix.value = ntfyTopic.value.replace(/^blog-/, '')
-    ntfyPublicEnabled.value = !!response.data?.ntfy_public_enabled
-    ntfyPublicToken.value = response.data?.ntfy_public_token || ''
+    ntfyTopics.value = response.data?.ntfy_topics || []
+    selectedNtfyTopicID.value = ntfyTopics.value[0]?.id || null
   } catch (error: any) {
     toast.error(error.message || '加载推送配置失败')
   } finally {
@@ -93,10 +92,10 @@ const saveNtfyTopic = async () => {
   ntfySaving.value = true
   try {
     const response = await updateNtfyTopic(ntfyTopicSuffix.value.trim())
-    ntfyTopic.value = response.data?.ntfy_topic || ''
-    ntfyTopicSuffix.value = ntfyTopic.value.replace(/^blog-/, '')
-    ntfyBaseURL.value = response.data?.ntfy_base_url || ntfyBaseURL.value
-    ntfyPublicToken.value = response.data?.ntfy_public_token || ''
+    const topic = response.data as NtfyTopic
+    ntfyTopics.value.push(topic)
+    selectedNtfyTopicID.value = topic.id
+    ntfyTopicSuffix.value = ''
     toast.success('ntfy 话题已保存，blog 用户读写权限已授予')
   } catch (error: any) {
     toast.error(error.message || '保存 ntfy 话题失败')
@@ -106,11 +105,13 @@ const saveNtfyTopic = async () => {
 }
 
 const toggleNtfyPublic = async (enabled: boolean) => {
+  if (!selectedNtfyTopic.value) return
   ntfyPublicSaving.value = true
   try {
-    const response = await updateNtfyPublic(enabled)
-    ntfyPublicEnabled.value = !!response.data?.ntfy_public_enabled
-    ntfyPublicToken.value = response.data?.ntfy_public_token || ''
+    const response = await updateNtfyPublic(selectedNtfyTopic.value.id, enabled)
+    const updated = response.data as NtfyTopic
+    const index = ntfyTopics.value.findIndex((item) => item.id === updated.id)
+    if (index >= 0) ntfyTopics.value[index] = updated
     toast.success(enabled ? '公开推送地址已开启' : '公开推送地址已关闭')
   } catch (error: any) {
     toast.error(error.message || '更新公开推送设置失败')
@@ -183,7 +184,27 @@ const send = async () => {
             <NButton type="primary" :loading="ntfySaving" @click="saveNtfyTopic">保存话题</NButton>
           </div>
 
-          <div v-if="ntfyTopic" class="mt-5 space-y-3">
+          <div v-if="ntfyTopics.length" class="mt-6">
+            <div class="mb-3 text-sm font-medium text-slate-700">已保存的话题</div>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <button
+                v-for="item in ntfyTopics"
+                :key="item.id"
+                type="button"
+                class="rounded-xl border p-4 text-left transition-colors"
+                :class="selectedNtfyTopicID === item.id ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 bg-white hover:border-slate-300'"
+                @click="selectedNtfyTopicID = item.id"
+              >
+                <div class="flex items-center justify-between gap-3">
+                  <span class="font-mono text-sm text-slate-700">{{ item.topic }}</span>
+                  <span v-if="selectedNtfyTopicID === item.id" class="text-xs font-medium text-emerald-600">当前发送</span>
+                </div>
+                <div class="mt-2 text-xs text-slate-400">{{ item.public_enabled ? '公开代理已开启' : '公开代理未开启' }}</div>
+              </button>
+            </div>
+          </div>
+
+          <div v-if="selectedNtfyTopic" class="mt-5 space-y-3">
             <div class="flex flex-col gap-2 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center">
               <div class="min-w-0 flex-1">
                 <div class="text-xs text-slate-400">完整订阅地址</div>
@@ -194,28 +215,31 @@ const send = async () => {
             <div class="flex flex-col gap-2 rounded-xl bg-slate-50 p-4 sm:flex-row sm:items-center">
               <div class="min-w-0 flex-1">
                 <div class="text-xs text-slate-400">话题名称</div>
-                <div class="font-mono text-sm text-slate-600">{{ ntfyTopic }}</div>
+                <div class="font-mono text-sm text-slate-600">{{ selectedNtfyTopic.topic }}</div>
               </div>
-              <NButton size="small" @click="copyText(ntfyTopic, '话题')">复制话题</NButton>
+              <NButton size="small" @click="copyText(selectedNtfyTopic.topic, '话题')">复制话题</NButton>
             </div>
           </div>
         </section>
 
-        <section v-if="ntfyTopic" class="rounded-2xl border border-slate-100 bg-white p-5 md:p-6">
+        <section v-if="selectedNtfyTopic" class="rounded-2xl border border-slate-100 bg-white p-5 md:p-6">
           <div class="flex items-center justify-between gap-4">
             <div>
               <h2 class="font-semibold text-slate-800">公开网页代理</h2>
               <p class="mt-1 text-sm text-slate-400">开启后，持有随机地址的人无需登录博客即可发送通知。每个地址限制每分钟 10 次。</p>
             </div>
-            <NSwitch :value="ntfyPublicEnabled" :loading="ntfyPublicSaving" @update:value="toggleNtfyPublic" />
+            <NSwitch :value="selectedNtfyTopic.public_enabled" :loading="ntfyPublicSaving" @update:value="toggleNtfyPublic" />
           </div>
-          <div v-if="ntfyPublicEnabled" class="mt-4 flex flex-col gap-2 rounded-xl bg-amber-50 p-4 sm:flex-row sm:items-center">
+          <div v-if="selectedNtfyTopic.public_enabled" class="mt-4 flex flex-col gap-2 rounded-xl bg-amber-50 p-4 sm:flex-row sm:items-center">
             <div class="min-w-0 flex-1 break-all font-mono text-sm text-amber-800">{{ ntfyPublicURL }}</div>
             <NButton size="small" @click="copyText(ntfyPublicURL, '公开地址')">复制公开地址</NButton>
           </div>
         </section>
 
-        <NtfyPushForm v-if="ntfyTopic" />
+        <div v-if="!selectedNtfyTopic" class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700">
+          发送功能已准备好，请先在上方保存话题并完成 blog 用户授权。
+        </div>
+        <NtfyPushForm :topic-id="selectedNtfyTopic?.id" :disabled="!selectedNtfyTopic" />
       </div>
     </NSpin>
 

@@ -6,6 +6,14 @@ export interface PushSettings {
   ntfy_topic: string
   ntfy_public_enabled: boolean
   ntfy_public_token?: string
+  ntfy_topics: NtfyTopic[]
+}
+
+export interface NtfyTopic {
+  id: number
+  topic: string
+  public_enabled: boolean
+  public_token?: string
 }
 
 export type BarkMode = 'message' | 'title' | 'sound' | 'call' | 'critical'
@@ -23,10 +31,11 @@ export const sendBarkPush = (payload: { mode: BarkMode; title?: string; message:
 export const updateNtfyTopic = (topicSuffix: string) =>
   http.put('/me/push-settings/ntfy', { topic_suffix: topicSuffix }).then((response) => response.data)
 
-export const updateNtfyPublic = (enabled: boolean) =>
-  http.put('/me/push-settings/ntfy/public', { enabled }).then((response) => response.data)
+export const updateNtfyPublic = (topicId: number, enabled: boolean) =>
+  http.put('/me/push-settings/ntfy/public', { topic_id: topicId, enabled }).then((response) => response.data)
 
 export interface NtfyPushPayload {
+  topic_id?: number
   mode: NtfyMode
   title?: string
   message: string

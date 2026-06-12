@@ -35,6 +35,7 @@ var ntfyTopicSuffixPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)
 
 type PushService struct {
 	settings            *repository.UserPushSettingRepository
+	topics              *repository.UserNtfyTopicRepository
 	client              *http.Client
 	ntfyClient          *http.Client
 	ntfyBaseURL         string
@@ -44,10 +45,11 @@ type PushService struct {
 	ntfyAccessToken     string
 	ntfyCLIPath         string
 	ntfyConfigFile      string
+	ntfyAuthFile        string
 	ntfyDockerContainer string
 }
 
-func NewPushService(settings *repository.UserPushSettingRepository, ntfyBaseURL, ntfyInternalURL, ntfyUsername, ntfyPassword, ntfyAccessToken, ntfyCLIPath, ntfyConfigFile, ntfyDockerContainer string) *PushService {
+func NewPushService(settings *repository.UserPushSettingRepository, topics *repository.UserNtfyTopicRepository, ntfyBaseURL, ntfyInternalURL, ntfyUsername, ntfyPassword, ntfyAccessToken, ntfyCLIPath, ntfyConfigFile, ntfyAuthFile, ntfyDockerContainer string) *PushService {
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
@@ -75,6 +77,7 @@ func NewPushService(settings *repository.UserPushSettingRepository, ntfyBaseURL,
 	}
 	return &PushService{
 		settings:            settings,
+		topics:              topics,
 		ntfyBaseURL:         publicURL,
 		ntfyInternalURL:     internalURL,
 		ntfyUsername:        strings.TrimSpace(ntfyUsername),
@@ -82,6 +85,7 @@ func NewPushService(settings *repository.UserPushSettingRepository, ntfyBaseURL,
 		ntfyAccessToken:     strings.TrimSpace(ntfyAccessToken),
 		ntfyCLIPath:         strings.TrimSpace(ntfyCLIPath),
 		ntfyConfigFile:      strings.TrimSpace(ntfyConfigFile),
+		ntfyAuthFile:        strings.TrimSpace(ntfyAuthFile),
 		ntfyDockerContainer: strings.TrimSpace(ntfyDockerContainer),
 		client: &http.Client{
 			Timeout:   10 * time.Second,
@@ -103,6 +107,10 @@ func (s *PushService) GetSetting(userID int64) (*domain.UserPushSetting, error) 
 	return s.settings.Get(userID)
 }
 
+func (s *PushService) ListNtfyTopics(userID int64) ([]domain.UserNtfyTopic, error) {
+	return s.topics.List(userID)
+}
+
 func (s *PushService) UpdateSetting(userID int64, endpoint string) (*domain.UserPushSetting, error) {
 	normalized, err := normalizeBarkEndpoint(endpoint)
 	if err != nil {
@@ -121,7 +129,7 @@ func (s *PushService) UpdateSetting(userID int64, endpoint string) (*domain.User
 
 func (s *PushService) NtfyBaseURL() string { return s.ntfyBaseURL }
 
-func (s *PushService) UpdateNtfyTopic(userID int64, suffix string) (*domain.UserPushSetting, error) {
+func (s *PushService) CreateNtfyTopic(userID int64, suffix string) (*domain.UserNtfyTopic, error) {
 	suffix = strings.TrimSpace(suffix)
 	if !ntfyTopicSuffixPattern.MatchString(suffix) {
 		return nil, ErrInvalidNtfyTopic
@@ -133,60 +141,50 @@ func (s *PushService) UpdateNtfyTopic(userID int64, suffix string) (*domain.User
 	if err := s.grantNtfyAccess(topic); err != nil {
 		return nil, err
 	}
-	setting, err := s.settings.Get(userID)
-	if err != nil {
+	created := &domain.UserNtfyTopic{UserID: userID, Topic: topic}
+	if err := s.topics.Create(created); err != nil {
 		return nil, err
 	}
-	setting.NtfyTopic = topic
-	if setting.NtfyPublicToken == "" {
-		setting.NtfyPublicToken, err = newPublicPushToken()
-		if err != nil {
-			return nil, err
-		}
-	}
-	if err := s.settings.Upsert(setting); err != nil {
-		return nil, err
-	}
-	return setting, nil
+	return created, nil
 }
 
-func (s *PushService) UpdateNtfyPublic(userID int64, enabled bool) (*domain.UserPushSetting, error) {
-	setting, err := s.settings.Get(userID)
+func (s *PushService) UpdateNtfyPublic(userID, topicID int64, enabled bool) (*domain.UserNtfyTopic, error) {
+	topic, err := s.topics.GetOwned(userID, topicID)
 	if err != nil {
 		return nil, err
 	}
-	if setting.NtfyTopic == "" {
+	if topic == nil {
 		return nil, ErrPushNotConfigured
 	}
-	if setting.NtfyPublicToken == "" {
-		setting.NtfyPublicToken, err = newPublicPushToken()
+	if topic.PublicToken == "" {
+		topic.PublicToken, err = newPublicPushToken()
 		if err != nil {
 			return nil, err
 		}
 	}
-	setting.NtfyPublicEnabled = enabled
-	if err := s.settings.Upsert(setting); err != nil {
+	topic.PublicEnabled = enabled
+	if err := s.topics.Update(topic); err != nil {
 		return nil, err
 	}
-	return setting, nil
+	return topic, nil
 }
 
-func (s *PushService) SendNtfy(userID int64, mode, title, message string, priority int, tags string) error {
-	setting, err := s.settings.Get(userID)
+func (s *PushService) SendNtfy(userID, topicID int64, mode, title, message string, priority int, tags string) error {
+	topic, err := s.topics.GetOwned(userID, topicID)
 	if err != nil {
 		return err
 	}
-	if setting.NtfyTopic == "" {
+	if topic == nil {
 		return ErrPushNotConfigured
 	}
-	return s.sendNtfy(setting.NtfyTopic, mode, title, message, priority, tags)
+	return s.sendNtfy(topic.Topic, mode, title, message, priority, tags)
 }
 
-func (s *PushService) GetPublicNtfy(token string) (*domain.UserPushSetting, error) {
+func (s *PushService) GetPublicNtfy(token string) (*domain.UserNtfyTopic, error) {
 	if len(token) < 32 {
 		return nil, ErrPublicPushNotFound
 	}
-	setting, err := s.settings.GetByPublicToken(token)
+	setting, err := s.topics.GetByPublicToken(token)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +199,7 @@ func (s *PushService) SendPublicNtfy(token, mode, title, message string, priorit
 	if err != nil {
 		return err
 	}
-	return s.sendNtfy(setting.NtfyTopic, mode, title, message, priority, tags)
+	return s.sendNtfy(setting.Topic, mode, title, message, priority, tags)
 }
 
 func (s *PushService) sendNtfy(topic, mode, title, message string, priority int, tags string) error {
@@ -275,6 +273,10 @@ func (s *PushService) grantNtfyAccess(topic string) error {
 	}
 	if s.ntfyConfigFile != "" {
 		args = append(args, "--config", s.ntfyConfigFile)
+	} else if s.ntfyAuthFile != "" {
+		args = append(args, "--auth-file", s.ntfyAuthFile)
+	} else {
+		return fmt.Errorf("%w: set NTFY_AUTH_FILE to the auth-file used by the ntfy server, or set NTFY_CONFIG_FILE to an existing server config", ErrNtfyACLFailed)
 	}
 	args = append(args, "access", s.ntfyUsername, topic, "rw")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -317,22 +319,34 @@ func (s *PushService) SendBark(userID int64, mode, title, message string) error 
 	if setting.BarkEndpoint == "" {
 		return ErrPushNotConfigured
 	}
-	target, err := buildBarkURL(setting.BarkEndpoint, mode, title, message)
+	target, payload, err := buildBarkRequest(setting.BarkEndpoint, mode, title, message)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodGet, target, nil)
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return ErrInvalidPushMessage
 	}
+	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(string(body)))
+	if err != nil {
+		return ErrInvalidPushMessage
+	}
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPushFailed, err)
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 64<<10))
+	responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("%w: bark returned HTTP %d", ErrPushFailed, resp.StatusCode)
+		return fmt.Errorf("%w: bark returned HTTP %d: %s", ErrPushFailed, resp.StatusCode, barkErrorMessage(responseBody))
+	}
+	var result struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	if len(responseBody) > 0 && json.Unmarshal(responseBody, &result) == nil && result.Code != 0 && result.Code != 200 {
+		return fmt.Errorf("%w: bark returned code %d: %s", ErrPushFailed, result.Code, result.Message)
 	}
 	return nil
 }
@@ -359,35 +373,61 @@ func normalizeBarkEndpoint(raw string) (string, error) {
 	return parsed.String(), nil
 }
 
-func buildBarkURL(endpoint, mode, title, message string) (string, error) {
+func buildBarkRequest(endpoint, mode, title, message string) (string, map[string]any, error) {
 	base, err := normalizeBarkEndpoint(endpoint)
 	if err != nil || strings.TrimSpace(message) == "" {
-		return "", ErrInvalidPushMessage
+		return "", nil, ErrInvalidPushMessage
 	}
-	segments := []string{url.PathEscape(strings.TrimSpace(message))}
-	query := url.Values{}
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return "", nil, ErrInvalidPushEndpoint
+	}
+	pathParts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(pathParts) == 0 || pathParts[len(pathParts)-1] == "" {
+		return "", nil, ErrInvalidPushEndpoint
+	}
+	deviceKey, err := url.PathUnescape(pathParts[len(pathParts)-1])
+	if err != nil || strings.TrimSpace(deviceKey) == "" {
+		return "", nil, ErrInvalidPushEndpoint
+	}
+	pathParts[len(pathParts)-1] = "push"
+	parsed.Path = "/" + strings.Join(pathParts, "/")
+	payload := map[string]any{
+		"device_key": deviceKey,
+		"body":       strings.TrimSpace(message),
+	}
 	switch mode {
 	case "message":
 	case "title":
 		if strings.TrimSpace(title) == "" {
-			return "", ErrInvalidPushMessage
+			return "", nil, ErrInvalidPushMessage
 		}
-		segments = []string{url.PathEscape(strings.TrimSpace(title)), segments[0]}
+		payload["title"] = strings.TrimSpace(title)
 	case "sound":
-		query.Set("sound", "minuet")
+		payload["sound"] = "minuet"
 	case "call":
-		query.Set("call", "1")
+		payload["call"] = "1"
 	case "critical":
-		query.Set("level", "critical")
-		query.Set("volume", "5")
+		payload["level"] = "critical"
+		payload["volume"] = 5
 	default:
-		return "", ErrInvalidPushMessage
+		return "", nil, ErrInvalidPushMessage
 	}
-	target := base + "/" + strings.Join(segments, "/")
-	if encoded := query.Encode(); encoded != "" {
-		target += "?" + encoded
+	return parsed.String(), payload, nil
+}
+
+func barkErrorMessage(body []byte) string {
+	var result struct {
+		Message string `json:"message"`
 	}
-	return target, nil
+	if json.Unmarshal(body, &result) == nil && strings.TrimSpace(result.Message) != "" {
+		return strings.TrimSpace(result.Message)
+	}
+	message := strings.TrimSpace(string(body))
+	if message == "" {
+		return "empty response"
+	}
+	return message
 }
 
 func isPublicIP(ip net.IP) bool {
