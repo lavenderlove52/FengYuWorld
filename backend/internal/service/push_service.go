@@ -262,23 +262,10 @@ func (s *PushService) sendNtfy(topic, mode, title, message string, priority int,
 }
 
 func (s *PushService) grantNtfyAccess(topic string) error {
-	if s.ntfyCLIPath == "" {
-		return ErrNtfyACLFailed
+	executable, args, err := s.ntfyAccessCommand(topic)
+	if err != nil {
+		return err
 	}
-	args := []string{}
-	executable := s.ntfyCLIPath
-	if s.ntfyDockerContainer != "" {
-		executable = "docker"
-		args = append(args, "exec", s.ntfyDockerContainer, s.ntfyCLIPath)
-	}
-	if s.ntfyConfigFile != "" {
-		args = append(args, "--config", s.ntfyConfigFile)
-	} else if s.ntfyAuthFile != "" {
-		args = append(args, "--auth-file", s.ntfyAuthFile)
-	} else {
-		return fmt.Errorf("%w: set NTFY_AUTH_FILE to the auth-file used by the ntfy server, or set NTFY_CONFIG_FILE to an existing server config", ErrNtfyACLFailed)
-	}
-	args = append(args, "access", s.ntfyUsername, topic, "rw")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	output, err := exec.CommandContext(ctx, executable, args...).CombinedOutput()
@@ -286,6 +273,28 @@ func (s *PushService) grantNtfyAccess(topic string) error {
 		return fmt.Errorf("%w: %s", ErrNtfyACLFailed, strings.TrimSpace(string(output)))
 	}
 	return nil
+}
+
+func (s *PushService) ntfyAccessCommand(topic string) (string, []string, error) {
+	if s.ntfyCLIPath == "" {
+		return "", nil, ErrNtfyACLFailed
+	}
+	args := []string{}
+	executable := s.ntfyCLIPath
+	if s.ntfyDockerContainer != "" {
+		executable = "docker"
+		args = append(args, "exec", s.ntfyDockerContainer, s.ntfyCLIPath)
+	}
+	args = append(args, "access")
+	if s.ntfyConfigFile != "" {
+		args = append(args, "--config", s.ntfyConfigFile)
+	} else if s.ntfyAuthFile != "" {
+		args = append(args, "--auth-file", s.ntfyAuthFile)
+	} else {
+		return "", nil, fmt.Errorf("%w: set NTFY_AUTH_FILE to the auth-file used by the ntfy server, or set NTFY_CONFIG_FILE to an existing server config", ErrNtfyACLFailed)
+	}
+	args = append(args, s.ntfyUsername, topic, "rw")
+	return executable, args, nil
 }
 
 func normalizeNtfyTags(raw string) []string {
@@ -319,19 +328,14 @@ func (s *PushService) SendBark(userID int64, mode, title, message string) error 
 	if setting.BarkEndpoint == "" {
 		return ErrPushNotConfigured
 	}
-	target, payload, err := buildBarkRequest(setting.BarkEndpoint, mode, title, message)
+	target, err := buildBarkURL(setting.BarkEndpoint, mode, title, message)
 	if err != nil {
 		return err
 	}
-	body, err := json.Marshal(payload)
+	req, err := http.NewRequest(http.MethodGet, target, nil)
 	if err != nil {
 		return ErrInvalidPushMessage
 	}
-	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(string(body)))
-	if err != nil {
-		return ErrInvalidPushMessage
-	}
-	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPushFailed, err)
@@ -339,7 +343,8 @@ func (s *PushService) SendBark(userID int64, mode, title, message string) error 
 	defer resp.Body.Close()
 	responseBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("%w: bark returned HTTP %d: %s", ErrPushFailed, resp.StatusCode, barkErrorMessage(responseBody))
+		message := barkErrorMessage(responseBody)
+		return fmt.Errorf("%w: bark returned HTTP %d: %s", ErrPushFailed, resp.StatusCode, message)
 	}
 	var result struct {
 		Code    int    `json:"code"`
@@ -373,47 +378,35 @@ func normalizeBarkEndpoint(raw string) (string, error) {
 	return parsed.String(), nil
 }
 
-func buildBarkRequest(endpoint, mode, title, message string) (string, map[string]any, error) {
+func buildBarkURL(endpoint, mode, title, message string) (string, error) {
 	base, err := normalizeBarkEndpoint(endpoint)
 	if err != nil || strings.TrimSpace(message) == "" {
-		return "", nil, ErrInvalidPushMessage
+		return "", ErrInvalidPushMessage
 	}
-	parsed, err := url.Parse(base)
-	if err != nil {
-		return "", nil, ErrInvalidPushEndpoint
-	}
-	pathParts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
-	if len(pathParts) == 0 || pathParts[len(pathParts)-1] == "" {
-		return "", nil, ErrInvalidPushEndpoint
-	}
-	deviceKey, err := url.PathUnescape(pathParts[len(pathParts)-1])
-	if err != nil || strings.TrimSpace(deviceKey) == "" {
-		return "", nil, ErrInvalidPushEndpoint
-	}
-	pathParts[len(pathParts)-1] = "push"
-	parsed.Path = "/" + strings.Join(pathParts, "/")
-	payload := map[string]any{
-		"device_key": deviceKey,
-		"body":       strings.TrimSpace(message),
-	}
+	segments := []string{url.PathEscape(strings.TrimSpace(message))}
+	query := url.Values{}
 	switch mode {
 	case "message":
 	case "title":
 		if strings.TrimSpace(title) == "" {
-			return "", nil, ErrInvalidPushMessage
+			return "", ErrInvalidPushMessage
 		}
-		payload["title"] = strings.TrimSpace(title)
+		segments = []string{url.PathEscape(strings.TrimSpace(title)), segments[0]}
 	case "sound":
-		payload["sound"] = "minuet"
+		query.Set("sound", "minuet")
 	case "call":
-		payload["call"] = "1"
+		query.Set("call", "1")
 	case "critical":
-		payload["level"] = "critical"
-		payload["volume"] = 5
+		query.Set("level", "critical")
+		query.Set("volume", "5")
 	default:
-		return "", nil, ErrInvalidPushMessage
+		return "", ErrInvalidPushMessage
 	}
-	return parsed.String(), payload, nil
+	target := base + "/" + strings.Join(segments, "/")
+	if encoded := query.Encode(); encoded != "" {
+		target += "?" + encoded
+	}
+	return target, nil
 }
 
 func barkErrorMessage(body []byte) string {

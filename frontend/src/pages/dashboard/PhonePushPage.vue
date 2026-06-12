@@ -39,16 +39,8 @@ const currentMode = computed(() => modes.find((item) => item.key === mode.value)
 const previewURL = computed(() => {
   const base = endpoint.value.trim().replace(/\/+$/, '') || 'https://你的Bark服务/bark/设备Key'
   const messagePart = encodeURIComponent(content.value.trim() || '推送内容')
-  if (mode.value === 'title') {
-    return `${base}/${encodeURIComponent(title.value.trim() || '推送标题')}/${messagePart}`
-  }
-  const query = mode.value === 'sound'
-    ? '?sound=minuet'
-    : mode.value === 'call'
-      ? '?call=1'
-      : mode.value === 'critical'
-        ? '?level=critical&volume=5'
-        : ''
+  if (mode.value === 'title') return `${base}/${encodeURIComponent(title.value.trim() || '推送标题')}/${messagePart}`
+  const query = mode.value === 'sound' ? '?sound=minuet' : mode.value === 'call' ? '?call=1' : mode.value === 'critical' ? '?level=critical&volume=5' : ''
   return `${base}/${messagePart}${query}`
 })
 
