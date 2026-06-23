@@ -531,11 +531,15 @@ func (s *PostService) GetBySlug(slug string, viewerID *int64) (*dto.PostDetail, 
 }
 
 // prepareBaseSlug 解析用户填写或标题生成的 slug；用户填写纯数字则拒绝。
+// 当标题全为非 ASCII 字符（如中文）导致自动 slug 为空时，降级使用 "post" 作为基础。
 func (s *PostService) prepareBaseSlug(reqSlug, title string) (string, error) {
 	baseSlug := strings.TrimSpace(reqSlug)
 	userProvided := baseSlug != ""
 	if !userProvided {
 		baseSlug = util.Slugify(title)
+		if baseSlug == "" {
+			baseSlug = "post"
+		}
 	}
 	if baseSlug == "" {
 		return "", ErrInvalidPostData

@@ -37,7 +37,7 @@ const ntfyPublicURL = computed(() => {
 const modes: Array<{ key: BarkMode; label: string; description: string }> = [
   { key: 'message', label: '普通消息', description: '发送一条只包含正文的通知' },
   { key: 'title', label: '标题消息', description: '发送带标题和正文的通知' },
-  { key: 'sound', label: '推送铃声', description: '使用更明显的 alarm 铃声发送通知' },
+  { key: 'sound', label: '推送铃声', description: '使用 iOS 系统默认提示音发送通知' },
   { key: 'call', label: '持续响铃', description: '持续响铃，直到打开通知或系统停止' },
   { key: 'critical', label: '重要警告', description: '以 critical 级别、音量 5 重复响铃约 30 秒' },
 ]
@@ -47,7 +47,7 @@ const previewURL = computed(() => {
   const base = endpoint.value.trim().replace(/\/+$/, '') || 'https://你的Bark服务/bark/设备Key'
   const messagePart = encodeURIComponent(content.value.trim() || '推送内容')
   if (mode.value === 'title') return `${base}/${encodeURIComponent(title.value.trim() || '推送标题')}/${messagePart}`
-  const query = mode.value === 'sound' ? '?sound=alarm' : mode.value === 'call' ? '?call=1' : mode.value === 'critical' ? '?call=1&level=critical&volume=5' : ''
+  const query = mode.value === 'sound' ? '?sound=default' : mode.value === 'call' ? '?call=1' : mode.value === 'critical' ? '?call=1&level=critical&sound=default&volume=5' : ''
   return `${base}/${messagePart}${query}`
 })
 

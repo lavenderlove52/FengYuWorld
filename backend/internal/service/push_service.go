@@ -335,14 +335,15 @@ func (s *PushService) SendBark(userID int64, mode, title, message string) error 
 	if setting.BarkEndpoint == "" {
 		return ErrPushNotConfigured
 	}
-	target, err := buildBarkURL(setting.BarkEndpoint, mode, title, message)
+	target, body, err := buildBarkRequest(setting.BarkEndpoint, mode, title, message)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequest(http.MethodGet, target, nil)
+	req, err := http.NewRequest(http.MethodPost, target, strings.NewReader(string(body)))
 	if err != nil {
 		return ErrInvalidPushMessage
 	}
+	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPushFailed, err)
@@ -361,6 +362,54 @@ func (s *PushService) SendBark(userID int64, mode, title, message string) error 
 		return fmt.Errorf("%w: bark returned code %d: %s", ErrPushFailed, result.Code, result.Message)
 	}
 	return nil
+}
+
+func buildBarkRequest(endpoint, mode, title, message string) (string, []byte, error) {
+	base, err := normalizeBarkEndpoint(endpoint)
+	message = strings.TrimSpace(message)
+	if err != nil || message == "" {
+		return "", nil, ErrInvalidPushMessage
+	}
+	parsed, err := url.Parse(base)
+	if err != nil {
+		return "", nil, ErrInvalidPushMessage
+	}
+	path := strings.TrimRight(parsed.Path, "/")
+	separator := strings.LastIndex(path, "/")
+	if separator < 0 || separator == len(path)-1 {
+		return "", nil, ErrInvalidPushMessage
+	}
+	deviceKey, err := url.PathUnescape(path[separator+1:])
+	if err != nil || strings.TrimSpace(deviceKey) == "" {
+		return "", nil, ErrInvalidPushMessage
+	}
+	parsed.Path = path[:separator] + "/push"
+	payload := map[string]any{"device_key": deviceKey, "body": message}
+	switch mode {
+	case "message":
+	case "title":
+		title = strings.TrimSpace(title)
+		if title == "" {
+			return "", nil, ErrInvalidPushMessage
+		}
+		payload["title"] = title
+	case "sound":
+		payload["sound"] = "default"
+	case "call":
+		payload["call"] = 1
+	case "critical":
+		payload["sound"] = "default"
+		payload["level"] = "critical"
+		payload["volume"] = 5
+		payload["call"] = 1
+	default:
+		return "", nil, ErrInvalidPushMessage
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return "", nil, ErrInvalidPushMessage
+	}
+	return parsed.String(), body, nil
 }
 
 func normalizeBarkEndpoint(raw string) (string, error) {
@@ -400,10 +449,11 @@ func buildBarkURL(endpoint, mode, title, message string) (string, error) {
 		}
 		segments = []string{url.PathEscape(strings.TrimSpace(title)), segments[0]}
 	case "sound":
-		query.Set("sound", "alarm")
+		query.Set("sound", "default")
 	case "call":
 		query.Set("call", "1")
 	case "critical":
+		query.Set("sound", "default")
 		query.Set("level", "critical")
 		query.Set("volume", "5")
 		query.Set("call", "1")

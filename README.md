@@ -43,7 +43,6 @@ JWT_REFRESH_SECRET=另一组随机至少32字符
 
 密码里的特殊字符要转成 URL 编码（`%XX`）：
 
-
 | 字符  | 编码    |
 | --- | ----- |
 | `@` | `%40` |
@@ -53,7 +52,6 @@ JWT_REFRESH_SECRET=另一组随机至少32字符
 | `/` | `%2F` |
 | `?` | `%3F` |
 | `&` | `%26` |
-
 
 后端会从项目根目录或 `backend/` 目录读取 `.env`（通过 godotenv）。
 
@@ -106,7 +104,6 @@ PGPASSWORD='请改成强密码' /usr/local/pgsql/bin/psql -h 127.0.0.1 -U myblog
 ### 4. 数据库迁移
 
 ```bash
-
 cd /root/project/FengYuWorld/backend
 go env -w GOPROXY=https://goproxy.cn,direct
 go mod download
@@ -248,14 +245,12 @@ make frontend-build
 
 前端默认部署在 `**/blog/**` 子路径（见 `frontend/vite.config.ts` 的 `base`）。
 
-
 | 路径           | 说明                                                      |
 | ------------ | ------------------------------------------------------- |
 | `/blog/`     | 前端 SPA                                                  |
 | `/blog/api/` | 反代 Go API                                               |
 | `/uploads/`  | 上传文件                                                    |
 | `/webdav/`   | 其他服务（如坚果云 relay，Nginx 示例见 `deploy/nginx-ip-paths.conf`） |
-
 
 ```bash
 # 本机构建并上传

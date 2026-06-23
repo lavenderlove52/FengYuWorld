@@ -15,15 +15,32 @@ func TestBuildBarkURL(t *testing.T) {
 	}{
 		{"message", "", "hello world", "https://push.example.com/bark/key/hello%20world"},
 		{"title", "News", "hello", "https://push.example.com/bark/key/News/hello"},
-		{"sound", "", "hello", "https://push.example.com/bark/key/hello?sound=alarm"},
+		{"sound", "", "hello", "https://push.example.com/bark/key/hello?sound=default"},
 		{"call", "", "hello", "https://push.example.com/bark/key/hello?call=1"},
-		{"critical", "", "hello", "https://push.example.com/bark/key/hello?call=1&level=critical&volume=5"},
+		{"critical", "", "hello", "https://push.example.com/bark/key/hello?call=1&level=critical&sound=default&volume=5"},
 	}
 	for _, tt := range tests {
 		got, err := buildBarkURL("https://push.example.com/bark/key/", tt.mode, tt.title, tt.message)
 		if err != nil || got != tt.want {
 			t.Fatalf("mode %s: got %q, err %v; want %q", tt.mode, got, err, tt.want)
 		}
+	}
+}
+
+func TestBuildBarkRequestUsesV2PushPayload(t *testing.T) {
+	target, body, err := buildBarkRequest("https://push.example.com/bark/device-key", "sound", "", "hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target != "https://push.example.com/bark/push" {
+		t.Fatalf("got target %q", target)
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["device_key"] != "device-key" || payload["body"] != "hello" || payload["sound"] != "default" {
+		t.Fatalf("unexpected payload: %#v", payload)
 	}
 }
 
