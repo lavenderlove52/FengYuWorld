@@ -27,6 +27,7 @@ func defaultTheme(userID int64) *domain.UserTheme {
 		BannerURL:              "",
 		Layout:                 "grid",
 		ShowPinsPublic:         false,
+		ShowPlansPublic:        false,
 		CustomCSS:              "",
 		CustomJS:               "",
 		EffectConfig:           domain.DefaultThemeEffectConfig(),
@@ -67,7 +68,7 @@ func (r *UserThemeRepository) Upsert(theme *domain.UserTheme) error {
 		Columns: []clause.Column{{Name: "user_id"}},
 		DoUpdates: clause.AssignmentColumns([]string{
 			"preset", "accent_color", "theme_color_enabled", "background_color", "background_color_enabled", "font_family", "banner_url",
-			"layout", "show_pins_public", "custom_css", "custom_js", "effect_config", "hero_config", "updated_at",
+			"layout", "show_pins_public", "show_plans_public", "custom_css", "custom_js", "effect_config", "hero_config", "updated_at",
 		}),
 	}).Create(theme).Error
 }

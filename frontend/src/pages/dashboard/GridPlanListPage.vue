@@ -129,6 +129,25 @@ function pnlClass(value: number): string {
   if (value < 0) return 'text-emerald-600'
   return 'text-slate-500'
 }
+
+/** 列表卡片上的可见范围标记；private 不显示，避免每张卡都挂个「仅自己」。 */
+function visibilityTag(visibility: GridPlanSummary['visibility']): {
+  label: string
+  type: 'default' | 'info' | 'success' | 'warning'
+} {
+  switch (visibility) {
+    case 'public':
+      return { label: '公开', type: 'success' }
+    case 'login':
+      return { label: '登录可见', type: 'info' }
+    case 'friends':
+      return { label: '好友可见', type: 'info' }
+    case 'specified':
+      return { label: '指定查看', type: 'warning' }
+    default:
+      return { label: '仅自己', type: 'default' }
+  }
+}
 </script>
 
 <template>
@@ -159,6 +178,9 @@ function pnlClass(value: number): string {
             <div class="flex items-center gap-2 min-w-0">
               <span class="font-semibold truncate">{{ plan.name }}</span>
               <NTag size="tiny">{{ plan.currency_name }}</NTag>
+              <NTag v-if="plan.visibility !== 'private'" size="tiny" :type="visibilityTag(plan.visibility).type">
+                {{ visibilityTag(plan.visibility).label }}
+              </NTag>
             </div>
           </template>
           <template #header-extra>

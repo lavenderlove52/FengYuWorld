@@ -4,13 +4,17 @@ import { useRoute } from 'vue-router'
 import { getUserProfile } from '@/api/users'
 import { listUserPosts } from '@/api/posts'
 import { getMyPins, getUserPins } from '@/api/pins'
+import { listUserGridPlans } from '@/api/gridPlans'
 import { useAuthStore } from '@/stores/auth'
 import { useUserTheme } from '@/composables/useUserTheme'
 import type { PublicUserInfo } from '@/types/auth'
 import type { PostSummary, PinnedPost } from '@/types/post'
+import type { GridPlanSummary } from '@/types/gridPlan'
 import type { ThemeImage } from '@/types/theme'
 import PostList from '@/components/post/PostList.vue'
 import PinCarousel from '@/components/post/PinCarousel.vue'
+import PublicPlanCard from '@/components/gridplan/PublicPlanCard.vue'
+import PublicPlanDetail from '@/components/gridplan/PublicPlanDetail.vue'
 import Pagination from '@/components/common/Pagination.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import ThemeEffects from '@/components/theme/ThemeEffects.vue'
@@ -25,6 +29,36 @@ const loading = ref(true)
 const page = ref(1)
 const pageSize = 12
 const total = ref(0)
+
+// ---------- 投资计划页签 ----------
+const activeTab = ref<'posts' | 'plans'>('posts')
+const publicPlans = ref<GridPlanSummary[]>([])
+const plansLoading = ref(false)
+const openedPlanId = ref<number | null>(null)
+
+/** 作者本人始终能看自己的计划页签；访客取决于主页定制里的开关。 */
+const plansTabVisible = computed(() => isOwner.value || theme.value.show_plans_public)
+
+async function loadPlans(): Promise<void> {
+  if (!plansTabVisible.value) return
+  plansLoading.value = true
+  try {
+    const res = await listUserGridPlans(String(route.params.username))
+    publicPlans.value = res.code === 0 ? res.data ?? [] : []
+  } catch {
+    // 计划属于辅助信息，失败时显示空状态，不打断文章浏览
+    publicPlans.value = []
+  } finally {
+    plansLoading.value = false
+  }
+}
+
+function switchTab(tab: 'posts' | 'plans'): void {
+  if (activeTab.value === tab) return
+  activeTab.value = tab
+  openedPlanId.value = null
+  if (tab === 'plans' && publicPlans.value.length === 0) loadPlans()
+}
 
 const containerRef = ref<HTMLElement | null>(null)
 const contentRef = ref<HTMLElement | null>(null)
@@ -84,11 +118,16 @@ const loadPage = async () => {
   user.value = null
   posts.value = []
   pins.value = []
+  publicPlans.value = []
   total.value = 0
   page.value = 1
+  activeTab.value = 'posts'
+  openedPlanId.value = null
   const username = String(route.params.username)
   await loadTheme(username)
   await load()
+  // 完整主页一次加载完，避免用户切页签时再等
+  if (plansTabVisible.value) loadPlans()
 }
 
 onMounted(loadPage)
@@ -176,21 +215,77 @@ watch(() => route.params.username, loadPage)
             </div>
 
             <div class="flex items-baseline justify-between mb-6">
-              <h2 class="text-lg sm:text-xl font-bold" style="color: var(--theme-text, #0f172a)">
-                {{ isOwner ? '我的文章' : `${user.nickname} 的文章` }}
-              </h2>
-              <span class="text-sm" style="color: var(--theme-text, #94a3b8); opacity: 0.7">共 {{ total }} 篇</span>
+              <div class="flex items-baseline gap-5">
+                <button
+                  type="button"
+                  class="text-lg sm:text-xl font-bold transition"
+                  :style="{ color: 'var(--theme-text, #0f172a)', opacity: activeTab === 'posts' ? 1 : 0.4 }"
+                  @click="switchTab('posts')"
+                >
+                  {{ isOwner ? '我的文章' : `${user.nickname} 的文章` }}
+                </button>
+                <button
+                  v-if="plansTabVisible"
+                  type="button"
+                  class="text-lg sm:text-xl font-bold transition"
+                  :style="{ color: 'var(--theme-text, #0f172a)', opacity: activeTab === 'plans' ? 1 : 0.4 }"
+                  @click="switchTab('plans')"
+                >
+                  {{ isOwner ? '我的投资计划' : `${user.nickname} 的投资计划` }}
+                </button>
+              </div>
+              <span
+                v-if="activeTab === 'posts'"
+                class="text-sm"
+                style="color: var(--theme-text, #94a3b8); opacity: 0.7"
+              >共 {{ total }} 篇</span>
+              <span
+                v-else
+                class="text-sm"
+                style="color: var(--theme-text, #94a3b8); opacity: 0.7"
+              >共 {{ publicPlans.length }} 份</span>
             </div>
 
-            <PostList :posts="posts" :loading="loading" :layout="articleLayout" />
-            <Pagination
-              v-if="total > pageSize"
-              :page="page"
-              :page-size="pageSize"
-              :total="total"
-              class="mt-8"
-              @change="(p) => { page = p; load() }"
-            />
+            <template v-if="activeTab === 'posts'">
+              <PostList :posts="posts" :loading="loading" :layout="articleLayout" />
+              <Pagination
+                v-if="total > pageSize"
+                :page="page"
+                :page-size="pageSize"
+                :total="total"
+                class="mt-8"
+                @change="(p) => { page = p; load() }"
+              />
+            </template>
+
+            <template v-else>
+              <!-- 计划详情：仍然停留在主页页签里，只读 -->
+              <PublicPlanDetail
+                v-if="openedPlanId !== null"
+                :username="String(route.params.username)"
+                :plan-id="openedPlanId"
+                @back="openedPlanId = null"
+              />
+              <template v-else>
+                <div v-if="plansLoading" class="text-center py-10 text-sm" style="color: var(--theme-text, #94a3b8)">
+                  加载中…
+                </div>
+                <div v-else-if="publicPlans.length" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <PublicPlanCard
+                    v-for="item in publicPlans"
+                    :key="item.id"
+                    :plan="item"
+                    @open="openedPlanId = item.id"
+                  />
+                </div>
+                <div v-else class="text-center py-12">
+                  <EmptyState message="这里还没有对外展示的投资计划" />
+                  <p v-if="isOwner" class="text-xs mt-2" style="color: var(--theme-text, #94a3b8); opacity: 0.7">
+                    在「定投计划」里把可见范围改成非「仅自己」，并在主页定制里打开「对访客展示投资计划」。
+                  </p>
+                </div>
+              </template>
+            </template>
           </div>
         </div>
       </div>

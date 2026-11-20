@@ -14,6 +14,7 @@ import {
   normalizeHeroConfig,
 } from '@/types/theme'
 import { resolveThemeBackground, resolveThemeColor } from '@/utils/themeColor'
+import { invalidateUserTheme } from '@/composables/useUserTheme'
 import type { UserTheme, ThemePreset, ThemeLayout } from '@/types/theme'
 import ThemeEffectsSettings from '@/components/theme/ThemeEffectsSettings.vue'
 import ThemeHeroSettings from '@/components/theme/ThemeHeroSettings.vue'
@@ -147,12 +148,15 @@ const save = async () => {
       banner_url: form.value.banner_url,
       layout: form.value.layout,
       show_pins_public: form.value.show_pins_public,
+      show_plans_public: form.value.show_plans_public,
       custom_css: form.value.custom_css,
       custom_js: form.value.custom_js,
       effect_config: form.value.effect_config,
       hero_config: normalizeHeroConfig(form.value.hero_config),
     })
     if (res.code === 0) {
+      // 服务端已保存，本地主题缓存要失效，否则打开自己的主页还是旧开关状态
+      invalidateUserTheme(auth.user?.username)
       message.success('主题已保存，刷新个人主页即可看到效果')
     } else {
       message.error(res.message || '保存失败')
@@ -390,6 +394,19 @@ const LAYOUTS = [
               <p class="text-xs text-slate-400 mt-0.5">开启后访客也能看到置顶文章轮播</p>
             </div>
             <NSwitch v-model:value="form.show_pins_public" />
+          </div>
+        </section>
+
+        <!-- 投资计划对外显示 -->
+        <section>
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-base font-semibold text-slate-700">对访客展示投资计划</h2>
+              <p class="text-xs text-slate-400 mt-0.5">
+                开启后个人主页会有「投资计划」页签；每份计划还要自己把可见范围改成非「仅自己」才会出现
+              </p>
+            </div>
+            <NSwitch v-model:value="form.show_plans_public" />
           </div>
         </section>
 

@@ -20,6 +20,18 @@ const jsCleanups = new Map<string, Array<() => void>>()
 const themeCache = new Map<string, UserTheme>()
 const THEME_ROUTE_NAMES = new Set(['user-home', 'post-detail'])
 
+/**
+ * 清掉某个用户的缓存主题。保存过主页定制后必须调用，否则同一会话里打开自己的主页
+ * 仍然读到旧缓存，「对访客展示投资计划」这类开关看起来没生效。
+ */
+export function invalidateUserTheme(username?: string): void {
+  if (username) {
+    themeCache.delete(username)
+    return
+  }
+  themeCache.clear()
+}
+
 let activeThemeOwner = ''
 
 function isThemeRoute(name: unknown) {

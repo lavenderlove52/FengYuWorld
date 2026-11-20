@@ -38,3 +38,16 @@ export const addGridExecution = (id: number, payload: RecordExecutionPayload) =>
 
 export const undoLastGridExecution = (id: number) =>
   http.delete<ApiResponse<GridExecution>>(`/grid-plans/${id}/executions/last`).then((r) => r.data)
+
+// ---------- 个人主页（对外展示，按可见性过滤） ----------
+
+export const listUserGridPlans = (username: string) =>
+  http.get<ApiResponse<GridPlanSummary[]>>(`/users/${username}/grid-plans`).then((r) => r.data)
+
+export const getUserGridPlan = (username: string, id: number) =>
+  http.get<ApiResponse<GridPlanDetail>>(`/users/${username}/grid-plans/${id}`).then((r) => r.data)
+
+export const listUserGridSnapshots = (username: string, id: number, days = 180) =>
+  http
+    .get<ApiResponse<GridSnapshot[]>>(`/users/${username}/grid-plans/${id}/snapshots`, { params: { days } })
+    .then((r) => r.data)

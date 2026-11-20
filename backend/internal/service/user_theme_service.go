@@ -106,6 +106,9 @@ func (s *UserThemeService) Update(userID int64, req dto.UpdateThemeRequest) (*do
 	if req.ShowPinsPublic != nil {
 		theme.ShowPinsPublic = *req.ShowPinsPublic
 	}
+	if req.ShowPlansPublic != nil {
+		theme.ShowPlansPublic = *req.ShowPlansPublic
+	}
 	theme.CustomCSS = filteredCSS
 	theme.CustomJS = req.CustomJS
 	if req.EffectConfig != nil {

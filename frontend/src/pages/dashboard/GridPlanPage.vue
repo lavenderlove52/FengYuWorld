@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, h, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import type { VNodeChild } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import {
@@ -8,12 +8,13 @@ import {
 } from 'naive-ui'
 import type { DataTableColumns, SelectGroupOption, SelectOption } from 'naive-ui'
 import {
-  addAsset, addGridLayer, applyTemplate, clearExecutedLayers, discardChanges, loadPlan, planMetrics, planState,
-  PlanConflictError, recordExecution, recordSnapshot, removeAsset, removeGridLayer, resetPlanState, restoreLayer,
-  savePlan, setLayerAmount, setReferenceHighToCurrent, undoLastExecution, updateAggregation, updateAssetEnabled,
+  addAsset, addGridLayer, applyOptimizedGrid, applyTemplate, clearExecutedLayers, discardChanges, loadPlan,
+  planMetrics, planState, PlanConflictError, recordExecution, recordSnapshot, removeAsset, removeGridLayer,
+  resetPlanState, restoreLayer, savePlan, setLayerAmount, setReferenceHighToCurrent, undoLastExecution,
+  updateAggregation, updateAssetEnabled,
   updateAssetLeveraged, updateAssetNumber, updateAssetText, updateBudget, updateCurrency, updateFrequency,
   updateGateMode, updateGateThreshold, updateLayer, updateNextDate, updatePlanName, updateUnallocated,
-  updateWeightMethod, voidLayer,
+  updateVisibility, updateVisibleUsers, updateWeightMethod, voidLayer,
 } from '@/core/gridplan/planState'
 import { formatPlanMoney, formatSignedMoney } from '@/core/gridplan/planFormat'
 import { formatNumber, formatPercent, formatPlainPercent } from '@/core/gridplan/format'
@@ -22,9 +23,13 @@ import { FREQUENCY_LABEL, todayISO } from '@/core/gridplan/format'
 import { listGridSnapshots } from '@/api/gridPlans'
 import DonutChart, { type DonutSlice } from '@/components/chart/DonutChart.vue'
 import LineChart, { type LinePoint } from '@/components/chart/LineChart.vue'
+import FriendMultiSelect from '@/components/post/FriendMultiSelect.vue'
 import { CURRENCIES, findTemplate, gridForIndex, indicesFor, PLAN_TEMPLATES } from '@/core/gridplan/templates'
+import {
+  MIN_LAYERS, optimizeGrid, suggestLayerCount, VOLATILITY_LABEL, volatilityOf, type GridOptimizeResult,
+} from '@/core/gridplan/gridOptimizer'
 import { ensurePresets, presetsFor, refreshPresets, removePreset } from '@/core/gridplan/presetStore'
-import type { Frequency, GateMode, GridSnapshot, WeightMethod } from '@/types/gridPlan'
+import type { Frequency, GateMode, GridAssetDTO, GridLayerDTO, GridSnapshot, PlanVisibility, WeightMethod } from '@/types/gridPlan'
 
 const route = useRoute()
 const router = useRouter()
@@ -44,6 +49,20 @@ const statusMeta: Record<PlanAssetStatus, { label: string; type: 'success' | 'wa
 
 const plan = computed(() => planState.plan)
 const metrics = computed(() => planMetrics.value)
+
+const VISIBILITY_OPTIONS = [
+  { value: 'private', label: '仅自己' },
+  { value: 'login', label: '登录用户可见' },
+  { value: 'friends', label: '全部好友' },
+  { value: 'specified', label: '指定好友' },
+  { value: 'public', label: '公开（含未登录访客）' },
+]
+
+/** 指定可见好友的多选值，直接双向绑到 planState，切档位或保存都以它为准。 */
+const visibleUserIds = computed<number[]>({
+  get: () => planState.plan?.visible_user_ids ?? [],
+  set: (ids) => updateVisibleUsers(ids),
+})
 
 // ---------- 快照曲线 ----------
 
@@ -703,6 +722,89 @@ function pnlClass(value: number): string {
   if (value < 0) return 'text-emerald-600'
   return 'text-slate-500'
 }
+
+// ---------- 一键优化 ----------
+
+/**
+ * 每个标的的目标档数。按「名称 + 代码」记而不是按 id：
+ * 保存后后端会重建标的、id 变化，用 id 做键会让用户填的数悄悄退回默认值。
+ */
+const optimizeCounts = reactive<Record<string, number>>({})
+
+function assetKey(asset: { name: string; code: string }): string {
+  return `${asset.name}||${asset.code}`
+}
+
+function optimizeLayerCount(asset: GridAssetDTO): number {
+  return optimizeCounts[assetKey(asset)] ?? suggestLayerCount(asset)
+}
+
+function setOptimizeLayerCount(asset: GridAssetDTO, value: number): void {
+  optimizeCounts[assetKey(asset)] = Math.max(MIN_LAYERS, Math.floor(value) || MIN_LAYERS)
+}
+
+function formatLayerBrief(layer: GridLayerDTO): string {
+  return `${layer.key} 阈值 ${Number(layer.threshold)}% · 比例 ${Number(layer.allocation)}%`
+}
+
+async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
+  const market = plan.value?.market ?? 'cn'
+  const requested = optimizeLayerCount(row.asset)
+  let result: GridOptimizeResult
+  try {
+    result = optimizeGrid(row.asset, market, requested)
+  } catch (err) {
+    toast(describeError(err), true)
+    return
+  }
+
+  const anchorText = result.anchorSource === 'drawdown'
+    ? `起点取当前回撤 ${result.anchor}%（第一层今天即可买入）`
+    : `起点取最深已执行层 ${result.anchor}%，从它往下排，再跌才触发`
+  const lines = [
+    `${VOLATILITY_LABEL[result.volatility]}标的，排成 ${result.targetLayers} 层，最深 ${result.maxDepth}%。${anchorText}。`,
+  ]
+  if (result.targetLayers !== requested) {
+    lines.push(`目标档数按 ${requested} 层算，已执行层已有 ${result.executedLayers.length} 层，实际排成 ${result.targetLayers} 层。`)
+  }
+  if (result.executedLayers.length > 0) {
+    lines.push(`已执行层不动：${result.executedLayers.map(formatLayerBrief).join('；')}`)
+  }
+  if (result.voidedLayers.length > 0) {
+    lines.push(`本次作废（金额保留，可点「生效」恢复）：${result.voidedLayers.map(formatLayerBrief).join('；')}`)
+  }
+  if (result.alreadyVoidedCount > 0) {
+    lines.push(`另有 ${result.alreadyVoidedCount} 层此前已作废，保持不动。`)
+  }
+  if (result.removedLayers.length > 0) {
+    lines.push(`被新层取代（删除）：${result.removedLayers.map(formatLayerBrief).join('；')}`)
+  }
+  lines.push(`新排：${result.addedLayers.map(formatLayerBrief).join('；')}`)
+  if (result.rowCount > result.targetLayers) {
+    lines.push(`优化后表格共 ${result.rowCount} 行（含保留的作废层），后端按行数计上限。`)
+  }
+  lines.push('改动只在本页生效，确认无误后记得点「保存」。')
+
+  const ok = await new Promise<boolean>((resolve) => {
+    dialog.warning({
+      title: `一键优化「${row.asset.name}」网格`,
+      content: () => h('div', { style: 'display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:1.6' },
+        lines.map((line) => h('div', { style: 'color:#475569' }, line))),
+      positiveText: '应用',
+      negativeText: '取消',
+      onPositiveClick: () => resolve(true),
+      onNegativeClick: () => resolve(false),
+      onClose: () => resolve(false),
+      onMaskClick: () => resolve(false),
+    })
+  })
+  if (!ok) return
+  if (!applyOptimizedGrid(row.asset.id, result.grid)) {
+    toast('优化失败：标的已不存在', true)
+    return
+  }
+  toast(`已排成 ${result.targetLayers} 层，记得点「保存」`)
+}
 </script>
 
 <template>
@@ -826,6 +928,16 @@ function pnlClass(value: number): string {
               <NInputNumber :value="plan.unallocated_invested" :min="0" style="width:100%"
                 @update:value="(v) => updateUnallocated(Number(v ?? 0))" />
             </NFormItem>
+            <NFormItem label="公开范围" size="small">
+              <NSelect :value="plan.visibility" :options="VISIBILITY_OPTIONS"
+                @update:value="(v) => updateVisibility(v as PlanVisibility)" />
+            </NFormItem>
+            <NFormItem v-if="plan.visibility === 'specified'" label="指定可见好友" size="small">
+              <FriendMultiSelect v-model="visibleUserIds" />
+            </NFormItem>
+            <p v-if="plan.visibility !== 'private'" class="text-xs text-slate-400 -mt-2 mb-3">
+              还要在「主页定制」里打开「对访客展示投资计划」，个人主页才会出现这个页签。
+            </p>
             <NFormItem label="组合回撤闸门阈值 %" size="small">
               <NInputNumber :value="plan.gate_threshold" :min="0" :max="100" style="width:100%"
                 @update:value="(v) => updateGateThreshold(Number(v ?? 0))" />
@@ -1008,6 +1120,23 @@ function pnlClass(value: number): string {
                     清除执行状态
                   </NButton>
                   <NButton size="small" ghost type="error" @click="onDeleteAsset(row)">删除标的</NButton>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-slate-200">
+                  <span class="text-xs text-slate-500">一键优化</span>
+                  <NInputNumber
+                    :value="optimizeLayerCount(row.asset)"
+                    :min="MIN_LAYERS"
+                    :max="20"
+                    size="tiny"
+                    style="width:88px"
+                    @update:value="(v) => setOptimizeLayerCount(row.asset, Number(v ?? 0))"
+                  />
+                  <span class="text-xs text-slate-400">层（{{ VOLATILITY_LABEL[volatilityOf(row.asset)] }}默认 {{ suggestLayerCount(row.asset) }} 层）</span>
+                  <NButton size="small" ghost type="warning" @click="onOptimizeGrid(row)">一键优化</NButton>
+                  <span class="text-xs text-slate-400">
+                    浅层没买过的作废，已执行层不动，钱排到更深的档位
+                  </span>
                 </div>
               </NCard>
             </NCard>

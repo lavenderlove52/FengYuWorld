@@ -8,6 +8,7 @@ type GridPlanSummary struct {
 	Market       string  `json:"market"`
 	Currency     string  `json:"currency"`
 	CurrencyName string  `json:"currency_name"`
+	Visibility   string  `json:"visibility"`
 	TotalBudget  float64 `json:"total_budget"`
 	Invested     float64 `json:"invested"`
 	MarketValue  float64 `json:"market_value"`
@@ -57,6 +58,8 @@ type GridPlanDetail struct {
 	UnallocatedInvested float64        `json:"unallocated_invested"`
 	SortOrder           int            `json:"sort_order"`
 	Version             int64          `json:"version"`
+	Visibility          string         `json:"visibility"`
+	VisibleUserIDs      []int64        `json:"visible_user_ids"`
 	Assets              []GridAssetDTO `json:"assets" binding:"dive"`
 	CreatedAt           string         `json:"created_at"`
 	UpdatedAt           string         `json:"updated_at"`
@@ -81,8 +84,11 @@ type SaveGridPlanRequest struct {
 	UnallocatedInvested float64  `json:"unallocated_invested"`
 	SortOrder           int      `json:"sort_order"`
 	// Version 保存时带上的读到的版本号；0 表示不校验（兼容老客户端）
-	Version int64          `json:"version"`
-	Assets  []GridAssetDTO `json:"assets" binding:"dive"`
+	Version int64 `json:"version"`
+	// Visibility 对外可见范围，缺省按 private
+	Visibility     string         `json:"visibility" binding:"max=20"`
+	VisibleUserIDs []int64        `json:"visible_user_ids"`
+	Assets         []GridAssetDTO `json:"assets" binding:"dive"`
 }
 
 // ---------- 快照 ----------

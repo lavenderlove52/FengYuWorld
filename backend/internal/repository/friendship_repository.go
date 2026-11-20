@@ -45,6 +45,18 @@ func (r *FriendshipRepository) Update(f *domain.Friendship) error {
 	return r.db.Save(f).Error
 }
 
+// Reopen 把一条被拒绝的关系改回待处理，并把申请人换成发起方。
+// (user_id, friend_id) 有唯一约束，重新申请只能复用原行。
+func (r *FriendshipRepository) Reopen(userID, friendID, id int64) error {
+	return r.db.Model(&domain.Friendship{}).Where("id = ?", id).
+		Updates(map[string]interface{}{
+			"user_id":    userID,
+			"friend_id":  friendID,
+			"status":     domain.FriendshipStatusPending,
+			"updated_at": gorm.Expr("now()"),
+		}).Error
+}
+
 func (r *FriendshipRepository) DeletePair(userID, friendID int64) error {
 	return r.db.Where(
 		"(user_id = ? AND friend_id = ?) OR (user_id = ? AND friend_id = ?)",

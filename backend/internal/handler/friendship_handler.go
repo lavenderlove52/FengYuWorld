@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -27,23 +28,24 @@ func (h *FriendshipHandler) SendRequest(c *gin.Context) {
 		return
 	}
 	item, err := h.friends.SendRequest(userID, req)
-	if err == service.ErrFriendNotFound {
+	switch {
+	case err == nil:
+		c.JSON(http.StatusOK, dto.OK(item))
+	case errors.Is(err, service.ErrFriendNotFound):
 		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "用户不存在"))
-		return
-	}
-	if err == service.ErrCannotFriendSelf {
+	case errors.Is(err, service.ErrCannotFriendSelf):
 		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "不能添加自己"))
-		return
-	}
-	if err == service.ErrFriendConflict {
+	case errors.Is(err, service.ErrAlreadyFriends):
+		c.JSON(http.StatusConflict, dto.Err(dto.CodeConflict, "你们已经是好友了"))
+	case errors.Is(err, service.ErrRequestPending):
+		c.JSON(http.StatusConflict, dto.Err(dto.CodeConflict, "已经发送过申请，等对方确认"))
+	case errors.Is(err, service.ErrRequestIncoming):
+		c.JSON(http.StatusConflict, dto.Err(dto.CodeConflict, "对方已经向你发送了申请，去「新的朋友」里接受"))
+	case errors.Is(err, service.ErrFriendConflict):
 		c.JSON(http.StatusConflict, dto.Err(dto.CodeConflict, "好友申请冲突"))
-		return
-	}
-	if err != nil {
+	default:
 		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
-		return
 	}
-	c.JSON(http.StatusOK, dto.OK(item))
 }
 
 func (h *FriendshipHandler) ListReceived(c *gin.Context) {

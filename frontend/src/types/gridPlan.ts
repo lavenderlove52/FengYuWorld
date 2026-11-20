@@ -47,12 +47,16 @@ export interface GridAssetPayload {
   executed_layers?: string[]
 }
 
+/** 与后端 domain.PlanVisibility* 对应；login 表示「任何登录用户」。 */
+export type PlanVisibility = 'private' | 'login' | 'friends' | 'specified' | 'public'
+
 export interface GridPlanSummary {
   id: number
   name: string
   market: string
   currency: string
   currency_name: string
+  visibility: PlanVisibility
   total_budget: number
   invested: number
   market_value: number
@@ -81,6 +85,10 @@ export interface GridPlanDetail {
   sort_order: number
   /** 乐观锁版本号：保存时原样带回，后端比对不上说明别处已改 */
   version: number
+  /** 对外可见范围 */
+  visibility: PlanVisibility
+  /** 仅 visibility === 'specified' 时有值 */
+  visible_user_ids?: number[]
   assets: GridAssetDTO[]
   created_at: string
   updated_at: string
@@ -104,6 +112,8 @@ export interface SaveGridPlanPayload {
   sort_order?: number
   /** 读到的版本号，后端据此判断是否被别人改过；省略表示不校验 */
   version?: number
+  visibility?: PlanVisibility
+  visible_user_ids?: number[]
   assets?: GridAssetPayload[]
 }
 

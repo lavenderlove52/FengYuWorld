@@ -16,6 +16,7 @@ import type {
   GridLayerDTO,
   GridPlanDetail,
   GridSnapshot,
+  PlanVisibility,
   SaveGridPlanPayload,
   WeightMethod,
 } from '@/types/gridPlan'
@@ -230,6 +231,20 @@ export function updateUnallocated(value: number): void {
   touch()
 }
 
+/** 改对外可见范围；只切档位，不动已选好友，来回切换不会丢选择。 */
+export function updateVisibility(visibility: PlanVisibility): void {
+  if (!planState.plan) return
+  planState.plan.visibility = visibility
+  if (visibility !== 'specified') planState.plan.visible_user_ids = []
+  touch()
+}
+
+export function updateVisibleUsers(ids: number[]): void {
+  if (!planState.plan) return
+  planState.plan.visible_user_ids = [...ids]
+  touch()
+}
+
 export function updateCurrency(currency: string, currencyName: string): void {
   if (!planState.plan) return
   planState.plan.currency = currency
@@ -380,6 +395,18 @@ export function restoreLayer(assetId: number, layerKey: string): boolean {
   return true
 }
 
+/** 一键优化：整体替换该标的的网格（含作废层与新层），只改本地，仍需保存才落库。 */
+export function applyOptimizedGrid(assetId: number, grid: GridLayerDTO[]): boolean {
+  const asset = findAsset(assetId)
+  if (!asset) return false
+  asset.grid = grid.map((layer) => ({ ...layer, voided: Boolean(layer.voided) }))
+  // 被优化合并掉的层不能再留在执行状态里，否则后端会以「引用了不存在的网格层」拒绝保存
+  const keys = new Set(asset.grid.map((layer) => layer.key))
+  asset.executed_layers = asset.executed_layers.filter((key) => keys.has(key))
+  touch()
+  return true
+}
+
 /**
  * 改某一层的计划金额：该层比例按目标预算换算，其余未作废层等比缩放到剩余比例，
  * 保证生效层合计始终 100%。作废层保留原比例，撤销作废后能回到原份额。
@@ -460,6 +487,8 @@ function normalizePlan(plan: GridPlanDetail): GridPlanDetail {
     ...plan,
     next_date: plan.next_date ?? '',
     version: Number(plan.version) || 0,
+    visibility: plan.visibility ?? 'private',
+    visible_user_ids: plan.visible_user_ids ?? [],
     assets: (plan.assets ?? []).map((asset) => ({
       ...asset,
       grid: (asset.grid ?? []).map((layer) => ({ ...layer, voided: Boolean(layer.voided) })),
@@ -485,6 +514,8 @@ function toPayload(plan: GridPlanDetail): SaveGridPlanPayload {
     unallocated_invested: plan.unallocated_invested,
     sort_order: plan.sort_order,
     version: plan.version,
+    visibility: plan.visibility,
+    visible_user_ids: plan.visibility === 'specified' ? [...(plan.visible_user_ids ?? [])] : [],
     assets: plan.assets.map((asset) => ({
       id: asset.id > 0 ? asset.id : undefined,
       name: asset.name,

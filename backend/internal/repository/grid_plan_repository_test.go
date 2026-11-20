@@ -143,7 +143,7 @@ func TestGridPlan_UserIsolation(t *testing.T) {
 		}
 
 		// bob 的列表里不应该出现 alice 的计划
-		list, err := repo.Summaries(bob)
+		list, err := repo.Summaries(bob, &bob)
 		if err != nil {
 			t.Fatalf("summaries: %v", err)
 		}
@@ -166,7 +166,7 @@ func TestGridPlan_SummaryAggregation(t *testing.T) {
 			t.Fatalf("create: %v", err)
 		}
 
-		list, err := repo.Summaries(uid)
+		list, err := repo.Summaries(uid, &uid)
 		if err != nil {
 			t.Fatalf("summaries: %v", err)
 		}
@@ -201,7 +201,7 @@ func TestGridPlan_EmptyPlanSummaryHasZero(t *testing.T) {
 			t.Fatalf("create: %v", err)
 		}
 
-		list, err := repo.Summaries(uid)
+		list, err := repo.Summaries(uid, &uid)
 		if err != nil {
 			t.Fatalf("summaries: %v", err)
 		}

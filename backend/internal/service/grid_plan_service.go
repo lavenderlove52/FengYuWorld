@@ -48,6 +48,10 @@ type GridPlanService struct {
 	repo *repository.GridPlanRepository
 	// collector 可选：保存计划后把自定义标的收进账号的自建联想列表。
 	collector *GridAssetPresetService
+	// friends 可见性校验要确认「指定好友」确实是好友
+	friends *repository.FriendshipRepository
+	// policy 对外可见性；nil 时按「只有作者可见」处理
+	policy *GridPlanPolicy
 }
 
 func NewGridPlanService(repo *repository.GridPlanRepository) *GridPlanService {
@@ -58,9 +62,70 @@ func (s *GridPlanService) SetPresetCollector(c *GridAssetPresetService) {
 	s.collector = c
 }
 
+// SetFriendship 注入好友仓储，用于校验「指定可见」的用户确实是好友。
+func (s *GridPlanService) SetFriendship(f *repository.FriendshipRepository) {
+	s.friends = f
+}
+
+func (s *GridPlanService) SetPolicy(p *GridPlanPolicy) {
+	s.policy = p
+}
+
 // List 计划列表 + 汇总。
 func (s *GridPlanService) List(userID int64) ([]domain.PlanSummary, error) {
-	return s.repo.Summaries(userID)
+	return s.repo.Summaries(userID, &userID)
+}
+
+// ListForViewer 某位用户对外展示的计划汇总；viewerID 为 nil 表示未登录访客。
+func (s *GridPlanService) ListForViewer(ownerID int64, viewerID *int64) ([]domain.PlanSummary, error) {
+	return s.repo.Summaries(ownerID, viewerID)
+}
+
+// GetForViewer 读取他人计划详情，可见性不通过时返回 ErrGridPlanNotFound（不暴露存在性）。
+func (s *GridPlanService) GetForViewer(viewerID *int64, planID int64) (*domain.GridPlan, error) {
+	plan, err := s.repo.GetAny(planID)
+	if err != nil {
+		return nil, err
+	}
+	if plan == nil {
+		return nil, ErrGridPlanNotFound
+	}
+	canRead, err := s.canRead(viewerID, plan)
+	if err != nil {
+		return nil, err
+	}
+	if !canRead {
+		return nil, ErrGridPlanNotFound
+	}
+	return plan, nil
+}
+
+// SnapshotsForViewer 曲线数据，同样先过可见性。
+func (s *GridPlanService) SnapshotsForViewer(viewerID *int64, planID int64, days int) ([]domain.GridPlanSnapshot, error) {
+	if _, err := s.GetForViewer(viewerID, planID); err != nil {
+		return nil, err
+	}
+	return s.snapshotsByID(planID, days)
+}
+
+// GetForViewerWithSnapshots 详情 + 曲线一次取回，避免对同一份计划做两遍读取和可见性判定。
+func (s *GridPlanService) GetForViewerWithSnapshots(viewerID *int64, planID int64, days int) (*domain.GridPlan, []domain.GridPlanSnapshot, error) {
+	plan, err := s.GetForViewer(viewerID, planID)
+	if err != nil {
+		return nil, nil, err
+	}
+	snapshots, err := s.snapshotsByID(planID, days)
+	if err != nil {
+		return nil, nil, err
+	}
+	return plan, snapshots, nil
+}
+
+func (s *GridPlanService) canRead(viewerID *int64, plan *domain.GridPlan) (bool, error) {
+	if s.policy == nil {
+		return viewerID != nil && *viewerID == plan.UserID, nil
+	}
+	return s.policy.CanReadPlan(viewerID, plan)
 }
 
 // Get 计划详情。找不到或不属于该用户都返回 ErrGridPlanNotFound，避免暴露存在性。
@@ -87,6 +152,9 @@ func (s *GridPlanService) Create(userID int64, plan *domain.GridPlan) (*domain.G
 		applyAssetDefaults(&plan.Assets[i])
 	}
 	if err := validatePlan(plan); err != nil {
+		return nil, err
+	}
+	if err := s.validateVisibility(userID, plan, ""); err != nil {
 		return nil, err
 	}
 	if err := s.repo.Create(plan); err != nil {
@@ -123,6 +191,9 @@ func (s *GridPlanService) Update(userID, planID int64, incoming *domain.GridPlan
 	if err := validatePlan(incoming); err != nil {
 		return nil, err
 	}
+	if err := s.validateVisibility(userID, incoming, existing.Visibility); err != nil {
+		return nil, err
+	}
 	if err := s.repo.Update(incoming, incoming.Version); err != nil {
 		if errors.Is(err, repository.ErrVersionConflict) {
 			return nil, ErrGridPlanConflict
@@ -156,6 +227,10 @@ func (s *GridPlanService) Snapshots(userID, planID int64, days int) ([]domain.Gr
 	if _, err := s.Get(userID, planID); err != nil {
 		return nil, err
 	}
+	return s.snapshotsByID(planID, days)
+}
+
+func (s *GridPlanService) snapshotsByID(planID int64, days int) ([]domain.GridPlanSnapshot, error) {
 	if days < 0 {
 		days = 0
 	}
@@ -357,6 +432,70 @@ func (s *GridPlanService) UndoLastExecution(userID, planID int64) (*domain.GridP
 }
 
 // ---------- 校验 ----------
+
+var (
+	allowedPlanVisibility = map[string]struct{}{
+		domain.PlanVisibilityPrivate:   {},
+		domain.PlanVisibilityLogin:     {},
+		domain.PlanVisibilityFriends:   {},
+		domain.PlanVisibilitySpecified: {},
+		domain.PlanVisibilityPublic:    {},
+	}
+)
+
+// validateVisibility 只放行已知档位；specified 必须至少选一个好友，且确实都是好友。
+// visibility 为空表示客户端没带这个字段：沿用 current（库里的现有值），
+// 这样老客户端保存一次不会把共享悄悄撤回。
+func (s *GridPlanService) validateVisibility(ownerID int64, plan *domain.GridPlan, current string) error {
+	if plan.Visibility == "" {
+		plan.Visibility = current
+	}
+	if plan.Visibility == "" {
+		plan.Visibility = domain.PlanVisibilityPrivate
+	}
+	if _, ok := allowedPlanVisibility[plan.Visibility]; !ok {
+		return &ValidationError{Field: "可见性", Reason: "只能是 private / login / friends / specified / public"}
+	}
+	if plan.Visibility != domain.PlanVisibilitySpecified {
+		// 非 specified 档清掉明细，避免切换档位后留下旧授权。
+		// 但客户端完全没带 visible_user_ids 时（老客户端）不清，保持库里的授权不变。
+		if plan.VisibleUserIDs != nil {
+			plan.VisibleUserIDs = []int64{}
+		}
+		return nil
+	}
+	if len(plan.VisibleUserIDs) == 0 {
+		return &ValidationError{Field: "可见性", Reason: "选择「指定好友」时至少要选一个人"}
+	}
+	if s.friends == nil {
+		return &ValidationError{Field: "可见性", Reason: "指定可见暂不可用"}
+	}
+	friendIDs, err := s.friends.ListAcceptedFriendIDs(ownerID)
+	if err != nil {
+		return err
+	}
+	friendSet := make(map[int64]struct{}, len(friendIDs))
+	for _, id := range friendIDs {
+		friendSet[id] = struct{}{}
+	}
+	seen := make(map[int64]struct{}, len(plan.VisibleUserIDs))
+	kept := make([]int64, 0, len(plan.VisibleUserIDs))
+	for _, id := range plan.VisibleUserIDs {
+		if id == ownerID {
+			return &ValidationError{Field: "可见性", Reason: "计划本来就对你自己可见，不用选自己"}
+		}
+		if _, ok := friendSet[id]; !ok {
+			return &ValidationError{Field: "可见性", Reason: "只能选择已经互为好友的用户"}
+		}
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		kept = append(kept, id)
+	}
+	plan.VisibleUserIDs = kept
+	return nil
+}
 
 func validatePlan(plan *domain.GridPlan) error {
 	if strings.TrimSpace(plan.Name) == "" {

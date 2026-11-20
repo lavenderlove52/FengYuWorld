@@ -129,9 +129,12 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO myblog;
 
 ### 3. 拉代码、配置、迁移
 
+首次部署时服务器上还没有仓库，先 clone 一次（之后的日常更新用上一节里的 `git pull`）：
+
 ```bash
-cd /root/project/FengYuWorld
-git pull
+mkdir -p /root/project && cd /root/project
+git clone <仓库地址> FengYuWorld
+cd FengYuWorld
 cp .env.example backend/.env
 vim backend/.env          # 按上一节改 DATABASE_URL 和两个 JWT 密钥
 
@@ -288,9 +291,15 @@ Nginx 只做路径分流，**只有改 `deploy/nginx-ip-paths.conf` 时才需要
 
 ### 只更新前端
 
-前端是纯静态资源，流程是「本地打包 → 覆盖上传 → 浏览器强刷」，服务器上不重启任何进程。
+前端是纯静态资源，流程是「本地同步代码 → 本地打包 → 覆盖上传 → 浏览器强刷」，服务器上不重启任何进程。
 
 ```bash
+# 0. 先把本地仓库同步到最新（在仓库根目录）
+#    产物是本地工作区编出来的，服务器上是什么版本跟 dist 没有任何关系，
+#    只有这一步能保证发出去的是远端最新代码。
+git status           # 有未提交改动：确认要不要一起发，不想发就先 git stash
+git pull
+
 # 1. 本地打包（在 frontend/ 目录下，产物是 dist/）
 cd frontend
 npm install          # 首次或依赖变化时
@@ -317,7 +326,7 @@ curl -sI http://124.223.116.8/blog/ | head -3
 
   只删最老的、保留最近 200 个是安全的：`index.html` 只引用当前这一版哈希，旧文件已无引用。
 
-- **本地未提交的改动会被一起打进去**。`npm run build` 不看 git 状态，`dist/` 里是什么就发什么。上线前先 `git status` 确认一遍，不想发的先 `git stash`。
+- **本地未提交的改动会被一起打进去**。`npm run build` 不看 git 状态，`dist/` 里是什么就发什么。上线前先 `git status` 确认一遍，不想发的先 `git stash`。**而且 build 前一定要 `git pull`**：前端在本地编译，服务器上的代码版本不影响 `dist/`，忘了拉就会把旧代码重新发一遍。
 
 ### 只更新后端
 
@@ -328,6 +337,7 @@ curl -sI http://124.223.116.8/blog/ | head -3
 ssh root@124.223.116.8
 
 cd /root/project/FengYuWorld
+git status                 # 服务器上不该有本地改动；有的话先弄清楚是什么
 git pull
 
 # 1. 数据库迁移（有新 migration 时；无变更时重复执行也安全）
@@ -364,13 +374,21 @@ journalctl -u myblog -n 50 --no-pager     # 有异常看这里
 顺序建议 **先后端、后前端**：
 
 ```bash
-# 服务器
-cd /root/project/FengYuWorld && git pull
-cd backend && go run ./cmd/migrate && go build -o bin/server ./cmd/server
+# ---------- 服务器：拉代码 → 迁移 → 编译 → 重启 ----------
+ssh root@124.223.116.8
+cd /root/project/FengYuWorld
+git status                 # 服务器上不该有本地改动；有的话先弄清楚是什么
+git pull
+
+cd backend
+go run ./cmd/migrate       # 有新 migration 时；无变更时重复执行也安全
+go build -o bin/server ./cmd/server
 systemctl restart myblog
 curl http://127.0.0.1:8080/api/health
 
-# 本地
+# ---------- 本地：同步代码 → 打包 → 上传 ----------
+cd /path/to/My-Blog        # 仓库根目录
+git pull                   # 忘了拉就会把旧代码重新发一遍
 cd frontend && npm run build
 scp -r dist/* root@124.223.116.8:/var/www/blog/
 ```
@@ -384,6 +402,18 @@ scp -r dist/* root@124.223.116.8:/var/www/blog/
 ```bash
 # 本地打包后顺手留一份
 cp -r dist dist.bak.$(date +%Y%m%d-%H%M)
+
+# 需要回滚时，把备份传回去
+scp -r dist.bak.20260101-1200/* root@124.223.116.8:/var/www/blog/
+```
+
+也可以用 git 回滚到旧提交后重新 build 再传（本地同样要 `git pull` 拿到最新的历史）：
+
+```bash
+git log --oneline -5
+git checkout <上一个正常的提交>
+cd frontend && npm run build && scp -r dist/* root@124.223.116.8:/var/www/blog/
+# 确认没问题后回到分支：git checkout main
 ```
 
 后端回滚走 git：

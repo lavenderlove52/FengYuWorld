@@ -97,6 +97,7 @@ export interface UserTheme {
   banner_url: string
   layout: ThemeLayout
   show_pins_public: boolean
+  show_plans_public: boolean
   custom_css: string
   custom_js: string
   effect_config: ThemeEffectConfig
@@ -115,6 +116,7 @@ export interface UpdateThemePayload {
   banner_url?: string
   layout?: ThemeLayout
   show_pins_public?: boolean
+  show_plans_public?: boolean
   custom_css?: string
   custom_js?: string
   effect_config?: ThemeEffectConfig
@@ -231,6 +233,7 @@ export const DEFAULT_THEME: UserTheme = {
   banner_url: '',
   layout: 'grid',
   show_pins_public: false,
+  show_plans_public: false,
   custom_css: '',
   custom_js: '',
   effect_config: createDefaultEffectConfig(),

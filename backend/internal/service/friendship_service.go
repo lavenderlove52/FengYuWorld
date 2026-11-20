@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 
 	"my-blog/backend/internal/domain"
 	"my-blog/backend/internal/dto"
@@ -14,15 +15,26 @@ var (
 	ErrFriendConflict   = errors.New("friend conflict")
 	ErrFriendForbidden  = errors.New("friend forbidden")
 	ErrCannotFriendSelf = errors.New("cannot friend self")
+	// 下面几个是 ErrFriendConflict 的具体情况，前端要显示不同提示
+	ErrAlreadyFriends   = fmt.Errorf("already friends: %w", ErrFriendConflict)
+	ErrRequestPending   = fmt.Errorf("request pending: %w", ErrFriendConflict)
+	ErrRequestIncoming  = fmt.Errorf("request incoming: %w", ErrFriendConflict)
 )
 
 type FriendshipService struct {
 	friendships *repository.FriendshipRepository
 	users       *repository.UserRepository
+	// plans 可选：取消好友时顺手清掉「指定可见」授权
+	plans *repository.GridPlanRepository
 }
 
 func NewFriendshipService(friendships *repository.FriendshipRepository, users *repository.UserRepository) *FriendshipService {
 	return &FriendshipService{friendships: friendships, users: users}
+}
+
+// SetGridPlans 注入计划仓储，让取消好友同时回收「指定可见」授权。
+func (s *FriendshipService) SetGridPlans(plans *repository.GridPlanRepository) {
+	s.plans = plans
 }
 
 func (s *FriendshipService) SendRequest(userID int64, req dto.FriendRequestCreate) (*dto.FriendshipItem, error) {
@@ -42,11 +54,22 @@ func (s *FriendshipService) SendRequest(userID int64, req dto.FriendRequestCreat
 		switch existing.Status {
 		case domain.FriendshipStatusPending:
 			if existing.FriendID == userID {
-				return nil, ErrFriendConflict
+				// 对方先发的申请，我没处理又去点添加
+				return nil, ErrRequestIncoming
 			}
-			return nil, ErrFriendConflict
+			return nil, ErrRequestPending
 		case domain.FriendshipStatusAccepted:
-			return nil, ErrFriendConflict
+			return nil, ErrAlreadyFriends
+		case domain.FriendshipStatusRejected:
+			// 之前被拒绝过：复用同一行改回 pending。
+			// 直接 Create 会撞 (user_id, friend_id) 唯一键，用户看到的是「系统错误」，永远加不上。
+			if err := s.friendships.Reopen(userID, target.ID, existing.ID); err != nil {
+				return nil, err
+			}
+			existing.UserID = userID
+			existing.FriendID = target.ID
+			existing.Status = domain.FriendshipStatusPending
+			return s.toItem(existing, target), nil
 		}
 	}
 
@@ -132,7 +155,16 @@ func (s *FriendshipService) DeleteFriend(userID, friendUserID int64) error {
 	if !ok {
 		return ErrFriendNotFound
 	}
-	return s.friendships.DeletePair(userID, friendUserID)
+	if err := s.friendships.DeletePair(userID, friendUserID); err != nil {
+		return err
+	}
+	// 取消好友后，之前「指定可见」给对方的计划要立刻失效，不能等到下次编辑计划才清
+	if s.plans != nil {
+		if err := s.plans.PurgeVisibleUsers(userID, friendUserID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *FriendshipService) mapItems(list []domain.Friendship, received bool) ([]dto.FriendshipItem, error) {

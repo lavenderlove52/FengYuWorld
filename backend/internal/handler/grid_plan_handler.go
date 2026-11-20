@@ -17,10 +17,11 @@ import (
 
 type GridPlanHandler struct {
 	plans *service.GridPlanService
+	users *service.UserService
 }
 
-func NewGridPlanHandler(plans *service.GridPlanService) *GridPlanHandler {
-	return &GridPlanHandler{plans: plans}
+func NewGridPlanHandler(plans *service.GridPlanService, users *service.UserService) *GridPlanHandler {
+	return &GridPlanHandler{plans: plans, users: users}
 }
 
 // List GET /api/grid-plans
@@ -193,6 +194,113 @@ func (h *GridPlanHandler) UndoLastExecution(c *gin.Context) {
 	c.JSON(http.StatusOK, dto.OK(toExecutionDTO(*exec)))
 }
 
+// ---------- 对外展示（个人主页） ----------
+
+// PublicList GET /api/users/:username/grid-plans
+// 只返回该用户对外可见的计划汇总，未登录访客只能看到 public。
+func (h *GridPlanHandler) PublicList(c *gin.Context) {
+	username := c.Param("username")
+	owner, err := h.users.GetByUsername(username)
+	viewerID, _ := middleware.GetUserID(c)
+	if err != nil || owner == nil || !ownerVisibleTo(owner, viewerID) {
+		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "用户不存在"))
+		return
+	}
+	// 作者看自己的主页时，展示全部计划（含 private），和文章列表一致
+	summaries, err := h.plans.ListForViewer(owner.ID, viewerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.Err(dto.CodeInternalError, "系统错误"))
+		return
+	}
+	out := make([]dto.GridPlanSummary, 0, len(summaries))
+	for _, item := range summaries {
+		out = append(out, toPlanSummaryDTO(item))
+	}
+	c.JSON(http.StatusOK, dto.OK(out))
+}
+
+// PublicGet GET /api/users/:username/grid-plans/:id
+func (h *GridPlanHandler) PublicGet(c *gin.Context) {
+	username := c.Param("username")
+	owner, err := h.users.GetByUsername(username)
+	viewerID, _ := middleware.GetUserID(c)
+	if err != nil || owner == nil || !ownerVisibleTo(owner, viewerID) {
+		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "用户不存在"))
+		return
+	}
+	planID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	plan, err := h.plans.GetForViewer(viewerID, planID)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	if plan.UserID != owner.ID {
+		// 防串号：URL 里的用户和计划作者必须一致，否则等同于泄露别人的计划
+		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "计划不存在"))
+		return
+	}
+	detail := toPlanDetailDTO(plan)
+	if plan.UserID != viewerIDOf(c) {
+		// 指定可见的好友名单只给作者看，别把别人都授权给了谁暴露出去
+		detail.VisibleUserIDs = nil
+	}
+	c.JSON(http.StatusOK, dto.OK(detail))
+}
+
+// viewerIDOf 当前登录用户；未登录返回 0，不会和任何真实用户 id 撞上。
+func viewerIDOf(c *gin.Context) int64 {
+	if id, ok := middleware.GetUserID(c); ok {
+		return *id
+	}
+	return 0
+}
+
+// ownerVisibleTo 被锁定/停用的账号，对外一律当作不存在，和文章列表的口径一致。
+// 作者本人仍然能看自己的主页。
+func ownerVisibleTo(owner *domain.User, viewerID *int64) bool {
+	if viewerID != nil && *viewerID == owner.ID {
+		return true
+	}
+	return owner.Status == domain.UserStatusActive
+}
+
+// PublicSnapshots GET /api/users/:username/grid-plans/:id/snapshots?days=180
+func (h *GridPlanHandler) PublicSnapshots(c *gin.Context) {
+	username := c.Param("username")
+	owner, err := h.users.GetByUsername(username)
+	viewerID, _ := middleware.GetUserID(c)
+	if err != nil || owner == nil || !ownerVisibleTo(owner, viewerID) {
+		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "用户不存在"))
+		return
+	}
+	planID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	days, err := strconv.Atoi(c.DefaultQuery("days", "180"))
+	if err != nil || days <= 0 {
+		days = 180
+	}
+	// 一次拿回详情和曲线，可见性只判定一次
+	plan, items, err := h.plans.GetForViewerWithSnapshots(viewerID, planID, days)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	if plan.UserID != owner.ID {
+		c.JSON(http.StatusNotFound, dto.Err(dto.CodeNotFound, "计划不存在"))
+		return
+	}
+	out := make([]dto.GridSnapshotDTO, 0, len(items))
+	for _, item := range items {
+		out = append(out, toSnapshotDTO(item))
+	}
+	c.JSON(http.StatusOK, dto.OK(out))
+}
+
 // ---------- 错误映射 ----------
 
 func (h *GridPlanHandler) fail(c *gin.Context, err error) {
@@ -230,6 +338,7 @@ func toPlanSummaryDTO(item domain.PlanSummary) dto.GridPlanSummary {
 		Market:       item.Market,
 		Currency:     item.Currency,
 		CurrencyName: item.CurrencyName,
+		Visibility:   item.Visibility,
 		TotalBudget:  item.TotalBudget,
 		Invested:     item.Invested,
 		MarketValue:  item.MarketValue,
@@ -285,6 +394,8 @@ func toPlanDetailDTO(plan *domain.GridPlan) dto.GridPlanDetail {
 		UnallocatedInvested: plan.UnallocatedInvested,
 		SortOrder:           plan.SortOrder,
 		Version:             plan.Version,
+		Visibility:          plan.Visibility,
+		VisibleUserIDs:      plan.VisibleUserIDs,
 		Assets:              assets,
 		CreatedAt:           util.FormatTime(plan.CreatedAt),
 		UpdatedAt:           util.FormatTime(plan.UpdatedAt),
@@ -344,6 +455,8 @@ func toPlanDomain(req *dto.SaveGridPlanRequest) *domain.GridPlan {
 		UnallocatedInvested: req.UnallocatedInvested,
 		SortOrder:           req.SortOrder,
 		Version:             req.Version,
+		Visibility:          req.Visibility,
+		VisibleUserIDs:      req.VisibleUserIDs,
 		Assets:              assets,
 	}
 }

@@ -34,14 +34,16 @@ func (r *GridPlanRepository) WithTx(fn func(*GridPlanRepository) error) error {
 }
 
 // Summaries 计划列表，带投入/市值/盈亏汇总。一次查询搞定，避免 N+1。
-func (r *GridPlanRepository) Summaries(userID int64) ([]domain.PlanSummary, error) {
+// viewerID == nil 表示未登录访客，此时只返回 public 计划；否则按可见性返回。
+func (r *GridPlanRepository) Summaries(ownerID int64, viewerID *int64) ([]domain.PlanSummary, error) {
 	var rows []domain.PlanSummary
-	err := r.db.Model(&domain.GridPlan{}).
+	q := r.db.Model(&domain.GridPlan{}).
 		Select(`grid_plans.id,
 		        grid_plans.name,
 		        grid_plans.market,
 		        grid_plans.currency,
 		        grid_plans.currency_name,
+		        grid_plans.visibility,
 		        grid_plans.total_budget,
 		        grid_plans.sort_order,
 		        grid_plans.updated_at,
@@ -50,21 +52,75 @@ func (r *GridPlanRepository) Summaries(userID int64) ([]domain.PlanSummary, erro
 		        COALESCE(SUM(grid_assets.market_value - grid_assets.invested), 0) AS pnl,
 		        COUNT(grid_assets.id) AS asset_count`).
 		Joins("LEFT JOIN grid_assets ON grid_assets.plan_id = grid_plans.id").
-		Where("grid_plans.user_id = ?", userID).
-		Group("grid_plans.id").
+		Where("grid_plans.user_id = ?", ownerID)
+	if !isOwnerViewer(ownerID, viewerID) {
+		if viewerID == nil {
+			q = q.Where("grid_plans.visibility = ?", domain.PlanVisibilityPublic)
+		} else {
+			q = q.Where(visibleToViewerSQL, *viewerID, *viewerID, *viewerID)
+		}
+	}
+	err := q.Group("grid_plans.id").
 		Order("grid_plans.sort_order ASC, grid_plans.id ASC").
 		Scan(&rows).Error
 	return rows, err
 }
 
+// visibleToViewerSQL 非作者视角的可见性条件，参数依次是 viewerID 三次
+// （好友分支两个占位、指定可见一个占位）。
+// 好友关系与指定可见都走 EXISTS，和文章列表的判定保持一致。
+const visibleToViewerSQL = `(
+	grid_plans.visibility = 'public'
+	OR grid_plans.visibility = 'login'
+	OR (grid_plans.visibility = 'friends' AND EXISTS (
+		SELECT 1 FROM friendships
+		WHERE status = 'accepted'
+		AND ((user_id = grid_plans.user_id AND friend_id = ?) OR (user_id = ? AND friend_id = grid_plans.user_id))
+	))
+	OR (grid_plans.visibility = 'specified' AND EXISTS (
+		SELECT 1 FROM grid_plan_visible_users
+		WHERE plan_id = grid_plans.id AND user_id = ?
+	))
+)`
+
+func isOwnerViewer(ownerID int64, viewerID *int64) bool {
+	return viewerID != nil && *viewerID == ownerID
+}
+
 // GetByID 读取计划详情（含标的）。找不到或不属于该用户都返回 (nil, nil)。
 func (r *GridPlanRepository) GetByID(userID, planID int64) (*domain.GridPlan, error) {
+	plan, err := r.loadPlan(r.db, planID)
+	if err != nil || plan == nil {
+		return nil, err
+	}
+	if plan.UserID != userID {
+		return nil, nil
+	}
+	if err := r.loadVisibleUsers(r.db, []*domain.GridPlan{plan}); err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+// GetAny 按 id 读取计划，不校验归属：可见性判定交给 service 层，判定通过后再用。
+func (r *GridPlanRepository) GetAny(planID int64) (*domain.GridPlan, error) {
+	plan, err := r.loadPlan(r.db, planID)
+	if err != nil || plan == nil {
+		return nil, err
+	}
+	if err := r.loadVisibleUsers(r.db, []*domain.GridPlan{plan}); err != nil {
+		return nil, err
+	}
+	return plan, nil
+}
+
+func (r *GridPlanRepository) loadPlan(db *gorm.DB, planID int64) (*domain.GridPlan, error) {
 	var plan domain.GridPlan
-	err := r.db.
+	err := db.
 		Preload("Assets", func(db *gorm.DB) *gorm.DB {
 			return db.Order("sort_order ASC, id ASC")
 		}).
-		Where("id = ? AND user_id = ?", planID, userID).
+		Where("id = ?", planID).
 		First(&plan).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
@@ -75,9 +131,103 @@ func (r *GridPlanRepository) GetByID(userID, planID int64) (*domain.GridPlan, er
 	return &plan, nil
 }
 
+// loadVisibleUsers 一次性把多份计划的指定可见用户填进去，避免逐条查询。
+func (r *GridPlanRepository) loadVisibleUsers(db *gorm.DB, plans []*domain.GridPlan) error {
+	ids := make([]int64, 0, len(plans))
+	for _, plan := range plans {
+		if plan != nil && plan.Visibility == domain.PlanVisibilitySpecified {
+			ids = append(ids, plan.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+	var rows []struct {
+		PlanID int64
+		UserID int64
+	}
+	if err := db.Table("grid_plan_visible_users").
+		Select("plan_id, user_id").
+		Where("plan_id IN ?", ids).
+		Scan(&rows).Error; err != nil {
+		return err
+	}
+	byPlan := make(map[int64][]int64, len(ids))
+	for _, row := range rows {
+		byPlan[row.PlanID] = append(byPlan[row.PlanID], row.UserID)
+	}
+	for _, plan := range plans {
+		if plan == nil || plan.Visibility != domain.PlanVisibilitySpecified {
+			continue
+		}
+		plan.VisibleUserIDs = byPlan[plan.ID]
+		if plan.VisibleUserIDs == nil {
+			plan.VisibleUserIDs = []int64{}
+		}
+	}
+	return nil
+}
+
 // Create 新建计划。assets 里的 PlanID 会被覆盖为新建的 id。
 func (r *GridPlanRepository) Create(plan *domain.GridPlan) error {
-	return r.db.Create(plan).Error
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(plan).Error; err != nil {
+			return err
+		}
+		return syncPlanVisibleUsers(tx, plan)
+	})
+}
+
+// syncPlanVisibleUsers 只在 specified 档写明细，其它档一律清空。
+// 显式带空数组 [] 表示「用户清空了选择」：同样删除全部授权。
+func syncPlanVisibleUsers(tx *gorm.DB, plan *domain.GridPlan) error {
+	if plan.Visibility != domain.PlanVisibilitySpecified {
+		return tx.Where("plan_id = ?", plan.ID).Delete(&domain.GridPlanVisibleUser{}).Error
+	}
+	if plan.VisibleUserIDs == nil {
+		// nil = 老客户端没带这个字段，保留现有授权不动
+		return nil
+	}
+	if err := tx.Where("plan_id = ?", plan.ID).Delete(&domain.GridPlanVisibleUser{}).Error; err != nil {
+		return err
+	}
+	if len(plan.VisibleUserIDs) == 0 {
+		return nil
+	}
+	rows := make([]domain.GridPlanVisibleUser, 0, len(plan.VisibleUserIDs))
+	seen := make(map[int64]struct{}, len(plan.VisibleUserIDs))
+	for _, userID := range plan.VisibleUserIDs {
+		if userID <= 0 {
+			continue
+		}
+		if _, dup := seen[userID]; dup {
+			continue
+		}
+		seen[userID] = struct{}{}
+		rows = append(rows, domain.GridPlanVisibleUser{PlanID: plan.ID, UserID: userID})
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	return tx.Create(&rows).Error
+}
+
+// IsVisibleToUser 判断 specified 档是否放行给某个登录用户。
+func (r *GridPlanRepository) IsVisibleToUser(planID, userID int64) (bool, error) {
+	var count int64
+	err := r.db.Model(&domain.GridPlanVisibleUser{}).
+		Where("plan_id = ? AND user_id = ?", planID, userID).
+		Count(&count).Error
+	return count > 0, err
+}
+
+// PurgeVisibleUsers 取消好友时回收授权：双向都清，谁给谁授权过都算。
+// 只删 grid_plan_visible_users，计划本身不动；下次编辑时 validateVisibility 也会重新校验好友关系。
+func (r *GridPlanRepository) PurgeVisibleUsers(userA, userB int64) error {
+	return r.db.Exec(`DELETE FROM grid_plan_visible_users
+		WHERE (user_id = ? AND plan_id IN (SELECT id FROM grid_plans WHERE user_id = ?))
+		   OR (user_id = ? AND plan_id IN (SELECT id FROM grid_plans WHERE user_id = ?))`,
+		userA, userB, userB, userA).Error
 }
 
 // Update 整体更新：计划参数 + 标的列表（先删后插），同一事务。
@@ -91,7 +241,7 @@ func (r *GridPlanRepository) Update(plan *domain.GridPlan, expectedVersion int64
 		res := q.
 			Select("name", "market", "currency", "currency_name", "unit", "total_budget",
 				"frequency", "next_date", "gate_threshold", "gate_mode", "weight_method",
-				"grid_aggregation", "unallocated_invested", "sort_order", "version", "updated_at").
+				"grid_aggregation", "unallocated_invested", "sort_order", "visibility", "version", "updated_at").
 			Updates(map[string]interface{}{
 				"name":                 plan.Name,
 				"market":               plan.Market,
@@ -107,6 +257,7 @@ func (r *GridPlanRepository) Update(plan *domain.GridPlan, expectedVersion int64
 				"grid_aggregation":     plan.GridAggregation,
 				"unallocated_invested": plan.UnallocatedInvested,
 				"sort_order":           plan.SortOrder,
+				"visibility":           plan.Visibility,
 				"version":              gorm.Expr("version + 1"),
 				"updated_at":           time.Now(),
 			})
@@ -118,6 +269,9 @@ func (r *GridPlanRepository) Update(plan *domain.GridPlan, expectedVersion int64
 				return ErrVersionConflict
 			}
 			return gorm.ErrRecordNotFound
+		}
+		if err := syncPlanVisibleUsers(tx, plan); err != nil {
+			return err
 		}
 
 		// 标的按 id 增量同步：已有 id 的原地更新，没有的插入，本次没出现的删除。

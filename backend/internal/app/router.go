@@ -55,6 +55,10 @@ func registerRoutes(
 		api.GET("/users/:username", users.GetUserProfile)
 		api.GET("/users/:username/posts", authMW.Optional(), users.GetUserPosts)
 		api.GET("/users/:username/pins", authMW.Optional(), pins.GetPublicUserPins)
+		// 个人主页的投资计划：可见性在 service 里按档位判定，未登录访客只拿到 public
+		api.GET("/users/:username/grid-plans", authMW.Optional(), gridPlans.PublicList)
+		api.GET("/users/:username/grid-plans/:id", authMW.Optional(), gridPlans.PublicGet)
+		api.GET("/users/:username/grid-plans/:id/snapshots", authMW.Optional(), gridPlans.PublicSnapshots)
 		api.GET("/users/:username/theme", theme.GetTheme)
 		api.GET("/settings/public", settings.GetPublicSettings)
 		api.GET("/push/public/:token", push.GetPublicNtfy)

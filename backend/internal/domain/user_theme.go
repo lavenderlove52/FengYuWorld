@@ -104,6 +104,7 @@ type UserTheme struct {
 	BannerURL              string            `gorm:"size:500;not null;default:''"      json:"banner_url"`
 	Layout                 string            `gorm:"size:20;not null;default:grid"     json:"layout"`
 	ShowPinsPublic         bool              `gorm:"not null;default:false"            json:"show_pins_public"`
+	ShowPlansPublic        bool              `gorm:"not null;default:false"            json:"show_plans_public"`
 	CustomCSS              string            `gorm:"type:text;not null;default:''"     json:"custom_css"`
 	CustomJS               string            `gorm:"type:text;not null;default:''"     json:"custom_js"`
 	EffectConfig           ThemeEffectConfig `gorm:"type:jsonb;serializer:json;not null" json:"effect_config"`

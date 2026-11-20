@@ -19,6 +19,7 @@ const chatStore = useChatStore()
 const authStore = useAuthStore()
 const settingsStore = useSettingsStore()
 const username = ref('')
+const sending = ref(false)
 const selectedFriend = ref<FriendListItem | null>(null)
 const viewMode = ref<ViewMode>('list')
 const showRequests = ref(false)
@@ -48,33 +49,64 @@ onUnmounted(() => {
   chatStore.setActiveFriend(null)
 })
 
+/** 接口失败时 axios 会 reject，必须统一兜住并弹提示，否则用户只在 console 里看到。 */
+const errorText = (err: unknown): string =>
+  err instanceof Error && err.message ? err.message : '操作失败，请稍后重试'
+
 const send = async () => {
-  if (!username.value.trim()) return
-  const res = await friendsApi.sendFriendRequest(username.value.trim())
-  if (res.code === 0) {
+  const target = username.value.trim()
+  if (!target) {
+    message.warning('请输入要添加的用户名')
+    return
+  }
+  sending.value = true
+  try {
+    const res = await friendsApi.sendFriendRequest(target)
+    if (res.code !== 0) {
+      message.error(res.message || '申请发送失败')
+      return
+    }
     message.success('申请已发送')
     username.value = ''
     showAddFriend.value = false
+    await load()
+  } catch (err) {
+    // 已经是好友 / 已发过 / 对方已发给我，后端返回 409 并带上具体原因
+    message.error(errorText(err))
+    // 失败也刷新一次：可能是对方刚成了好友，列表和「新的朋友」要跟上
     load()
-  } else {
-    message.error(res.message)
+  } finally {
+    sending.value = false
   }
 }
 
 const accept = async (id: number) => {
-  await friendsApi.acceptRequest(id)
-  message.success('已接受')
-  load()
+  try {
+    await friendsApi.acceptRequest(id)
+    message.success('已接受')
+    await load()
+  } catch (err) {
+    message.error(errorText(err))
+  }
 }
 
 const reject = async (id: number) => {
-  await friendsApi.rejectRequest(id)
-  message.info('已拒绝')
-  load()
+  try {
+    await friendsApi.rejectRequest(id)
+    message.info('已拒绝')
+    await load()
+  } catch (err) {
+    message.error(errorText(err))
+  }
 }
 
 const remove = async (id: number) => {
-  await friendsApi.deleteFriend(id)
+  try {
+    await friendsApi.deleteFriend(id)
+  } catch (err) {
+    message.error(errorText(err))
+    return
+  }
   message.success('已删除好友')
   if (selectedFriend.value?.id === id) {
     closeChat()
@@ -131,7 +163,7 @@ const closeChat = () => {
             class="flex-1"
             @keydown.enter="send"
           />
-          <NButton type="primary" size="small" class="!bg-[#12b7f5] !border-[#12b7f5]" @click="send">
+          <NButton type="primary" size="small" :loading="sending" class="!bg-[#12b7f5] !border-[#12b7f5]" @click="send">
             发送申请
           </NButton>
         </div>

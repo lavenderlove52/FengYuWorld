@@ -35,6 +35,7 @@ type UpdateThemeRequest struct {
 	BannerURL              string                    `json:"banner_url"`
 	Layout                 string                    `json:"layout"`
 	ShowPinsPublic         *bool                     `json:"show_pins_public"`
+	ShowPlansPublic        *bool                     `json:"show_plans_public"`
 	CustomCSS              string                    `json:"custom_css"`
 	CustomJS               string                    `json:"custom_js"`
 	EffectConfig           *ThemeEffectConfigRequest `json:"effect_config"`
@@ -52,6 +53,7 @@ type UserThemeResponse struct {
 	BannerURL              string                   `json:"banner_url"`
 	Layout                 string                   `json:"layout"`
 	ShowPinsPublic         bool                     `json:"show_pins_public"`
+	ShowPlansPublic        bool                     `json:"show_plans_public"`
 	CustomCSS              string                   `json:"custom_css"`
 	CustomJS               string                   `json:"custom_js"`
 	EffectConfig           domain.ThemeEffectConfig `json:"effect_config"`

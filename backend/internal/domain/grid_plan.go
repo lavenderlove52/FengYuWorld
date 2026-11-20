@@ -11,6 +11,15 @@ type GridLayer struct {
 	Voided     bool    `json:"voided,omitempty"`
 }
 
+// 投资计划对外可见范围。默认 private：不主动改，个人主页就不会展示。
+const (
+	PlanVisibilityPrivate   = "private"
+	PlanVisibilityLogin     = "login"
+	PlanVisibilityFriends   = "friends"
+	PlanVisibilitySpecified = "specified"
+	PlanVisibilityPublic    = "public"
+)
+
 // GridPlan 一份投资计划，对应一个独立资金池。
 type GridPlan struct {
 	ID           int64    `gorm:"primaryKey"                        json:"id"`
@@ -30,12 +39,16 @@ type GridPlan struct {
 	GridAggregation     string  `gorm:"size:20;not null;default:highest"  json:"grid_aggregation"`
 	UnallocatedInvested float64 `gorm:"type:numeric(18,2);not null;default:0" json:"unallocated_invested"`
 	SortOrder           int     `gorm:"not null;default:0"                json:"sort_order"`
+	// Visibility 对外可见范围，见 PlanVisibility* 常量
+	Visibility string `gorm:"size:20;not null;default:private" json:"visibility"`
 	// Version 乐观锁：每次写库 +1，保存时要求与客户端读到的版本一致。
 	Version   int64     `gorm:"not null;default:1"                      json:"version"`
 	CreatedAt time.Time `gorm:"not null;default:now()"            json:"created_at"`
 	UpdatedAt time.Time `gorm:"not null;default:now()"            json:"updated_at"`
 
 	Assets []GridAsset `gorm:"foreignKey:PlanID;constraint:OnDelete:CASCADE" json:"assets,omitempty"`
+	// VisibleUserIDs specified 档下可见的用户；单独存 grid_plan_visible_users，不在这张表里
+	VisibleUserIDs []int64 `gorm:"-" json:"visible_user_ids,omitempty"`
 }
 
 func (GridPlan) TableName() string { return "grid_plans" }
@@ -92,6 +105,15 @@ type GridPlanExecution struct {
 
 func (GridPlanExecution) TableName() string { return "grid_plan_executions" }
 
+// GridPlanVisibleUser specified 档下能看到该计划的用户。
+type GridPlanVisibleUser struct {
+	PlanID    int64     `gorm:"primaryKey"                  json:"plan_id"`
+	UserID    int64     `gorm:"primaryKey"                  json:"user_id"`
+	CreatedAt time.Time `gorm:"not null;default:now()"      json:"created_at"`
+}
+
+func (GridPlanVisibleUser) TableName() string { return "grid_plan_visible_users" }
+
 // ---------- 计划级汇总（列表页用，不落库） ----------
 
 // PlanSummary 计划列表里的汇总数据。
@@ -101,6 +123,7 @@ type PlanSummary struct {
 	Market       string    `json:"market"`
 	Currency     string    `json:"currency"`
 	CurrencyName string    `json:"currency_name"`
+	Visibility   string    `json:"visibility"`
 	TotalBudget  float64   `json:"total_budget"`
 	Invested     float64   `json:"invested"`
 	MarketValue  float64   `json:"market_value"`
