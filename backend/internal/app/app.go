@@ -111,6 +111,14 @@ func New(cfg *config.Config) (*App, error) {
 	homeThemeImageHandler := handler.NewHomeThemeImageHandler(homeThemeImageSvc)
 	settingsHandler := handler.NewSettingsHandler(appSettingSvc)
 	pushHandler := handler.NewPushHandler(pushSvc)
+	gridPlanRepo := repository.NewGridPlanRepository(database)
+	gridPlanSvc := service.NewGridPlanService(gridPlanRepo)
+	gridPlanHandler := handler.NewGridPlanHandler(gridPlanSvc)
+	gridPresetRepo := repository.NewGridAssetPresetRepository(database)
+	gridPresetSvc := service.NewGridAssetPresetService(gridPresetRepo)
+	gridPresetHandler := handler.NewGridAssetPresetHandler(gridPresetSvc)
+	// 保存计划后把自定义标的收进自建联想列表
+	gridPlanSvc.SetPresetCollector(gridPresetSvc)
 
 	authMW := middleware.NewAuthMiddlewareWithDB(jwtManager, database, middleware.NewUserCache())
 
@@ -127,7 +135,7 @@ func New(cfg *config.Config) (*App, error) {
 	}
 	router.Static(cfg.PublicUploadBaseURL, cfg.UploadDir)
 
-	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, postTreeHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler, settingsHandler, pushHandler)
+	registerRoutes(router, authMW, authHandler, captchaHandler, userHandler, postHandler, postTreeHandler, friendHandler, categoryHandler, tagHandler, uploadHandler, healthHandler, pinHandler, inviteHandler, userThemeHandler, homeThemeImageHandler, wsHandler, chatHandler, settingsHandler, pushHandler, gridPlanHandler, gridPresetHandler)
 
 	return &App{
 		Config: cfg,

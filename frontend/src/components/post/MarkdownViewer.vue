@@ -148,6 +148,8 @@ watch(
       :model-value="contentMd"
       language="zh-CN"
       preview-theme="default"
+      :no-highlight="true"
+      :no-prettier="true"
       class="blog-markdown-viewer"
       :sanitize="sanitizeHtml"
     />
@@ -480,5 +482,26 @@ watch(
 .blog-markdown-viewer :deep(.md-editor-preview code:not(pre code)) {
   background: color-mix(in srgb, var(--theme-accent, #2d8cf0) 12%, transparent);
   color: var(--theme-accent, #2d8cf0);
+}
+
+/* Tailwind Preflight 会将 ol/ul list-style 重置为 none，此处恢复列表标号 */
+.blog-markdown-viewer :deep(.md-editor-preview ol) {
+  list-style: decimal;
+  padding-left: 1.75em;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview ul) {
+  list-style: disc;
+  padding-left: 1.75em;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview ol ol),
+.blog-markdown-viewer :deep(.md-editor-preview ul ol) {
+  list-style-type: lower-alpha;
+}
+
+.blog-markdown-viewer :deep(.md-editor-preview ol ul),
+.blog-markdown-viewer :deep(.md-editor-preview ul ul) {
+  list-style-type: circle;
 }
 </style>

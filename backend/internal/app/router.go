@@ -28,6 +28,8 @@ func registerRoutes(
 	chat *handler.ChatHandler,
 	settings *handler.SettingsHandler,
 	push *handler.PushHandler,
+	gridPlans *handler.GridPlanHandler,
+	gridPresets *handler.GridAssetPresetHandler,
 ) {
 	api := r.Group("/api")
 	{
@@ -67,6 +69,19 @@ func registerRoutes(
 			authed.GET("/me/theme-images", homeThemeImages.List)
 			authed.POST("/me/theme-images", homeThemeImages.Upload)
 			authed.DELETE("/me/theme-images/:id", homeThemeImages.Delete)
+
+			authed.GET("/grid-plans", gridPlans.List)
+			authed.POST("/grid-plans", gridPlans.Create)
+			authed.GET("/grid-plans/:id", gridPlans.Get)
+			authed.PUT("/grid-plans/:id", gridPlans.Update)
+			authed.DELETE("/grid-plans/:id", gridPlans.Delete)
+			authed.GET("/grid-plans/:id/snapshots", gridPlans.ListSnapshots)
+			authed.POST("/grid-plans/:id/snapshots", gridPlans.RecordSnapshot)
+			authed.POST("/grid-plans/:id/executions", gridPlans.AddExecution)
+			authed.DELETE("/grid-plans/:id/executions/last", gridPlans.UndoLastExecution)
+
+			authed.GET("/grid-presets", gridPresets.List)
+			authed.DELETE("/grid-presets/:id", gridPresets.Delete)
 
 			authed.GET("/me/posts", posts.ListMine)
 			authed.GET("/me/post-links", posts.SearchLinkable)

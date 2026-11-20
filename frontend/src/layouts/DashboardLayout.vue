@@ -46,6 +46,7 @@ const menuOptions = computed(() => {
     { label: () => h(RouterLink, { to: '/dashboard/drafts' }, { default: () => '草稿箱' }), key: 'drafts' },
     { label: () => h(RouterLink, { to: '/dashboard/pins' }, { default: () => '置顶管理' }), key: 'pin-manage' },
     { label: () => h(RouterLink, { to: '/dashboard/theme' }, { default: () => '主页定制' }), key: 'theme-settings' },
+    { label: () => h(RouterLink, { to: '/dashboard/grid-plans' }, { default: () => '定投计划' }), key: 'grid-plans' },
     { label: () => h(RouterLink, { to: '/dashboard/friends' }, { default: () => '好友' }), key: 'friends' },
     { label: () => h(RouterLink, { to: '/dashboard/settings' }, { default: () => '设置' }), key: 'settings' },
     { label: () => h(RouterLink, { to: '/dashboard/phone-push' }, { default: () => '手机推送' }), key: 'phone-push' },
@@ -66,6 +67,7 @@ const menuOptions = computed(() => {
 
 const activeKey = computed(() => {
   if (route.name === 'post-edit' || route.name === 'post-new') return 'post-new'
+  if (route.name === 'grid-plan-detail') return 'grid-plans'
   return String(route.name || 'dashboard')
 })
 

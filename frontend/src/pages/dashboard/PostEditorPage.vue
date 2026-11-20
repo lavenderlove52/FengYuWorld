@@ -111,10 +111,10 @@ const loadTree = async () => {
 }
 
 onMounted(async () => {
-  await loadTree()
-
+  // 目录树和文章正文互不依赖，并行拉能省掉一次往返
+  const treePromise = loadTree()
   if (isEdit.value) {
-    const res = await getPost(postId.value)
+    const [, res] = await Promise.all([treePromise, getPost(postId.value)])
     if (res.code === 0 && res.data) {
       const p = res.data
       form.value = {
@@ -133,7 +133,9 @@ onMounted(async () => {
       }
       tagInput.value = (p.tags || []).join(', ')
     }
+    return
   }
+  await treePromise
 })
 
 const openDirectoryModal = () => {
