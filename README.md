@@ -354,11 +354,9 @@ cd /root/project/FengYuWorld
 ./deploy/release.sh --no-migrate  # 跳过迁移（例如只想重启服务）
 ```
 
-首次在服务器上使用时确认可执行：
+脚本在仓库里已带可执行位（`100755`），`git pull` 下来就能直接 `./deploy/release.sh`。
 
-```bash
-chmod +x deploy/release.sh
-```
+如果遇到 `Permission denied`，说明拉到的还是旧版本，或者用了 `bash deploy/release.sh` 之外的调用方式——**不要用 `chmod +x` 修**：Linux 的文件模式会被 git 感知，脚本第一步检查工作区时会因此判定「有未提交改动」而拒绝执行。
 
 ### 手动发布（脚本出问题时）
 
