@@ -63,7 +63,7 @@ type GridAsset struct {
 	Enabled        bool        `gorm:"not null;default:true"                 json:"enabled"`
 	CurrentPoint   *float64    `gorm:"type:numeric(18,4)"                    json:"current_point"`
 	HighPoint      *float64    `gorm:"type:numeric(18,4)"                    json:"high_point"`
-	Weight         float64     `gorm:"type:numeric(6,2);not null;default:0"  json:"weight"`
+	Weight         float64     `gorm:"type:numeric(9,6);not null;default:0"  json:"weight"`
 	Invested       float64     `gorm:"type:numeric(18,2);not null;default:0" json:"invested"`
 	MarketValue    float64     `gorm:"type:numeric(18,2);not null;default:0" json:"market_value"`
 	BaseAmount     float64     `gorm:"type:numeric(18,2);not null;default:0" json:"base_amount"`

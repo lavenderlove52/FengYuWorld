@@ -254,11 +254,59 @@ export function updateCurrency(currency: string, currencyName: string): void {
 
 export type NumericAssetField = 'current_point' | 'high_point' | 'weight' | 'invested' | 'market_value' | 'base_amount'
 
+/** 权重保留 6 位小数，和后端 numeric(9,6) 对齐。 */
+const WEIGHT_SCALE = 1e6
+
+export function roundWeight(value: number): number {
+  return Math.round(value * WEIGHT_SCALE) / WEIGHT_SCALE
+}
+
+/** 权重是唯一落库的字段，目标预算由「总预算 × 权重」算出来。 */
+export function targetBudgetOf(asset: Pick<GridAssetDTO, 'weight'>, totalBudget: number): number {
+  return ((Number(totalBudget) || 0) * (Number(asset.weight) || 0)) / 100
+}
+
+/**
+ * 改目标预算：反算权重。
+ * 若结果会让所有生效标的的权重合计超过 100%，按 100% 取还能给这个标的的最大金额
+ * （否则用户填个大数只会得到一句「超过 100%」的报错，什么也没省下）。
+ */
+export function updateTargetBudget(assetId: number, amount: number): void {
+  const asset = findAsset(assetId)
+  const plan = planState.plan
+  if (!asset || !plan) return
+  const totalBudget = Number(plan.total_budget) || 0
+  if (totalBudget <= 0) return
+
+  let wanted = roundWeight(((Math.max(0, Number(amount) || 0)) / totalBudget) * 100)
+  const others = plan.assets
+    .filter((item) => item !== asset && item.enabled)
+    .reduce((sum, item) => sum + (Number(item.weight) || 0), 0)
+  const remaining = Math.max(0, 100 - others)
+  if (asset.enabled) wanted = Math.min(wanted, roundWeight(remaining))
+  else wanted = Math.min(wanted, 100)
+
+  asset.weight = wanted
+  touch()
+}
+
 export function updateAssetNumber(assetId: number, field: NumericAssetField, value: number | null): void {
   const asset = findAsset(assetId)
+  const plan = planState.plan
   if (!asset) return
   if (field === 'current_point' || field === 'high_point') {
     asset[field] = value === null || !Number.isFinite(value) ? null : Math.max(0, value)
+    touch()
+    return
+  }
+  if (field === 'weight' && plan) {
+    // 直接改权重时也守住 100%：其余标的不动，这个最多占满剩下的部分
+    const totalBudget = Number(plan.total_budget) || 0
+    if (totalBudget > 0) {
+      updateTargetBudget(assetId, (Math.max(0, Number(value) || 0) * totalBudget) / 100)
+      return
+    }
+    asset.weight = roundWeight(Math.max(0, Math.min(100, Number(value) || 0)))
     touch()
     return
   }

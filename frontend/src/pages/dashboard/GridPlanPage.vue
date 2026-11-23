@@ -13,8 +13,8 @@ import {
   resetPlanState, restoreLayer, savePlan, setLayerAmount, setReferenceHighToCurrent, undoLastExecution,
   updateAggregation, updateAssetEnabled,
   updateAssetLeveraged, updateAssetNumber, updateAssetText, updateBudget, updateCurrency, updateFrequency,
-  updateGateMode, updateGateThreshold, updateLayer, updateNextDate, updatePlanName, updateUnallocated,
-  updateVisibility, updateVisibleUsers, updateWeightMethod, voidLayer,
+  updateGateMode, updateGateThreshold, updateLayer, updateNextDate, updatePlanName, updateTargetBudget,
+  updateUnallocated, updateVisibility, updateVisibleUsers, updateWeightMethod, voidLayer,
 } from '@/core/gridplan/planState'
 import { formatPlanMoney, formatSignedMoney } from '@/core/gridplan/planFormat'
 import { formatNumber, formatPercent, formatPlainPercent } from '@/core/gridplan/format'
@@ -723,6 +723,13 @@ function pnlClass(value: number): string {
   return 'text-slate-500'
 }
 
+/** 权重偏离：超配标红、低配标绿，和盈亏同一套颜色语言。 */
+function deviationClass(deviation: number): string {
+  if (deviation > 0) return 'text-red-600'
+  if (deviation < 0) return 'text-emerald-600'
+  return 'text-slate-400'
+}
+
 // ---------- 一键优化 ----------
 
 /**
@@ -970,10 +977,6 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                 ]"
                 @update:value="(v) => updateAggregation(v as 'highest' | 'cumulative')" />
             </NFormItem>
-            <div class="flex flex-wrap gap-2 mt-1">
-              <NButton size="small" @click="addAsset()">新增标的</NButton>
-              <NButton size="small" ghost @click="onUndo">撤销最近执行</NButton>
-            </div>
             <div class="mt-3 pt-3 border-t border-slate-100">
               <div class="text-xs text-slate-500 mb-2">初始化模板（会替换全部标的并清零投入/市值）</div>
               <div class="flex flex-wrap gap-2">
@@ -991,6 +994,23 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
           </NCard>
 
           <div class="flex flex-col gap-3 xl:col-start-1 xl:row-start-2">
+            <!-- 新增标的是最高频操作，放在标的列表最上方，不用滚到右侧去找 -->
+            <NCard size="small" :bordered="false" class="!bg-slate-50">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <div class="min-w-0">
+                  <div class="text-sm font-medium text-slate-700">
+                    标的（{{ metrics.assets.length }}）
+                  </div>
+                  <div class="text-xs text-slate-400 mt-0.5">
+                    新增后填名称、点位与权重，再点「保存」落库
+                  </div>
+                </div>
+                <div class="flex gap-2">
+                  <NButton ghost @click="onUndo">撤销最近执行</NButton>
+                  <NButton type="primary" @click="addAsset()">+ 新增标的</NButton>
+                </div>
+              </div>
+            </NCard>
             <NCard v-for="row in metrics.assets" :key="row.asset.id" size="small">
               <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="min-w-0">
@@ -1012,8 +1032,19 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                       <div class="text-sm font-medium">{{ formatPlainPercent(row.dd) }}</div>
                     </div>
                     <div>
-                      <div class="text-xs text-slate-500">目标 / 实际权重</div>
-                      <div class="text-sm font-medium">{{ row.asset.weight }}% / {{ formatPlainPercent(row.actualWeight) }}</div>
+                      <div class="text-xs text-slate-500">目标权重</div>
+                      <div class="text-sm font-medium">{{ formatPlainPercent(row.asset.weight) }}</div>
+                      <div class="text-xs text-slate-400 mt-0.5">
+                        应投 {{ formatPlanMoney(row.targetBudget, plan) }}
+                      </div>
+                    </div>
+                    <div>
+                      <div class="text-xs text-slate-500">已投入占比</div>
+                      <div class="text-sm font-medium">{{ formatPlainPercent(row.actualWeight) }}</div>
+                      <div v-if="row.weightDeviation !== null" class="text-xs mt-0.5" :class="deviationClass(row.weightDeviation)">
+                        {{ row.weightDeviation > 0 ? '超配' : row.weightDeviation < 0 ? '低配' : '持平' }}
+                        {{ formatPlainPercent(Math.abs(row.weightDeviation)) }}
+                      </div>
                     </div>
                     <div>
                       <div class="text-xs text-slate-500">已投入 / 市值</div>
@@ -1077,7 +1108,7 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                       @update:value="(v) => updateAssetNumber(row.asset.id, 'high_point', v === null ? null : Number(v))" />
                   </NFormItem>
                   <NFormItem label="目标权重 %" size="small">
-                    <NInputNumber :value="row.asset.weight" :min="0" style="width:100%"
+                    <NInputNumber :value="row.asset.weight" :min="0" :max="100" :step="0.1" style="width:100%"
                       @update:value="(v) => updateAssetNumber(row.asset.id, 'weight', Number(v ?? 0))" />
                   </NFormItem>
                   <NFormItem label="已投入" size="small">
@@ -1093,7 +1124,24 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                       @update:value="(v) => updateAssetNumber(row.asset.id, 'base_amount', Number(v ?? 0))" />
                   </NFormItem>
                   <NFormItem label="目标预算" size="small">
-                    <NInput :value="formatPlanMoney(row.targetBudget, plan)" disabled />
+                    <div class="w-full">
+                      <NInputNumber
+                        :value="Math.round(row.targetBudget * 100) / 100"
+                        :min="0"
+                        :step="plan.unit"
+                        :disabled="plan.total_budget <= 0"
+                        :show-button="false"
+                        :prefix="plan.currency"
+                        style="width:100%"
+                        @update:value="(v) => updateTargetBudget(row.asset.id, Number(v ?? 0))"
+                      />
+                      <p v-if="plan.total_budget <= 0" class="text-xs text-slate-400 mt-1">
+                        先填计划总预算，才能按金额反推权重
+                      </p>
+                      <p v-else class="text-xs text-slate-400 mt-1">
+                        改金额会反算权重（6 位小数）；填超过上限时按剩余额度取最大值
+                      </p>
+                    </div>
                   </NFormItem>
                   <NFormItem label="参与计算" size="small">
                     <NSwitch :value="row.asset.enabled" @update:value="(v) => updateAssetEnabled(row.asset.id, v)" />
@@ -1147,7 +1195,7 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
             </NCard>
 
             <NCard v-if="!metrics.assets.length" size="small">
-              <div class="text-center text-sm text-slate-500 py-6">还没有标的，点左侧「新增标的」开始。</div>
+              <div class="text-center text-sm text-slate-500 py-6">还没有标的，点上方「+ 新增标的」开始。</div>
             </NCard>
 
             <NCard size="small" title="行动与风险提醒">

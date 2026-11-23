@@ -553,7 +553,7 @@ func validatePlan(plan *domain.GridPlan) error {
 		}
 	}
 	if weightSum > 100+gridEpsilon {
-		return &ValidationError{Field: "目标权重", Reason: fmt.Sprintf("合计 %.2f%%，超过 100%%", weightSum)}
+		return &ValidationError{Field: "目标权重", Reason: fmt.Sprintf("合计 %.6g%%，超过 100%%", weightSum)}
 	}
 	return nil
 }

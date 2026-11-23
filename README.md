@@ -330,27 +330,48 @@ curl -sI http://124.223.116.8/blog/ | head -3
 
 ### 只更新后端
 
-后端是编译型服务，流程是「拉代码 → 迁移 → 编译 → 重启」。
+后端是编译型服务，流程是「拉代码 → 迁移 → 编译 → 重启」。这些步骤已经写进脚本，一条命令搞定：
 
 ```bash
-# 全部在服务器上执行
 ssh root@124.223.116.8
+cd /root/project/FengYuWorld
+./deploy/release.sh
+```
 
+脚本做的事（任意一步失败就中止，不会留下半更新的服务）：
+
+1. 检查服务器工作区干净（有未提交改动直接拒绝）
+2. `git pull --ff-only`，并打印这次拉到的提交
+3. `go run ./cmd/migrate`
+4. `go build` 到临时文件，成功后才替换 `bin/server`，同时把旧版本备份成 `bin/server.bak`
+5. `systemctl restart myblog`
+6. 轮询 `/api/health`，15 秒内没起来就自动换回备份重启
+
+常用参数：
+
+```bash
+./deploy/release.sh --dry-run     # 只打印将要做什么，不动线上
+./deploy/release.sh --no-migrate  # 跳过迁移（例如只想重启服务）
+```
+
+首次在服务器上使用时确认可执行：
+
+```bash
+chmod +x deploy/release.sh
+```
+
+### 手动发布（脚本出问题时）
+
+```bash
 cd /root/project/FengYuWorld
 git status                 # 服务器上不该有本地改动；有的话先弄清楚是什么
 git pull
 
-# 1. 数据库迁移（有新 migration 时；无变更时重复执行也安全）
 cd backend
-go run ./cmd/migrate
-
-# 2. 编译
+go run ./cmd/migrate       # 有新 migration 时；无变更时重复执行也安全
 go build -o bin/server ./cmd/server
-
-# 3. 重启
 systemctl restart myblog
 
-# 4. 验证
 systemctl status myblog --no-pager
 curl http://127.0.0.1:8080/api/health
 journalctl -u myblog -n 50 --no-pager     # 有异常看这里
@@ -374,17 +395,10 @@ journalctl -u myblog -n 50 --no-pager     # 有异常看这里
 顺序建议 **先后端、后前端**：
 
 ```bash
-# ---------- 服务器：拉代码 → 迁移 → 编译 → 重启 ----------
+# ---------- 服务器：一条命令发布后端 ----------
 ssh root@124.223.116.8
 cd /root/project/FengYuWorld
-git status                 # 服务器上不该有本地改动；有的话先弄清楚是什么
-git pull
-
-cd backend
-go run ./cmd/migrate       # 有新 migration 时；无变更时重复执行也安全
-go build -o bin/server ./cmd/server
-systemctl restart myblog
-curl http://127.0.0.1:8080/api/health
+./deploy/release.sh
 
 # ---------- 本地：同步代码 → 打包 → 上传 ----------
 cd /path/to/My-Blog        # 仓库根目录
