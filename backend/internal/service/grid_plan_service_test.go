@@ -260,11 +260,30 @@ func TestValidateAsset_VoidedLayersSkipRatioSum(t *testing.T) {
 	}
 }
 
-// 作废层仍要满足阈值递增，否则撤销作废后网格顺序是坏的。
-func TestValidateAsset_VoidedLayersStillNeedThresholdOrder(t *testing.T) {
+// 作废层是历史快照：允许保留旧阈值，也能和新层重叠，不参与递增校验。
+// 生效层之间的顺序仍然必须严格递增。
+func TestValidateAsset_VoidedLayersKeepHistoricalThresholds(t *testing.T) {
 	p := basePlan()
 	p.Assets[0].Grid = []domain.GridLayer{
 		{Key: "g1", Threshold: 20, Allocation: 10, Voided: true},
+		{Key: "g2", Threshold: 10, Allocation: 90},
+	}
+	if err := validatePlan(p); err != nil {
+		t.Fatalf("作废层不应参与递增校验: %v", err)
+	}
+
+	// 作废层和新层阈值相同也允许（一键优化后新旧层重叠）
+	p.Assets[0].Grid = []domain.GridLayer{
+		{Key: "g1", Threshold: 8, Allocation: 9, Voided: true},
+		{Key: "g2", Threshold: 8, Allocation: 91},
+	}
+	if err := validatePlan(p); err != nil {
+		t.Fatalf("作废层与新层允许同阈值: %v", err)
+	}
+
+	// 生效层之间的倒序仍然拒绝
+	p.Assets[0].Grid = []domain.GridLayer{
+		{Key: "g1", Threshold: 20, Allocation: 10},
 		{Key: "g2", Threshold: 10, Allocation: 90},
 	}
 	expectValidation(t, validatePlan(p), "必须严格大于上一层")

@@ -356,12 +356,28 @@ export function applyTemplate(template: PlanTemplate): void {
   touch()
 }
 
+/**
+ * 新增一层：阈值按该指数的平均档距往下延伸，直接就是合法值。
+ * 原来写死 0，用户忘了填就保存会整份被后端拒绝（要求阈值在 0~100 之间）。
+ */
 export function addGridLayer(assetId: number): void {
   const asset = findAsset(assetId)
-  if (!asset) return
+  const plan = planState.plan
+  if (!asset || !plan) return
   const index = asset.grid.length + 1
-  asset.grid.push({ key: nextLayerKey(asset.grid, index), threshold: 0, allocation: 0, voided: false })
+  const rows = gridForIndex(asset.name, plan.market === 'us' ? 'us' : 'cn')
+  const first = rows[0]?.[0] ?? 5
+  const last = rows[rows.length - 1]?.[0] ?? 60
+  const gap = rows.length > 1 ? (last - first) / (rows.length - 1) : 8
+  // 后端要求所有层阈值严格递增且 < 100，取整后至少要比当前最深一层大 0.1
+  const deepest = asset.grid.reduce((max, layer) => Math.max(max, Number(layer.threshold) || 0), 0)
+  const threshold = Math.min(99, roundThreshold(Math.max(deepest + gap, deepest + 0.1)))
+  asset.grid.push({ key: nextLayerKey(asset.grid, index), threshold, allocation: 0, voided: false })
   touch()
+}
+
+function roundThreshold(value: number): number {
+  return Math.round(value * 10) / 10
 }
 
 export function removeGridLayer(assetId: number, layerKey: string): boolean {
@@ -528,8 +544,13 @@ function toPayload(plan: GridPlanDetail): SaveGridPlanPayload {
       invested: asset.invested,
       market_value: asset.market_value,
       base_amount: asset.base_amount,
-      grid: asset.grid.map((layer: GridLayerDTO) => ({ ...layer, voided: Boolean(layer.voided) })),
-      executed_layers: [...asset.executed_layers],
+      grid: asset.grid
+        // 阈值为 0 的层是「新增网格层」留下的空行，后端不接受阈值 0，保存时一并跳过
+        .filter((layer: GridLayerDTO) => (Number(layer.threshold) || 0) > 0)
+        .map((layer: GridLayerDTO) => ({ ...layer, voided: Boolean(layer.voided) })),
+      executed_layers: asset.executed_layers.filter((key) => asset.grid.some(
+        (layer) => layer.key === key && (Number(layer.threshold) || 0) > 0,
+      )),
     })),
   }
 }

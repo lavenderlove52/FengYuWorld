@@ -615,7 +615,7 @@ function buildGridColumns(assetId: number): DataTableColumns<PlanAssetMetrics['r
 
 const LAYER_STATE_META: Record<PlanGridRow['state'], { label: string; type: 'success' | 'info' | 'default' }> = {
   invested: { label: '已投', type: 'info' },
-  voided: { label: '已作废', type: 'default' },
+  voided: { label: '历史', type: 'default' },
   triggered: { label: '已触发', type: 'success' },
   waiting: { label: '等待', type: 'default' },
 }
@@ -771,13 +771,16 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
     lines.push(`已执行层不动：${result.executedLayers.map(formatLayerBrief).join('；')}`)
   }
   if (result.voidedLayers.length > 0) {
-    lines.push(`本次作废（金额保留，可点「生效」恢复）：${result.voidedLayers.map(formatLayerBrief).join('；')}`)
+    lines.push(`作废保留（阈值与金额都不变，可点「生效」恢复）：${result.voidedLayers.map(formatLayerBrief).join('；')}`)
   }
   if (result.alreadyVoidedCount > 0) {
     lines.push(`另有 ${result.alreadyVoidedCount} 层此前已作废，保持不动。`)
   }
-  if (result.removedLayers.length > 0) {
-    lines.push(`被新层取代（删除）：${result.removedLayers.map(formatLayerBrief).join('；')}`)
+  if (result.replacedLayers.length > 0) {
+    lines.push(`以下 ${result.replacedLayers.length} 层由新档位取代，同样作废保留以便复盘：${result.replacedLayers.map(formatLayerBrief).join('；')}`)
+  }
+  if (result.droppedLayers.length > 0) {
+    lines.push(`跳过 ${result.droppedLayers.length} 个还没填阈值的空层（不保存）：${result.droppedLayers.map((layer) => layer.key).join('、')}`)
   }
   lines.push(`新排：${result.addedLayers.map(formatLayerBrief).join('；')}`)
   if (result.rowCount > result.targetLayers) {
@@ -1103,7 +1106,9 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                   :pagination="false" />
                 <div class="flex flex-wrap justify-between gap-2 text-xs text-slate-500 mt-2">
                   <span>网格资金比例合计：<b class="text-slate-700">{{ formatPlainPercent(row.gridRatioTotal) }}</b></span>
-                  <span v-if="row.voidedCount" class="text-slate-400">已作废 {{ row.voidedCount }} 层，不参与合计</span>
+                  <span v-if="row.voidedCount" class="text-slate-400">
+                    已作废 {{ row.voidedCount }} 层（保留历史阈值，不参与触发与合计，可点「生效」恢复）
+                  </span>
                   <span v-if="!row.gridRatioValid" class="text-red-600">比例超过 100%，需调整</span>
                   <span v-else-if="row.gridRatioTotal < 100">保留 {{ formatPlainPercent(100 - row.gridRatioTotal) }} 未分配</span>
                   <span v-else>资金比例完整</span>

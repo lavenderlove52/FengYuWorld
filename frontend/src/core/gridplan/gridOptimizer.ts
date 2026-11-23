@@ -70,8 +70,10 @@ export interface GridOptimizeResult {
   alreadyVoidedCount: number
   /** 整个网格的行数（含作废层），后端按行数校验 50 层上限 */
   rowCount: number
-  /** 被新层取代的层：没买过、不比起点浅 */
-  removedLayers: GridLayerDTO[]
+  /** 被新层取代、随之作废保留的层：没买过、不比起点浅 */
+  replacedLayers: GridLayerDTO[]
+  /** 空层：阈值为 0、既没金额也没执行记录，保存时跳过 */
+  droppedLayers: GridLayerDTO[]
   addedLayers: GridLayerDTO[]
 }
 
@@ -108,23 +110,30 @@ export function optimizeGrid(
   const targetLayers = Math.max(requested, executed.length + 1, MIN_LAYERS)
   const newCount = targetLayers - executed.length
 
-  // 比起点浅又没买过的层作废（金额保留）；不比起点浅的由新层取代。
+  // 保留旧层做复盘：比起点浅的、以及本该由新层取代的，一律作废保留（阈值与金额都是当时的值）。
+  // 阈值为 0 的层是「新增网格层」留下的空行，没有策略含义，保存时跳过而不是存进库。
   const voidedLayers: GridLayerDTO[] = []
-  const removedLayers: GridLayerDTO[] = []
+  const replacedLayers: GridLayerDTO[] = []
+  const droppedLayers: GridLayerDTO[] = []
   let alreadyVoidedCount = 0
   for (const layer of asset.grid) {
     if (executedKeys.has(layer.key)) continue
     const threshold = Number(layer.threshold) || 0
-    if (threshold < anchor - 0.05) {
-      if (layer.voided) {
-        // 本来就作废的层原样留着，不算「本次作废」
-        alreadyVoidedCount += 1
-        voidedLayers.push(layer)
-      } else {
-        voidedLayers.push({ ...layer, voided: true })
-      }
+    if (threshold <= 0) {
+      droppedLayers.push(layer)
+      continue
+    }
+    if (layer.voided) {
+      // 本来就作废的层原样留着，不算「本次作废」
+      alreadyVoidedCount += 1
+      voidedLayers.push(layer)
+    } else if (threshold < anchor - 0.05) {
+      voidedLayers.push({ ...layer, voided: true })
     } else {
-      removedLayers.push(layer)
+      // 不比起点浅、但会被新排的档位覆盖：同样作废保留，复盘时能看到原来的阈值
+      const replaced = { ...layer, voided: true }
+      voidedLayers.push(replaced)
+      replacedLayers.push(replaced)
     }
   }
 
@@ -194,7 +203,8 @@ export function optimizeGrid(
     maxDepth: deepest ? round1(Number(deepest.threshold) || 0) : 0,
     executedLayers: executed,
     voidedLayers,
-    removedLayers,
+    replacedLayers,
+    droppedLayers,
     addedLayers,
     alreadyVoidedCount,
     rowCount,

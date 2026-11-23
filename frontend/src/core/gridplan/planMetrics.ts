@@ -166,8 +166,11 @@ export function gridRatioValid(asset: Pick<GridAssetDTO, 'grid'>): boolean {
 }
 
 export function thresholdOrderValid(asset: Pick<GridAssetDTO, 'grid'>): boolean {
-  const values = asset.grid.map((layer) => Number(layer.threshold) || 0)
-  return values.every((value, index) => index === 0 || (value > values[index - 1] && value > 0))
+  // 作废层是历史快照，允许与新层同阈值，不参与顺序校验（与后端 validateAsset 一致）
+  const values = asset.grid
+    .filter((layer) => !layer.voided && (Number(layer.threshold) || 0) > 0)
+    .map((layer) => Number(layer.threshold))
+  return values.every((value, index) => index === 0 || value > values[index - 1]!)
 }
 export function isStrictPyramid(asset: Pick<GridAssetDTO, 'grid'>): boolean {
   // 作废层不参与，否则作废一个高比例层会被误报成「不是倒金字塔」。
@@ -546,8 +549,7 @@ function buildAlerts(m: PlanMetrics): PlanAlert[] {
     }
   })
 
-  if (plan.assets.some((a) => a.leveraged && a.enabled)) {
-    alerts.push({
+  if (plan.assets.some((a) => a.leveraged && a.enabled)) {    alerts.push({
       id: 'leveraged',
       level: 'warn',
       title: '组合包含 2 倍杠杆标的',

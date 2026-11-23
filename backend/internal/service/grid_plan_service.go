@@ -599,18 +599,19 @@ func validateAsset(asset *domain.GridAsset, index int) error {
 		if layer.Threshold <= 0 || layer.Threshold > 100 {
 			return wrap(fmt.Sprintf("第 %d 层回撤阈值", j+1), "必须在 0~100 之间")
 		}
-		if layer.Threshold <= prevThreshold+gridEpsilon {
-			return wrap(fmt.Sprintf("第 %d 层回撤阈值", j+1), "必须严格大于上一层")
-		}
-		prevThreshold = layer.Threshold
-
 		if layer.Allocation < 0 || layer.Allocation > 100 {
 			return wrap(fmt.Sprintf("第 %d 层资金比例", j+1), "必须在 0~100 之间")
 		}
-		// 作废层不参与配额，但仍保留 allocation，撤销作废时能回到原份额。
-		if !layer.Voided {
-			ratioSum += layer.Allocation
+		// 作废层是历史快照：保留当时的阈值与金额，允许与新层重叠，也不参与递增校验。
+		// 否则「一键优化」后旧层要么被删、要么被迫改阈值，用户就没法复盘策略变化了。
+		if layer.Voided {
+			continue
 		}
+		if layer.Threshold <= prevThreshold+gridEpsilon {
+			return wrap(fmt.Sprintf("第 %d 层回撤阈值", j+1), "必须严格大于上一层生效层")
+		}
+		prevThreshold = layer.Threshold
+		ratioSum += layer.Allocation
 	}
 	if ratioSum > 100+gridEpsilon {
 		return wrap("网格资金比例", fmt.Sprintf("合计 %.2f%%，超过 100%%", ratioSum))
