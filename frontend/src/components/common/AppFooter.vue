@@ -5,7 +5,7 @@ import { activePageTheme } from '@/stores/pageTheme'
 
 const route = useRoute()
 const usePageTheme = computed(() =>
-  ['user-home', 'post-detail'].includes(String(route.name)) && activePageTheme.enabled,
+  ['user-home', 'post-detail', 'user-plan-detail'].includes(String(route.name)) && activePageTheme.enabled,
 )
 const footerStyle = computed(() => usePageTheme.value
   ? {

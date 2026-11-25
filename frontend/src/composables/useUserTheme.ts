@@ -18,7 +18,7 @@ const THEME_BG_LOCK_ID_PREFIX = 'user-theme-bg-lock-'
 
 const jsCleanups = new Map<string, Array<() => void>>()
 const themeCache = new Map<string, UserTheme>()
-const THEME_ROUTE_NAMES = new Set(['user-home', 'post-detail'])
+const THEME_ROUTE_NAMES = new Set(['user-home', 'post-detail', 'user-plan-detail'])
 
 /**
  * 清掉某个用户的缓存主题。保存过主页定制后必须调用，否则同一会话里打开自己的主页

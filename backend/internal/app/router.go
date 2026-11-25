@@ -81,6 +81,7 @@ func registerRoutes(
 			authed.DELETE("/grid-plans/:id", gridPlans.Delete)
 			authed.GET("/grid-plans/:id/snapshots", gridPlans.ListSnapshots)
 			authed.POST("/grid-plans/:id/snapshots", gridPlans.RecordSnapshot)
+			authed.GET("/grid-plans/:id/executions", gridPlans.ListExecutions)
 			authed.POST("/grid-plans/:id/executions", gridPlans.AddExecution)
 			authed.DELETE("/grid-plans/:id/executions/last", gridPlans.UndoLastExecution)
 

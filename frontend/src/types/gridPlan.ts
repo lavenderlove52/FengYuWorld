@@ -25,6 +25,8 @@ export interface GridAssetDTO {
   weight: number
   invested: number
   market_value: number
+  /** 累计卖出到账；只由「记录卖出」维护，保存计划不会改它 */
+  realized_out: number
   base_amount: number
   grid: GridLayerDTO[]
   executed_layers: string[]
@@ -133,6 +135,9 @@ export interface GridExecution {
   asset_id: number | null
   asset_name: string
   amount: number
+  side: 'buy' | 'sell'
+  /** 成交点位，老记录没有 */
+  point: number | null
   layer_keys: string[]
   was_regular: boolean
   prev_next_date: string
@@ -144,6 +149,10 @@ export interface RecordExecutionPayload {
   /** 0 表示记到「已投入未分配」 */
   asset_id: number
   amount: number
+  /** 缺省按 buy 处理 */
+  side?: 'buy' | 'sell'
+  /** 成交点位快照，卖出时也会带 */
+  point?: number | null
   layer_keys?: string[]
   was_regular?: boolean
   note?: string

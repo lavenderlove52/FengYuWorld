@@ -410,3 +410,36 @@ func TestAdvanceByFrequency(t *testing.T) {
 		}
 	})
 }
+
+func TestNormalizeSide(t *testing.T) {
+	cases := map[string]string{
+		"":       domain.ExecutionSideBuy,
+		"buy":    domain.ExecutionSideBuy,
+		"sell":   domain.ExecutionSideSell,
+		" sell ": domain.ExecutionSideSell,
+		"short":  "",
+	}
+	for input, want := range cases {
+		if got := normalizeSide(input); got != want {
+			t.Errorf("normalizeSide(%q) = %q, 期望 %q", input, got, want)
+		}
+	}
+}
+
+func TestNormalizePoint(t *testing.T) {
+	if got := normalizePoint(nil); got != nil {
+		t.Errorf("nil 应返回 nil，得到 %v", *got)
+	}
+	zero := 0.0
+	if got := normalizePoint(&zero); got != nil {
+		t.Errorf("非正数应返回 nil，得到 %v", *got)
+	}
+	raw := 2248.314159
+	got := normalizePoint(&raw)
+	if got == nil || *got != 2248.3142 {
+		t.Fatalf("点位应保留 4 位小数，得到 %v", got)
+	}
+	if raw != 2248.314159 {
+		t.Error("不应改动调用方传进来的值")
+	}
+}

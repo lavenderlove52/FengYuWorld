@@ -66,6 +66,8 @@ type GridAsset struct {
 	Weight         float64     `gorm:"type:numeric(9,6);not null;default:0"  json:"weight"`
 	Invested       float64     `gorm:"type:numeric(18,2);not null;default:0" json:"invested"`
 	MarketValue    float64     `gorm:"type:numeric(18,2);not null;default:0" json:"market_value"`
+	// RealizedOut 累计卖出到账金额，只由记录卖出累加；已投入仍是累计买入，不会被卖出扣减。
+	RealizedOut    float64     `gorm:"type:numeric(18,2);not null;default:0" json:"realized_out"`
 	BaseAmount     float64     `gorm:"type:numeric(18,2);not null;default:0" json:"base_amount"`
 	Grid           []GridLayer `gorm:"type:jsonb;serializer:json;not null;default:'[]'" json:"grid"`
 	ExecutedLayers []string    `gorm:"type:jsonb;serializer:json;not null;default:'[]'" json:"executed_layers"`
@@ -90,12 +92,21 @@ type GridPlanSnapshot struct {
 func (GridPlanSnapshot) TableName() string { return "grid_plan_snapshots" }
 
 // GridPlanExecution 一次执行记录。删标的后 asset_id 置空，记录仍保留。
+const (
+	ExecutionSideBuy  = "buy"
+	ExecutionSideSell = "sell"
+)
+
 type GridPlanExecution struct {
 	ID           int64     `gorm:"primaryKey"                             json:"id"`
 	PlanID       int64     `gorm:"not null;index"                         json:"plan_id"`
 	AssetID      *int64    `                                             json:"asset_id"`
 	AssetName    string    `gorm:"size:80;not null"                        json:"asset_name"`
 	Amount       float64   `gorm:"type:numeric(18,2);not null"             json:"amount"`
+	// Side 执行方向：buy / sell。老记录默认 buy。
+	Side         string    `gorm:"size:8;not null;default:'buy'"            json:"side"`
+	// Point 成交时的点位快照，空表示没记（老记录都没有）。
+	Point        *float64  `gorm:"type:numeric(18,4)"                      json:"point"`
 	LayerKeys    []string  `gorm:"type:jsonb;serializer:json;not null;default:'[]'" json:"layer_keys"`
 	WasRegular   bool      `gorm:"not null;default:false"                  json:"was_regular"`
 	PrevNextDate DateOnly  `gorm:"type:date"                              json:"prev_next_date,omitempty"`

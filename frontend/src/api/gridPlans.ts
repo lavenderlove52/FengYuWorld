@@ -37,6 +37,10 @@ export const recordGridSnapshot = (id: number, date?: string) =>
 export const addGridExecution = (id: number, payload: RecordExecutionPayload) =>
   http.post<ApiResponse<GridExecution>>(`/grid-plans/${id}/executions`, payload).then((r) => r.data)
 
+/** 全部执行记录（买入与卖出），按时间升序，用于买卖点图和明细列表。 */
+export const listGridExecutions = (id: number) =>
+  http.get<ApiResponse<GridExecution[]>>(`/grid-plans/${id}/executions`).then((r) => r.data)
+
 export const undoLastGridExecution = (id: number) =>
   http.delete<ApiResponse<GridExecution>>(`/grid-plans/${id}/executions/last`).then((r) => r.data)
 

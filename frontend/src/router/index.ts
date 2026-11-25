@@ -13,6 +13,7 @@ const router = createRouter({
         { path: '', name: 'home', component: () => import('@/pages/public/HomePage.vue') },
         { path: 'p/:id', name: 'post-detail', component: () => import('@/pages/public/PostDetailPage.vue') },
         { path: 'u/:username', name: 'user-home', component: () => import('@/pages/public/UserHomePage.vue') },
+        { path: 'u/:username/plans/:id(\\d+)', name: 'user-plan-detail', component: () => import('@/pages/public/UserPlanDetailPage.vue') },
       ],
     },
     {
@@ -73,7 +74,7 @@ const router = createRouter({
 
 router.beforeEach(async (to, from) => {
   // 离开用户主页或文章页时立即重置主题，不等组件卸载
-  const themeRoutes = ['user-home', 'post-detail']
+  const themeRoutes = ['user-home', 'post-detail', 'user-plan-detail']
   if (themeRoutes.includes(String(from.name)) && !themeRoutes.includes(String(to.name))) {
     setActivePageTheme(null)
     document.body.style.backgroundColor = ''

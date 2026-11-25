@@ -3,13 +3,13 @@ import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'v
 import type { VNodeChild } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NDataTable, NDatePicker, NFormItem, NInput, NInputNumber, NResult, NSelect, NSpin, NSwitch, NTag, NTooltip,
+  NButton, NCard, NCheckbox, NCheckboxGroup, NDataTable, NDatePicker, NFormItem, NInput, NInputNumber, NModal, NResult, NSelect, NSpin, NSwitch, NTag, NTooltip,
   useDialog, useMessage,
 } from 'naive-ui'
 import type { DataTableColumns, SelectGroupOption, SelectOption } from 'naive-ui'
 import {
   addAsset, addGridLayer, applyOptimizedGrid, applyTemplate, clearExecutedLayers, discardChanges, loadPlan,
-  planMetrics, planState, PlanConflictError, recordExecution, recordSnapshot, removeAsset, removeGridLayer,
+  planMetrics, planState, PlanConflictError, recordExecution, recordSell, recordSnapshot, removeAsset, removeGridLayer,
   resetPlanState, restoreLayer, savePlan, setLayerAmount, setReferenceHighToCurrent, undoLastExecution,
   updateAggregation, updateAssetEnabled,
   updateAssetLeveraged, updateAssetNumber, updateAssetText, updateBudget, updateCurrency, updateFrequency,
@@ -20,16 +20,17 @@ import { formatPlanMoney, formatSignedMoney } from '@/core/gridplan/planFormat'
 import { formatNumber, formatPercent, formatPlainPercent } from '@/core/gridplan/format'
 import type { PlanAssetMetrics, PlanAssetStatus, PlanGridRow } from '@/core/gridplan/planMetrics'
 import { FREQUENCY_LABEL, todayISO } from '@/core/gridplan/format'
-import { listGridSnapshots } from '@/api/gridPlans'
+import { listGridExecutions, listGridSnapshots } from '@/api/gridPlans'
 import DonutChart, { type DonutSlice } from '@/components/chart/DonutChart.vue'
 import LineChart, { type LinePoint } from '@/components/chart/LineChart.vue'
+import TradePointChart, { type TradePoint } from '@/components/chart/TradePointChart.vue'
 import FriendMultiSelect from '@/components/post/FriendMultiSelect.vue'
 import { CURRENCIES, findTemplate, gridForIndex, indicesFor, PLAN_TEMPLATES } from '@/core/gridplan/templates'
 import {
   MIN_LAYERS, optimizeGrid, suggestLayerCount, VOLATILITY_LABEL, volatilityOf, type GridOptimizeResult,
 } from '@/core/gridplan/gridOptimizer'
 import { ensurePresets, presetsFor, refreshPresets, removePreset } from '@/core/gridplan/presetStore'
-import type { Frequency, GateMode, GridAssetDTO, GridLayerDTO, GridSnapshot, PlanVisibility, WeightMethod } from '@/types/gridPlan'
+import type { Frequency, GateMode, GridAssetDTO, GridExecution, GridLayerDTO, GridSnapshot, PlanVisibility, WeightMethod } from '@/types/gridPlan'
 
 const route = useRoute()
 const router = useRouter()
@@ -102,6 +103,33 @@ async function loadSnapshots(): Promise<void> {
 watch(rangeDays, () => {
   void loadSnapshots()
 })
+
+// ---------- 执行记录（买入 + 卖出） ----------
+
+const executions = ref<GridExecution[]>([])
+const executionsLoading = ref(false)
+// 列表按时间倒序展示，接口给的是升序（画图用）
+const reversedExecutions = computed(() => [...executions.value].reverse())
+
+// 单只标的的买卖点位序列，老记录没有点位就不进图
+function assetTradePoints(assetId: number): TradePoint[] {
+  return executions.value
+    .filter((exec) => exec.asset_id === assetId && exec.point !== null)
+    .map((exec) => ({ date: exec.executed_at, point: exec.point as number, side: exec.side }))
+}
+
+async function loadExecutions(): Promise<void> {
+  if (!planId.value) return
+  executionsLoading.value = true
+  try {
+    const res = await listGridExecutions(planId.value)
+    if (res.code === 0) executions.value = res.data ?? []
+  } catch {
+    // 明细属于辅助信息，失败不打断主流程
+  } finally {
+    executionsLoading.value = false
+  }
+}
 
 const chartPoints = computed<LinePoint[]>(() =>
   snapshots.value.map((s) => ({
@@ -181,7 +209,7 @@ function describeError(err: unknown): string {
 async function reload(): Promise<void> {
   try {
     await loadPlan(planId.value)
-    await Promise.all([loadSnapshots(), ensurePresets(planState.plan?.market ?? 'cn')])
+    await Promise.all([loadSnapshots(), loadExecutions(), ensurePresets(planState.plan?.market ?? 'cn')])
   } catch (err) {
     toast(describeError(err), true)
   }
@@ -330,11 +358,68 @@ async function executeAsset(row: PlanAssetMetrics): Promise<void> {
       amount,
       layerKeys: funded.map((r) => r.layer.key),
       wasRegular: row.due,
+      point: row.asset.current_point,
     })
-    await loadSnapshots()
+    await Promise.all([loadSnapshots(), loadExecutions()])
     toast(`已记录 ${row.asset.name} ${formatPlanMoney(amount, plan.value!)}`)
   } catch (err) {
     toast(describeError(err), true)
+  }
+}
+
+// ---------- 卖出 ----------
+
+const sellTarget = ref<PlanAssetMetrics | null>(null)
+const sellAmount = ref<number | null>(null)
+const sellPoint = ref<number | null>(null)
+const sellNote = ref('')
+const sellRestoreKeys = ref<string[]>([])
+const selling = ref(false)
+
+const sellLayerOptions = computed(() => {
+  const row = sellTarget.value
+  if (!row) return []
+  const executed = new Set(row.asset.executed_layers)
+  return row.rows
+    .filter((r) => executed.has(r.layer.key))
+    .map((r) => ({
+      label: `${r.layer.threshold}% 档（${formatPlanMoney(r.amount, plan.value!)}）`,
+      value: r.layer.key,
+    }))
+})
+
+function openSell(row: PlanAssetMetrics): void {
+  sellTarget.value = row
+  sellAmount.value = null
+  sellPoint.value = row.asset.current_point
+  sellNote.value = ''
+  sellRestoreKeys.value = []
+}
+
+async function submitSell(): Promise<void> {
+  const row = sellTarget.value
+  if (!row) return
+  const amount = Number(sellAmount.value) || 0
+  if (amount <= 0) {
+    toast('卖出到账金额必须大于 0', true)
+    return
+  }
+  selling.value = true
+  try {
+    const { restored } = await recordSell({
+      assetId: row.asset.id,
+      amount,
+      point: sellPoint.value,
+      note: sellNote.value.trim(),
+      restoreLayerKeys: sellRestoreKeys.value,
+    })
+    await Promise.all([loadSnapshots(), loadExecutions()])
+    sellTarget.value = null
+    toast(restored ? '已记录卖出，选中的层已恢复为未执行，记得点保存' : '已记录卖出')
+  } catch (err) {
+    toast(describeError(err), true)
+  } finally {
+    selling.value = false
   }
 }
 
@@ -362,7 +447,7 @@ function fundedLayers(row: PlanAssetMetrics, amount: number): PlanAssetMetrics['
 async function onUndo(): Promise<void> {
   try {
     const exec = await undoLastExecution()
-    await loadSnapshots()
+    await Promise.all([loadSnapshots(), loadExecutions()])
     toast(`已撤销 ${exec.asset_name} ${formatPlanMoney(exec.amount, plan.value!)}`)
   } catch (err) {
     toast(describeError(err), true)
@@ -733,9 +818,10 @@ async function onInvestLayer(assetId: number, layerRow: PlanGridRow): Promise<vo
       amount,
       layerKeys: [layerRow.layer.key],
       wasRegular: false,
+      point: asset.current_point,
       note: `网格层 ${layerRow.layer.key} 已投`,
     })
-    await loadSnapshots()
+    await Promise.all([loadSnapshots(), loadExecutions()])
     toast(`已记录 ${asset.name} ${plan.value ? formatPlanMoney(amount, plan.value) : amount}`)
   } catch (err) {
     toast(describeError(err), true)
@@ -1082,7 +1168,7 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                     <NTag size="small" :type="statusMeta[row.status].type">{{ statusMeta[row.status].label }}</NTag>
                     <NTag v-if="row.asset.leveraged" size="small" type="error">2× 杠杆</NTag>
                     <NTag v-if="!row.asset.enabled" size="small">已停用</NTag>
-                    <NTag v-if="!row.hasMarketValue" size="small" type="warning">未填市值</NTag>
+                    <NTag v-if="!row.hasValueOrRealized" size="small" type="warning">未填市值</NTag>
                   </div>
                   <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-3">
                     <div>
@@ -1114,13 +1200,16 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                         {{ formatPlanMoney(row.asset.invested, plan) }} /
                         {{ row.hasMarketValue ? formatPlanMoney(row.asset.market_value, plan) : '—' }}
                       </div>
+                      <div v-if="row.asset.realized_out > 0" class="text-xs text-slate-400">
+                        累计卖出 {{ formatPlanMoney(row.asset.realized_out, plan) }}
+                      </div>
                     </div>
                     <div>
                       <div class="text-xs text-slate-500">盈亏</div>
                       <div class="text-sm font-medium" :class="pnlClass(row.pnl)">
-                        {{ row.hasMarketValue ? formatSignedMoney(row.pnl, plan) : '未填市值' }}
+                        {{ row.hasValueOrRealized ? formatSignedMoney(row.pnl, plan) : '未填市值' }}
                       </div>
-                      <div v-if="row.hasMarketValue" class="text-xs" :class="pnlClass(row.pnl)">
+                      <div v-if="row.hasValueOrRealized" class="text-xs" :class="pnlClass(row.pnl)">
                         {{ formatPercent(row.returnRate) }}
                       </div>
                     </div>
@@ -1232,10 +1321,23 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                   <span v-if="!row.strictPyramid" class="text-amber-600">当前不是严格倒金字塔</span>
                 </div>
 
+                <div class="mt-3 pt-3 border-t border-slate-100">
+                  <div class="flex flex-wrap items-center justify-between gap-1 mb-1">
+                    <span class="text-xs text-slate-500">买卖点位</span>
+                    <span class="text-xs text-slate-400">
+                      {{ assetTradePoints(row.asset.id).length }} 个带点位的记录
+                    </span>
+                  </div>
+                  <TradePointChart :points="assetTradePoints(row.asset.id)" :height="140" />
+                </div>
+
                 <div class="flex flex-wrap gap-2 mt-3">
                   <NButton size="small" @click="addGridLayer(row.asset.id)">新增网格层</NButton>
                   <NButton size="small" type="primary" :disabled="row.suggestion <= 0" @click="executeAsset(row)">
                     记录本期执行
+                  </NButton>
+                  <NButton size="small" ghost :disabled="row.asset.invested <= 0" @click="openSell(row)">
+                    记录卖出
                   </NButton>
                   <NButton size="small" ghost @click="onResetHigh(row)">设为新参考高点</NButton>
                   <NButton size="small" ghost :disabled="!row.asset.executed_layers.length" @click="clearExecutedLayers(row.asset.id)">
@@ -1281,8 +1383,83 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                 </div>
               </div>
             </NCard>
+
+            <NCard size="small" title="执行记录">
+              <template #header-extra>
+                <span class="text-xs text-slate-400">共 {{ executions.length }} 条</span>
+              </template>
+              <NSpin :show="executionsLoading">
+                <div v-if="!executions.length" class="text-xs text-slate-400 py-4 text-center">
+                  还没有执行记录，记录买入或卖出后会出现在这里。
+                </div>
+                <div v-else class="flex flex-col gap-1.5 max-h-[300px] overflow-y-auto">
+                  <div v-for="exec in reversedExecutions" :key="exec.id"
+                    class="flex flex-wrap items-center gap-2 rounded-md border border-slate-100 px-3 py-2 text-sm">
+                    <NTag size="tiny" :type="exec.side === 'sell' ? 'warning' : 'success'">
+                      {{ exec.side === 'sell' ? '卖出' : '买入' }}
+                    </NTag>
+                    <span class="font-medium">{{ exec.asset_name }}</span>
+                    <span class="tabular-nums">{{ formatPlanMoney(exec.amount, plan) }}</span>
+                    <span v-if="exec.point !== null" class="text-xs text-slate-400">
+                      点位 {{ formatNumber(exec.point) }}
+                    </span>
+                    <span class="text-xs text-slate-400 ml-auto">{{ exec.executed_at }}</span>
+                    <span v-if="exec.note" class="text-xs text-slate-400 w-full">{{ exec.note }}</span>
+                  </div>
+                </div>
+              </NSpin>
+            </NCard>
           </div>
         </div>
+
+        <NModal :show="sellTarget !== null" preset="card" style="width: 460px" title="记录卖出"
+          :mask-closable="!selling" @update:show="(v: boolean) => { if (!v && !selling) sellTarget = null }">
+          <div v-if="sellTarget" class="flex flex-col gap-3">
+            <div class="text-sm">
+              标的：<b>{{ sellTarget.asset.name }}</b>
+              <span class="text-xs text-slate-400 ml-2">
+                已投入 {{ formatPlanMoney(sellTarget.asset.invested, plan) }} ·
+                累计卖出 {{ formatPlanMoney(sellTarget.asset.realized_out, plan) }}
+              </span>
+            </div>
+            <NFormItem label="卖出到账金额" size="small" required>
+              <NInputNumber v-model:value="sellAmount" :min="0" :step="plan.unit" style="width:100%" />
+            </NFormItem>
+            <NFormItem label="成交点位" size="small">
+              <NInputNumber v-model:value="sellPoint" :min="0" :show-button="false" style="width:100%"
+                placeholder="可留空，留空则不在点图上显示" />
+            </NFormItem>
+            <NFormItem label="备注" size="small">
+              <NInput v-model:value="sellNote" maxlength="200" placeholder="可不填" />
+            </NFormItem>
+            <div v-if="sellLayerOptions.length" class="flex flex-col gap-1">
+              <div class="text-xs text-slate-500">
+                同时把这些层恢复为未执行（可选；不勾则网格层状态完全不变）
+              </div>
+              <NCheckboxGroup v-model:value="sellRestoreKeys">
+                <div class="flex flex-col gap-1">
+                  <NCheckbox v-for="opt in sellLayerOptions" :key="opt.value" :value="opt.value" :label="opt.label" />
+                </div>
+              </NCheckboxGroup>
+              <div class="text-xs text-slate-400">
+                恢复层只清掉网格上的「已投」标记，历史执行记录仍保留在下方列表里。
+              </div>
+            </div>
+            <div class="text-xs text-slate-400">
+              卖出只记到账金额，不推断卖的是哪一层、也不改已投入；
+              记得把「当前市值」更新为剩余持仓的市值。
+            </div>
+            <div v-if="recordBlocked" class="text-xs text-amber-600">请先保存计划，再记录卖出。</div>
+          </div>
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <NButton size="small" :disabled="selling" @click="sellTarget = null">取消</NButton>
+              <NButton size="small" type="primary" :loading="selling" :disabled="recordBlocked" @click="submitSell">
+                确认卖出
+              </NButton>
+            </div>
+          </template>
+        </NModal>
       </template>
       </div>
     </NSpin>

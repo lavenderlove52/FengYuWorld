@@ -12,7 +12,7 @@ const logoUrl = `${appBase}logo.png`
 
 const hasToken = computed(() => auth.tokenExists)
 const showMyArticleLink = computed(() =>
-  hasToken.value && ['home', 'user-home', 'post-detail'].includes(String(route.name)),
+  hasToken.value && ['home', 'user-home', 'post-detail', 'user-plan-detail'].includes(String(route.name)),
 )
 const showMyHomeLink = computed(() => route.name === 'post-detail' && !!auth.user?.username)
 const avatarUrl = computed(() => auth.user?.avatar_url || '')
@@ -64,7 +64,14 @@ const headerText = computed(() => activePageTheme.enabled ? activePageTheme.text
         <RouterLink v-if="hasToken" to="/dashboard" class="p-1.5 rounded-full">
           <div
             class="w-9 h-9 rounded-full overflow-hidden border flex items-center justify-center hover:opacity-80 transition-opacity cursor-pointer"
-            :style="{ borderColor: headerBorder || '#d1d5db', backgroundColor: '#e5e7eb' }"
+            :style="{
+              borderColor: headerBorder || '#d1d5db',
+              // 默认头像底色跟随主题文字色：深色主题下用浅色半透明，浅色主题下用深色半透明，
+              // 否则固定 #e5e7eb 配浅色文字会看不见首字母
+              backgroundColor: activePageTheme.enabled
+                ? `color-mix(in srgb, ${headerText} 16%, transparent)`
+                : '#e5e7eb',
+            }"
           >
             <img
               v-if="avatarUrl"

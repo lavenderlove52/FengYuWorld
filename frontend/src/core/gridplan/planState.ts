@@ -143,6 +143,8 @@ export async function recordExecution(payload: {
   amount: number
   layerKeys: string[]
   wasRegular: boolean
+  /** 成交点位快照，用于买卖点图 */
+  point?: number | null
   note?: string
 }): Promise<GridExecution> {
   if (!planState.plan) throw new Error('没有可记录的计划')
@@ -150,6 +152,7 @@ export async function recordExecution(payload: {
   const res = await apiAddExecution(planState.plan.id, {
     asset_id: payload.assetId,
     amount: payload.amount,
+    point: payload.point ?? null,
     layer_keys: payload.layerKeys,
     was_regular: payload.wasRegular,
     note: payload.note ?? '',
@@ -165,6 +168,39 @@ export async function undoLastExecution(): Promise<GridExecution> {
   if (res.code !== 0 || !res.data) throw new Error(res.message || '撤销失败')
   await loadPlan(planState.plan.id)
   return res.data
+}
+
+/**
+ * 记录一次卖出：只累加「累计卖出到账」，后端不会动已投入和网格层。
+ * restoreLayerKeys 是本地编辑——把这些层恢复成未执行，调用方需要提示用户保存。
+ */
+export async function recordSell(payload: {
+  assetId: number
+  amount: number
+  point?: number | null
+  note?: string
+  restoreLayerKeys?: string[]
+}): Promise<{ exec: GridExecution; restored: boolean }> {
+  if (!planState.plan) throw new Error('没有可记录的计划')
+  if (planState.dirty) throw new Error('请先保存计划，再记录卖出')
+  const res = await apiAddExecution(planState.plan.id, {
+    asset_id: payload.assetId,
+    amount: payload.amount,
+    side: 'sell',
+    point: payload.point ?? null,
+    note: payload.note ?? '',
+  })
+  if (res.code !== 0 || !res.data) throw new Error(res.message || '记录卖出失败')
+  await loadPlan(planState.plan.id)
+
+  const restore = payload.restoreLayerKeys ?? []
+  if (restore.length === 0) return { exec: res.data, restored: false }
+  const asset = findAsset(payload.assetId)
+  if (!asset) return { exec: res.data, restored: false }
+  const kept = new Set(restore)
+  asset.executed_layers = asset.executed_layers.filter((key) => !kept.has(key))
+  touch()
+  return { exec: res.data, restored: true }
 }
 
 // ---------- 本地编辑 ----------
@@ -351,6 +387,7 @@ export function addAsset(defaults: Partial<GridAssetPayload> = {}): GridAssetDTO
     weight: defaults.weight ?? 0,
     invested: defaults.invested ?? 0,
     market_value: defaults.market_value ?? 0,
+    realized_out: 0,
     base_amount: defaults.base_amount ?? 0,
     grid: (defaults.grid ?? gridLayers()).map((layer) => ({ ...layer, voided: Boolean(layer.voided) })),
     executed_layers: [],
@@ -386,6 +423,7 @@ export function applyTemplate(template: PlanTemplate): void {
     weight: asset.weight,
     invested: 0,
     market_value: 0,
+    realized_out: 0,
     base_amount: asset.baseAmount,
     grid: gridLayers(gridForIndex(asset.name, template.market)),
     executed_layers: [],

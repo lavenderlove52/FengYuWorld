@@ -431,6 +431,45 @@ func (r *GridPlanRepository) LockAssetsInvested(planID, assetID int64) (float64,
 	return row.Invested, layers, nil
 }
 
+// UpdateAssetsRealizedOut 写回标的的累计卖出到账金额。
+func (r *GridPlanRepository) UpdateAssetsRealizedOut(planID int64, assetID int64, realized float64) error {
+	res := r.db.Exec(`UPDATE grid_assets
+		SET realized_out = ?, updated_at = now()
+		WHERE id = ? AND plan_id = ?`, realized, assetID, planID)
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return ErrAssetGone
+	}
+	return nil
+}
+
+// LockAssetsRealized 锁住标的行并返回累计卖出到账，卖出/撤销都基于它做累加。
+func (r *GridPlanRepository) LockAssetsRealized(planID, assetID int64) (float64, error) {
+	var row struct {
+		RealizedOut float64
+	}
+	err := r.db.Raw(`SELECT realized_out FROM grid_assets
+		WHERE id = ? AND plan_id = ? FOR UPDATE`, assetID, planID).Scan(&row).Error
+	if err != nil {
+		return 0, err
+	}
+	return row.RealizedOut, nil
+}
+
+// ListExecutions 按时间升序返回计划的全部执行记录（含买入与卖出）。
+func (r *GridPlanRepository) ListExecutions(planID int64) ([]domain.GridPlanExecution, error) {
+	var rows []domain.GridPlanExecution
+	err := r.db.Where("plan_id = ?", planID).
+		Order("executed_at ASC, id ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
 // UpdatePlanUnallocated 更新「已投入未分配」金额。
 func (r *GridPlanRepository) UpdatePlanUnallocated(planID int64, value float64) error {
 	res := r.db.Exec(`UPDATE grid_plans SET unallocated_invested = ?, updated_at = now() WHERE id = ?`,

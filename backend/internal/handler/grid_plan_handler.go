@@ -171,12 +171,31 @@ func (h *GridPlanHandler) AddExecution(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, dto.Err(dto.CodeBadRequest, "请求参数错误"))
 		return
 	}
-	exec, err := h.plans.RecordExecution(userID, planID, req.AssetID, req.Amount, req.LayerKeys, req.WasRegular, req.Note)
+	exec, err := h.plans.RecordExecution(userID, planID, req.AssetID, req.Amount, req.Side, req.Point, req.LayerKeys, req.WasRegular, req.Note)
 	if err != nil {
 		h.fail(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, dto.OK(toExecutionDTO(*exec)))
+}
+
+// ListExecutions GET /api/grid-plans/:id/executions
+func (h *GridPlanHandler) ListExecutions(c *gin.Context) {
+	userID := middleware.MustUserID(c)
+	planID, ok := parseID(c, "id")
+	if !ok {
+		return
+	}
+	items, err := h.plans.Executions(userID, planID)
+	if err != nil {
+		h.fail(c, err)
+		return
+	}
+	out := make([]dto.GridExecutionDTO, 0, len(items))
+	for _, item := range items {
+		out = append(out, toExecutionDTO(item))
+	}
+	c.JSON(http.StatusOK, dto.OK(out))
 }
 
 // UndoLastExecution DELETE /api/grid-plans/:id/executions/last
@@ -373,6 +392,7 @@ func toPlanDetailDTO(plan *domain.GridPlan) dto.GridPlanDetail {
 			Weight:         asset.Weight,
 			Invested:       asset.Invested,
 			MarketValue:    asset.MarketValue,
+			RealizedOut:    asset.RealizedOut,
 			BaseAmount:     asset.BaseAmount,
 			Grid:           grid,
 			ExecutedLayers: executed,
@@ -430,6 +450,7 @@ func toPlanDomain(req *dto.SaveGridPlanRequest) *domain.GridPlan {
 			Weight:         asset.Weight,
 			Invested:       asset.Invested,
 			MarketValue:    asset.MarketValue,
+			// realized_out 只由「记录卖出」维护，保存计划不写它
 			BaseAmount:     asset.BaseAmount,
 			Grid:           grid,
 			ExecutedLayers: executed,
@@ -483,6 +504,8 @@ func toExecutionDTO(exec domain.GridPlanExecution) dto.GridExecutionDTO {
 		AssetID:      exec.AssetID,
 		AssetName:    exec.AssetName,
 		Amount:       exec.Amount,
+		Side:         exec.Side,
+		Point:        exec.Point,
 		LayerKeys:    keys,
 		WasRegular:   exec.WasRegular,
 		PrevNextDate: exec.PrevNextDate.String(),

@@ -538,3 +538,57 @@ func TestGridPlan_UpdateRejectsStaleVersion(t *testing.T) {
 		}
 	})
 }
+
+func TestGridPlan_SellKeepsInvestedAndRecordsPoint(t *testing.T) {
+	db := testDB(t)
+	inTx(t, db, func(tx *gorm.DB) {
+		repo := repository.NewGridPlanRepository(tx)
+		uid := seedUser(t, tx, "sell")
+
+		plan := newPlan(uid, "卖出")
+		if err := repo.Create(plan); err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		loaded, _ := repo.GetByID(uid, plan.ID)
+		assetID := loaded.Assets[0].ID
+
+		if err := repo.UpdateAssetsInvested(plan.ID, assetID, 1500, []string{"g1"}); err != nil {
+			t.Fatalf("update invested: %v", err)
+		}
+		if err := repo.UpdateAssetsRealizedOut(plan.ID, assetID, 1000); err != nil {
+			t.Fatalf("update realized: %v", err)
+		}
+
+		locked, err := repo.LockAssetsRealized(plan.ID, assetID)
+		if err != nil || locked != 1000 {
+			t.Fatalf("锁行读到 realized_out = %v, err = %v", locked, err)
+		}
+
+		point := 2248.31
+		if err := repo.AddExecution(&domain.GridPlanExecution{
+			PlanID: plan.ID, AssetID: &assetID, AssetName: "上证综指",
+			Amount: 1000, Side: domain.ExecutionSideSell, Point: &point,
+		}); err != nil {
+			t.Fatalf("add sell: %v", err)
+		}
+
+		after, _ := repo.GetByID(uid, plan.ID)
+		if after.Assets[0].Invested != 1500 {
+			t.Errorf("卖出不应改动已投入，得到 %v", after.Assets[0].Invested)
+		}
+		if after.Assets[0].RealizedOut != 1000 {
+			t.Errorf("realized_out = %v", after.Assets[0].RealizedOut)
+		}
+		if len(after.Assets[0].ExecutedLayers) != 1 {
+			t.Errorf("卖出不应改动网格层，得到 %v", after.Assets[0].ExecutedLayers)
+		}
+
+		execs, err := repo.ListExecutions(plan.ID)
+		if err != nil || len(execs) != 1 {
+			t.Fatalf("list executions: %v, len=%d", err, len(execs))
+		}
+		if execs[0].Side != domain.ExecutionSideSell || execs[0].Point == nil || *execs[0].Point != point {
+			t.Errorf("执行记录方向/点位不对: %+v", execs[0])
+		}
+	})
+}

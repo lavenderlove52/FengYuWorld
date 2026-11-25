@@ -67,12 +67,14 @@ export interface PlanAssetMetrics {
   voidedCount: number
   thresholdOrderValid: boolean
   strictPyramid: boolean
-  /** 市值减去已投入；市值未填时仍按 0 计算，展示层用 hasMarketValue 区分 */
+  /** 市值 + 累计卖出 − 已投入 */
   pnl: number
   /** 收益率百分比，已投入为 0 时返回 null */
   returnRate: number | null
   /** 市值为 0 且已投入大于 0 视为「未填市值」 */
   hasMarketValue: boolean
+  /** 有市值或有卖出回收，盈亏算得出来；清仓但有卖出的标的为 true */
+  hasValueOrRealized: boolean
 }
 
 export interface PlanMetrics {
@@ -98,15 +100,22 @@ export interface PlanMetrics {
   marketValueFilled: number
 }
 
-export function assetPnl(asset: Pick<GridAssetDTO, 'invested' | 'market_value'>): number {
-  return (Number(asset.market_value) || 0) - (Number(asset.invested) || 0)
+/**
+ * 盈亏 = 当前市值 + 累计卖出到账 − 累计买入。
+ * 卖出不冲减「已投入」，所以已实现收益通过这些回收金额体现在总盈亏里，
+ * 不需要 FIFO/移动加权成本口径。
+ */
+export function assetPnl(asset: Pick<GridAssetDTO, 'invested' | 'market_value' | 'realized_out'>): number {
+  return (Number(asset.market_value) || 0) + (Number(asset.realized_out) || 0) - (Number(asset.invested) || 0)
 }
 
-/** 市值未填时返回 null，避免界面出现「-100%」这种假数据。 */
-export function assetReturnRate(asset: Pick<GridAssetDTO, 'invested' | 'market_value'>): number | null {
+/** 既没市值也没卖出时返回 null，避免界面出现「-100%」这种假数据；分母始终是累计买入。 */
+export function assetReturnRate(asset: Pick<GridAssetDTO, 'invested' | 'market_value' | 'realized_out'>): number | null {
   const invested = Number(asset.invested) || 0
   if (invested <= 0) return null
-  if ((Number(asset.market_value) || 0) <= 0) return null
+  const market = Number(asset.market_value) || 0
+  const realized = Number(asset.realized_out) || 0
+  if (market <= 0 && realized <= 0) return null
   return (assetPnl(asset) / invested) * 100
 }
 
@@ -114,14 +123,22 @@ export function hasMarketValue(asset: Pick<GridAssetDTO, 'invested' | 'market_va
   return (Number(asset.market_value) || 0) > 0
 }
 
+/** 有市值或有卖出回收，都说明这只标的的盈亏是算得出来的。 */
+export function hasValueOrRealized(
+  asset: Pick<GridAssetDTO, 'invested' | 'market_value' | 'realized_out'>,
+): boolean {
+  return hasMarketValue(asset) || (Number(asset.realized_out) || 0) > 0
+}
+
 /**
- * 计划级汇总：只统计启用且填了市值的标的，未填的单独返回金额。
+ * 计划级汇总：只统计启用、且「有市值或有卖出回收」的标的，未填的单独返回金额。
  * 把未填市值当成 0 会让总盈亏凭空多出「-已投入」，所以这里不算它们。
  * 停用的标的整体不参与账目，和饼图、净值曲线的口径保持一致。
  */
 export function planTotals(plan: Pick<GridPlanDetail, 'assets'>): {
   invested: number
   marketValue: number
+  realizedOut: number
   pnl: number
   returnRate: number | null
   unfilledInvested: number
@@ -129,24 +146,29 @@ export function planTotals(plan: Pick<GridPlanDetail, 'assets'>): {
 } {
   let invested = 0
   let marketValue = 0
+  let realizedOut = 0
   let unfilledInvested = 0
   let unfilledCount = 0
   for (const asset of plan.assets) {
     if (!asset.enabled) continue
     const assetInvested = Number(asset.invested) || 0
-    if (!hasMarketValue(asset)) {
+    const assetRealized = Number(asset.realized_out) || 0
+    if (!hasValueOrRealized(asset)) {
       if (assetInvested > 0) unfilledInvested += assetInvested
       unfilledCount += 1
       continue
     }
     invested += assetInvested
     marketValue += Number(asset.market_value) || 0
+    realizedOut += assetRealized
   }
+  const pnl = marketValue + realizedOut - invested
   return {
     invested,
     marketValue,
-    pnl: marketValue - invested,
-    returnRate: invested > 0 ? ((marketValue - invested) / invested) * 100 : null,
+    realizedOut,
+    pnl,
+    returnRate: invested > 0 ? (pnl / invested) * 100 : null,
     unfilledInvested,
     unfilledCount,
   }
@@ -402,6 +424,7 @@ export function computeAssetMetrics(
     pnl: assetPnl(asset),
     returnRate: assetReturnRate(asset),
     hasMarketValue: hasMarketValue(asset),
+    hasValueOrRealized: hasValueOrRealized(asset),
   }
 }
 
@@ -440,7 +463,8 @@ export function computePlanMetrics(plan: GridPlanDetail): PlanMetrics {
     suggestionTotal: enabledAssets.reduce((sum, row) => sum + row.suggestion, 0),
     theoreticalTotal: enabledAssets.reduce((sum, row) => sum + row.theoretical, 0),
     alerts: [],
-    marketValueFilled: enabledAssets.filter((row) => row.hasMarketValue).length,
+    // 有卖出回收但已清仓的标的也算「算得出来」，不再算未填
+    marketValueFilled: enabledAssets.filter((row) => hasValueOrRealized(row.asset)).length,
   }
   metrics.alerts = buildAlerts(metrics)
   return metrics

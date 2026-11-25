@@ -160,8 +160,8 @@ onBeforeUnmount(() => {
   <div ref="container" class="w-full min-w-0 overflow-hidden">
     <div
       v-if="sorted.length === 0"
-      class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 text-slate-400"
-      :style="{ height: `${height}px` }"
+      class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed"
+      :style="{ height: `${height}px`, borderColor: 'currentColor', opacity: 0.55 }"
     >
       <span class="text-sm">还没有净值记录</span>
       <span class="text-xs">{{ emptyHint }}</span>
@@ -184,7 +184,8 @@ onBeforeUnmount(() => {
           :x2="PAD.left + chartW"
           :y1="y(tick)"
           :y2="y(tick)"
-          stroke="#eef2f7"
+          stroke="currentColor"
+          stroke-opacity="0.12"
           stroke-width="1"
         />
         <text
@@ -193,8 +194,8 @@ onBeforeUnmount(() => {
           :x="PAD.left - 8"
           :y="y(tick) + 4"
           text-anchor="end"
-          class="fill-slate-400"
-          style="font-size: 11px"
+          fill="currentColor"
+          style="font-size: 11px; opacity: 0.55"
         >{{ fmtTick(tick) }}</text>
       </g>
 
@@ -205,7 +206,8 @@ onBeforeUnmount(() => {
         :x2="PAD.left + chartW"
         :y1="zeroY"
         :y2="zeroY"
-        stroke="#cbd5e1"
+        stroke="currentColor"
+        stroke-opacity="0.35"
         stroke-dasharray="4 3"
       />
 
@@ -229,8 +231,8 @@ onBeforeUnmount(() => {
           :x="label.x"
           :y="height - 8"
           text-anchor="middle"
-          class="fill-slate-400"
-          style="font-size: 11px"
+          fill="currentColor"
+          style="font-size: 11px; opacity: 0.55"
         >{{ label.text }}</text>
       </g>
 
@@ -241,7 +243,8 @@ onBeforeUnmount(() => {
           :x2="hoverPoint.cx"
           :y1="PAD.top"
           :y2="PAD.top + chartH"
-          stroke="#94a3b8"
+          stroke="currentColor"
+          stroke-opacity="0.4"
           stroke-dasharray="3 3"
         />
         <circle :cx="hoverPoint.cx" :cy="y(hoverPoint.p.marketValue)" r="4" :fill="COLOR_MARKET" />
@@ -249,17 +252,17 @@ onBeforeUnmount(() => {
       </template>
     </svg>
 
-    <div v-if="sorted.length > 0" class="flex flex-wrap items-center gap-4 text-xs text-slate-500 px-2">
-      <span class="flex items-center gap-1.5">
+    <div v-if="sorted.length > 0" class="flex flex-wrap items-center gap-4 text-xs px-2">
+      <span class="flex items-center gap-1.5" style="opacity: 0.7">
         <i class="inline-block w-3 h-[2px]" :style="{ background: COLOR_INVESTED }" />投入
       </span>
-      <span class="flex items-center gap-1.5">
+      <span class="flex items-center gap-1.5" style="opacity: 0.7">
         <i class="inline-block w-3 h-[2px]" :style="{ background: COLOR_MARKET }" />市值
       </span>
-      <span v-if="hasPnl" class="flex items-center gap-1.5">
+      <span v-if="hasPnl" class="flex items-center gap-1.5" style="opacity: 0.7">
         <i class="inline-block w-3 h-[2px]" :style="{ background: COLOR_PNL, opacity: 0.9 }" />盈亏
       </span>
-      <span v-if="hoverPoint" class="ml-auto tabular-nums text-slate-700">
+      <span v-if="hoverPoint" class="ml-auto tabular-nums">
         {{ hoverPoint.p.date }} · 投入 {{ fmtTick(hoverPoint.p.invested) }} ·
         市值 {{ fmtTick(hoverPoint.p.marketValue) }} ·
         盈亏 {{ hoverPoint.p.pnl >= 0 ? '+' : '' }}{{ fmtTick(hoverPoint.p.pnl) }}

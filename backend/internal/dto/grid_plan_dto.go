@@ -36,6 +36,8 @@ type GridAssetDTO struct {
 	Weight         float64        `json:"weight"`
 	Invested       float64        `json:"invested"`
 	MarketValue    float64        `json:"market_value"`
+	// RealizedOut 累计卖出到账，只读：保存计划时不会用它覆盖数据库里的值。
+	RealizedOut    float64        `json:"realized_out"`
 	BaseAmount     float64        `json:"base_amount"`
 	Grid           []GridLayerDTO `json:"grid" binding:"dive"`
 	ExecutedLayers []string       `json:"executed_layers"`
@@ -114,6 +116,8 @@ type GridExecutionDTO struct {
 	AssetID      *int64   `json:"asset_id"`
 	AssetName    string   `json:"asset_name"`
 	Amount       float64  `json:"amount"`
+	Side         string   `json:"side"`
+	Point        *float64 `json:"point"`
 	LayerKeys    []string `json:"layer_keys"`
 	WasRegular   bool     `json:"was_regular"`
 	PrevNextDate string   `json:"prev_next_date"`
@@ -122,9 +126,12 @@ type GridExecutionDTO struct {
 }
 
 // RecordExecutionRequest asset_id 为 0 表示记到「已投入未分配」。
+// side 缺省按 buy，兼容老客户端；卖出必须带 asset_id，且不推进定投日。
 type RecordExecutionRequest struct {
 	AssetID    int64    `json:"asset_id"`
 	Amount     float64  `json:"amount" binding:"required"`
+	Side       string   `json:"side"`
+	Point      *float64 `json:"point"`
 	LayerKeys  []string `json:"layer_keys"`
 	WasRegular bool     `json:"was_regular"`
 	Note       string   `json:"note" binding:"max=200"`

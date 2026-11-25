@@ -240,6 +240,14 @@ func (s *GridPlanService) snapshotsByID(planID int64, days int) ([]domain.GridPl
 	return s.repo.ListSnapshots(planID, days)
 }
 
+// Executions 计划的执行记录（买入与卖出），按时间升序，前端用来画买卖点和明细列表。
+func (s *GridPlanService) Executions(userID, planID int64) ([]domain.GridPlanExecution, error) {
+	if _, err := s.Get(userID, planID); err != nil {
+		return nil, err
+	}
+	return s.repo.ListExecutions(planID)
+}
+
 // RecordSnapshot 记录今日净值。同一天重复调用只覆盖当天那条。
 // 投入和市值由标的实时汇总，不接受前端传入，避免两边口径不一致；停用的标的不计入。
 func (s *GridPlanService) RecordSnapshot(userID, planID int64, date domain.DateOnly) (*domain.GridPlanSnapshot, error) {
@@ -256,7 +264,9 @@ func (s *GridPlanService) RecordSnapshot(userID, planID int64, date domain.DateO
 		if !asset.Enabled {
 			continue
 		}
-		invested += asset.Invested
+		// 投入线用净投入（累计买入 − 累计卖出到账），否则卖出后曲线会凭空显示巨亏；
+		// 这样「市值 − 净投入」与页面盈亏口径一致。清仓后可以是负数，不要夹到 0。
+		invested += asset.Invested - asset.RealizedOut
 		marketValue += asset.MarketValue
 	}
 
@@ -273,12 +283,16 @@ func (s *GridPlanService) RecordSnapshot(userID, planID int64, date domain.DateO
 	return snap, nil
 }
 
-// RecordExecution 记录一次执行：写执行记录、累加已投入、标记网格层、必要时推进定投日。
-// assetID 为 0 表示「已投入未分配」，只累加 market.unallocated_invested。
+// RecordExecution 记录一次执行。
+// 买入：累加已投入、标记网格层、必要时推进定投日。
+// 卖出：只累加「累计卖出到账」，不推断卖的是哪一层，也不动已投入、网格层和定投日。
+// assetID 为 0 表示「已投入未分配」，只累加 market.unallocated_invested；卖出必须指定标的。
 func (s *GridPlanService) RecordExecution(
 	userID, planID int64,
 	assetID int64,
 	amount float64,
+	side string,
+	point *float64,
 	layerKeys []string,
 	wasRegular bool,
 	note string,
@@ -297,6 +311,14 @@ func (s *GridPlanService) RecordExecution(
 		if amount <= 0 {
 			return &ValidationError{Field: "金额", Reason: "必须大于 0"}
 		}
+		side = normalizeSide(side)
+		if side == "" {
+			return &ValidationError{Field: "方向", Reason: "只能是 buy 或 sell"}
+		}
+		isSell := side == domain.ExecutionSideSell
+		if isSell && assetID <= 0 {
+			return &ValidationError{Field: "标的", Reason: "卖出必须指定标的"}
+		}
 
 		var asset *domain.GridAsset
 		if assetID > 0 {
@@ -312,32 +334,49 @@ func (s *GridPlanService) RecordExecution(
 		}
 
 		exec = &domain.GridPlanExecution{
-			PlanID:     planID,
-			AssetName:  "未分配",
-			Amount:     round2(amount),
-			LayerKeys:  filterKeys(layerKeys),
-			WasRegular: wasRegular,
-			Note:       strings.TrimSpace(note),
+			PlanID:    planID,
+			AssetName: "未分配",
+			Amount:    round2(amount),
+			Side:      side,
+			Point:     normalizePoint(point),
+			Note:      strings.TrimSpace(note),
+		}
+		if isSell {
+			// 卖出不碰网格层，也不推进定投日
+			exec.LayerKeys = []string{}
+		} else {
+			exec.LayerKeys = filterKeys(layerKeys)
+			exec.WasRegular = wasRegular
 		}
 		if asset != nil {
 			exec.AssetName = asset.Name
 			exec.AssetID = &asset.ID
 
-			// 层级 key 必须真实存在：凭空写进去的 key 会让下一次保存被 validateAsset 拒绝，
-			// 整个计划从此保存不了。作废层也不允许被标记已投。
-			if err := checkLayerKeys(asset, exec.LayerKeys); err != nil {
-				return err
-			}
+			if isSell {
+				locked, err := tx.LockAssetsRealized(planID, asset.ID)
+				if err != nil {
+					return err
+				}
+				if err := tx.UpdateAssetsRealizedOut(planID, asset.ID, round2(locked+amount)); err != nil {
+					return err
+				}
+			} else {
+				// 层级 key 必须真实存在：凭空写进去的 key 会让下一次保存被 validateAsset 拒绝，
+				// 整个计划从此保存不了。作废层也不允许被标记已投。
+				if err := checkLayerKeys(asset, exec.LayerKeys); err != nil {
+					return err
+				}
 
-			// 锁住这一行再算增量：并发记录执行时，读到的 invested 必须是当前值。
-			lockedInvested, lockedLayers, err := tx.LockAssetsInvested(planID, asset.ID)
-			if err != nil {
-				return err
-			}
-			asset.Invested = round2(lockedInvested + amount)
-			asset.ExecutedLayers = mergeKeys(lockedLayers, exec.LayerKeys)
-			if err := tx.UpdateAssetsInvested(planID, asset.ID, asset.Invested, asset.ExecutedLayers); err != nil {
-				return err
+				// 锁住这一行再算增量：并发记录执行时，读到的 invested 必须是当前值。
+				lockedInvested, lockedLayers, err := tx.LockAssetsInvested(planID, asset.ID)
+				if err != nil {
+					return err
+				}
+				asset.Invested = round2(lockedInvested + amount)
+				asset.ExecutedLayers = mergeKeys(lockedLayers, exec.LayerKeys)
+				if err := tx.UpdateAssetsInvested(planID, asset.ID, asset.Invested, asset.ExecutedLayers); err != nil {
+					return err
+				}
 			}
 		} else {
 			if err := tx.UpdatePlanUnallocated(planID, round2(plan.UnallocatedInvested+amount)); err != nil {
@@ -345,7 +384,7 @@ func (s *GridPlanService) RecordExecution(
 			}
 		}
 
-		if wasRegular {
+		if exec.WasRegular {
 			exec.PrevNextDate = plan.NextDate
 			// NextDate 也可能是空（用户没设过定投日），此时从今天起算，别把日期推进整个跳过。
 			if err := tx.UpdatePlanNextDate(planID, advanceByFrequency(plan.NextDate, plan.Frequency)); err != nil {
@@ -364,7 +403,8 @@ func (s *GridPlanService) RecordExecution(
 	return exec, nil
 }
 
-// UndoLastExecution 撤销最近一条执行：回退已投入、解除网格层标记、恢复定投日，然后删记录。
+// UndoLastExecution 撤销最近一条执行：按方向反向回退（买入退已投入和层标记、卖出退累计卖出到账），
+// 恢复定投日，然后删记录。
 func (s *GridPlanService) UndoLastExecution(userID, planID int64) (*domain.GridPlanExecution, error) {
 	var undone *domain.GridPlanExecution
 	err := s.repo.WithTx(func(tx *repository.GridPlanRepository) error {
@@ -392,15 +432,27 @@ func (s *GridPlanService) UndoLastExecution(userID, planID int64) (*domain.GridP
 				}
 			}
 			if asset != nil {
-				// 同样先锁行再减，避免和并发的记录执行互相覆盖
-				lockedInvested, lockedLayers, err := tx.LockAssetsInvested(planID, asset.ID)
-				if err != nil {
-					return err
-				}
-				invested := math.Max(0, round2(lockedInvested-exec.Amount))
-				remaining := removeKeys(lockedLayers, exec.LayerKeys)
-				if err := tx.UpdateAssetsInvested(planID, asset.ID, invested, remaining); err != nil {
-					return err
+				if exec.Side == domain.ExecutionSideSell {
+					// 卖出的反向是扣回累计卖出到账；同样先锁行再减
+					locked, err := tx.LockAssetsRealized(planID, asset.ID)
+					if err != nil {
+						return err
+					}
+					realized := math.Max(0, round2(locked-exec.Amount))
+					if err := tx.UpdateAssetsRealizedOut(planID, asset.ID, realized); err != nil {
+						return err
+					}
+				} else {
+					// 同样先锁行再减，避免和并发的记录执行互相覆盖
+					lockedInvested, lockedLayers, err := tx.LockAssetsInvested(planID, asset.ID)
+					if err != nil {
+						return err
+					}
+					invested := math.Max(0, round2(lockedInvested-exec.Amount))
+					remaining := removeKeys(lockedLayers, exec.LayerKeys)
+					if err := tx.UpdateAssetsInvested(planID, asset.ID, invested, remaining); err != nil {
+						return err
+					}
 				}
 			}
 			// 标的已被删除（asset_id 置空）时，已投入无处可退，只删记录。
@@ -675,6 +727,27 @@ func applyAssetDefaults(asset *domain.GridAsset) {
 
 func round2(v float64) float64 {
 	return math.Round(v*100) / 100
+}
+
+// normalizeSide 空串按买入处理（兼容老客户端），非法值返回空串由调用方报错。
+func normalizeSide(side string) string {
+	switch strings.TrimSpace(side) {
+	case "", domain.ExecutionSideBuy:
+		return domain.ExecutionSideBuy
+	case domain.ExecutionSideSell:
+		return domain.ExecutionSideSell
+	default:
+		return ""
+	}
+}
+
+// normalizePoint 点位快照保留 4 位小数；没填或非正数视为没记。
+func normalizePoint(point *float64) *float64 {
+	if point == nil || *point <= 0 || math.IsNaN(*point) {
+		return nil
+	}
+	v := math.Round(*point*10000) / 10000
+	return &v
 }
 
 // checkLayerKeys 确认执行记录引用的层都在该标的的网格里，且没有被作废。
