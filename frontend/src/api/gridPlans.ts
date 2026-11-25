@@ -24,6 +24,7 @@ export const updateGridPlan = (id: number, payload: SaveGridPlanPayload) =>
 export const deleteGridPlan = (id: number) =>
   http.delete<ApiResponse<null>>(`/grid-plans/${id}`).then((r) => r.data)
 
+/** days=0 表示全部历史；缺省返回最近 180 天。 */
 export const listGridSnapshots = (id: number, days = 180) =>
   http
     .get<ApiResponse<GridSnapshot[]>>(`/grid-plans/${id}/snapshots`, { params: { days } })

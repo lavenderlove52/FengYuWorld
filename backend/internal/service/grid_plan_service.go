@@ -241,7 +241,7 @@ func (s *GridPlanService) snapshotsByID(planID int64, days int) ([]domain.GridPl
 }
 
 // RecordSnapshot 记录今日净值。同一天重复调用只覆盖当天那条。
-// 投入和市值由标的实时汇总，不接受前端传入，避免两边口径不一致。
+// 投入和市值由标的实时汇总，不接受前端传入，避免两边口径不一致；停用的标的不计入。
 func (s *GridPlanService) RecordSnapshot(userID, planID int64, date domain.DateOnly) (*domain.GridPlanSnapshot, error) {
 	plan, err := s.Get(userID, planID)
 	if err != nil {
@@ -253,6 +253,9 @@ func (s *GridPlanService) RecordSnapshot(userID, planID int64, date domain.DateO
 
 	invested, marketValue := 0.0, 0.0
 	for _, asset := range plan.Assets {
+		if !asset.Enabled {
+			continue
+		}
 		invested += asset.Invested
 		marketValue += asset.MarketValue
 	}

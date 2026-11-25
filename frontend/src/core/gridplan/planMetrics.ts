@@ -94,7 +94,7 @@ export interface PlanMetrics {
   suggestionTotal: number
   theoreticalTotal: number
   alerts: PlanAlert[]
-  /** 有市值数据的标的数量，用于饼图与「未填市值」提示 */
+  /** 启用标的中已填市值的数量，用于饼图与「未填市值」提示 */
   marketValueFilled: number
 }
 
@@ -115,8 +115,9 @@ export function hasMarketValue(asset: Pick<GridAssetDTO, 'invested' | 'market_va
 }
 
 /**
- * 计划级汇总：只统计填了市值的标的，未填的单独返回金额。
+ * 计划级汇总：只统计启用且填了市值的标的，未填的单独返回金额。
  * 把未填市值当成 0 会让总盈亏凭空多出「-已投入」，所以这里不算它们。
+ * 停用的标的整体不参与账目，和饼图、净值曲线的口径保持一致。
  */
 export function planTotals(plan: Pick<GridPlanDetail, 'assets'>): {
   invested: number
@@ -131,6 +132,7 @@ export function planTotals(plan: Pick<GridPlanDetail, 'assets'>): {
   let unfilledInvested = 0
   let unfilledCount = 0
   for (const asset of plan.assets) {
+    if (!asset.enabled) continue
     const assetInvested = Number(asset.invested) || 0
     if (!hasMarketValue(asset)) {
       if (assetInvested > 0) unfilledInvested += assetInvested
@@ -186,7 +188,10 @@ export function isRegularDue(plan: Pick<GridPlanDetail, 'next_date'>): boolean {
 }
 
 export function totalInvested(plan: Pick<GridPlanDetail, 'assets' | 'unallocated_invested'>): number {
-  const assets = plan.assets.reduce((sum, asset) => sum + (Number(asset.invested) || 0), 0)
+  // 停用的标的不记账：它的钱不再占预算，也不再出现在已投入里
+  const assets = plan.assets
+    .filter((asset) => asset.enabled)
+    .reduce((sum, asset) => sum + (Number(asset.invested) || 0), 0)
   return assets + (Number(plan.unallocated_invested) || 0)
 }
 
@@ -435,7 +440,7 @@ export function computePlanMetrics(plan: GridPlanDetail): PlanMetrics {
     suggestionTotal: enabledAssets.reduce((sum, row) => sum + row.suggestion, 0),
     theoreticalTotal: enabledAssets.reduce((sum, row) => sum + row.theoretical, 0),
     alerts: [],
-    marketValueFilled: assets.filter((row) => row.hasMarketValue).length,
+    marketValueFilled: enabledAssets.filter((row) => row.hasMarketValue).length,
   }
   metrics.alerts = buildAlerts(metrics)
   return metrics
@@ -561,11 +566,13 @@ function buildAlerts(m: PlanMetrics): PlanAlert[] {
     alerts.push({ id: 'no-assets', level: 'warn', title: '当前计划没有标的', detail: '请新增标的后再计算。' })
   }
 
-  if (m.marketValueFilled < m.assets.length) {
+  // 停用的标的没市值是正常的，不算「未填」
+  const enabledMissing = m.enabledAssets.length - m.marketValueFilled
+  if (enabledMissing > 0) {
     alerts.push({
       id: 'market-value-missing',
       level: 'info',
-      title: `${m.assets.length - m.marketValueFilled} 个标的未填当前市值`,
+      title: `${enabledMissing} 个标的未填当前市值`,
       detail: m.unfilledInvested > 0
         ? `其中 ${m.unfilledInvested.toFixed(2)} 的已投入没有计入盈亏，填入市值后才算完整。`
         : '未填市值的标的不会计入总市值和总盈亏。',

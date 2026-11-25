@@ -15,8 +15,10 @@ const props = withDefaults(
     height?: number
     /** 是否画盈亏零轴 */
     showPnl?: boolean
+    /** 无数据时的操作指引，不同页面入口不同 */
+    emptyHint?: string
   }>(),
-  { height: 220, showPnl: true },
+  { height: 220, showPnl: true, emptyHint: '点「记录当日净值」后，这里会画出投入与市值曲线' },
 )
 
 const COLOR_INVESTED = '#94a3b8'
@@ -25,10 +27,12 @@ const COLOR_PNL = '#f97316'
 
 const PAD = { top: 16, right: 16, bottom: 26, left: 62 }
 
-const width = ref(720)
+const width = ref(0)
 const container = ref<HTMLDivElement | null>(null)
 const hovered = ref<number | null>(null)
-const chartW = computed(() => Math.max(240, width.value - PAD.left - PAD.right))
+// ResizeObserver 首次回调前 width 还是 0，此时按 720 画一版兜底，避免 svg 宽度为 0
+const svgWidth = computed(() => (width.value > 0 ? width.value : 720))
+const chartW = computed(() => Math.max(240, svgWidth.value - PAD.left - PAD.right))
 const chartH = computed(() => Math.max(80, props.height - PAD.top - PAD.bottom))
 
 const sorted = computed(() =>
@@ -107,7 +111,7 @@ const xLabels = computed(() => {
 function onMove(event: MouseEvent): void {
   const el = event.currentTarget as SVGSVGElement
   const rect = el.getBoundingClientRect()
-  const scale = width.value / rect.width
+  const scale = svgWidth.value / rect.width
   const px = (event.clientX - rect.left) * scale
   const n = sorted.value.length
   if (n === 0) return
@@ -153,11 +157,20 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div ref="container" class="w-full">
+  <div ref="container" class="w-full min-w-0 overflow-hidden">
+    <div
+      v-if="sorted.length === 0"
+      class="flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-slate-200 bg-slate-50/60 text-slate-400"
+      :style="{ height: `${height}px` }"
+    >
+      <span class="text-sm">还没有净值记录</span>
+      <span class="text-xs">{{ emptyHint }}</span>
+    </div>
     <svg
-      :width="width"
+      v-else
+      :width="svgWidth"
       :height="height"
-      :viewBox="`0 0 ${width} ${height}`"
+      :viewBox="`0 0 ${svgWidth} ${height}`"
       class="w-full select-none"
       @mousemove="onMove"
       @mouseleave="hovered = null"
@@ -234,12 +247,9 @@ onBeforeUnmount(() => {
         <circle :cx="hoverPoint.cx" :cy="y(hoverPoint.p.marketValue)" r="4" :fill="COLOR_MARKET" />
         <circle :cx="hoverPoint.cx" :cy="y(hoverPoint.p.invested)" r="3" :fill="COLOR_INVESTED" />
       </template>
-
-      <text v-if="sorted.length === 0" :x="width / 2" :y="height / 2" text-anchor="middle"
-        class="fill-slate-400" style="font-size: 13px">还没有净值记录</text>
     </svg>
 
-    <div class="flex flex-wrap items-center gap-4 text-xs text-slate-500 px-2">
+    <div v-if="sorted.length > 0" class="flex flex-wrap items-center gap-4 text-xs text-slate-500 px-2">
       <span class="flex items-center gap-1.5">
         <i class="inline-block w-3 h-[2px]" :style="{ background: COLOR_INVESTED }" />投入
       </span>

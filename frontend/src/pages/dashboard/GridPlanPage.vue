@@ -3,7 +3,7 @@ import { computed, h, onBeforeUnmount, onMounted, reactive, ref, watch } from 'v
 import type { VNodeChild } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import {
-  NButton, NCard, NDataTable, NDatePicker, NFormItem, NInput, NInputNumber, NResult, NSelect, NSpin, NSwitch, NTag,
+  NButton, NCard, NDataTable, NDatePicker, NFormItem, NInput, NInputNumber, NResult, NSelect, NSpin, NSwitch, NTag, NTooltip,
   useDialog, useMessage,
 } from 'naive-ui'
 import type { DataTableColumns, SelectGroupOption, SelectOption } from 'naive-ui'
@@ -69,11 +69,28 @@ const visibleUserIds = computed<number[]>({
 const snapshots = ref<GridSnapshot[]>([])
 const snapshotLoading = ref(false)
 
+// days=0 表示全部历史
+const SNAPSHOT_RANGES = [
+  { days: 30, label: '1个月' },
+  { days: 60, label: '2个月' },
+  { days: 90, label: '3个月' },
+  { days: 180, label: '6个月' },
+  { days: 365, label: '1年' },
+  { days: 730, label: '2年' },
+  { days: 1095, label: '3年' },
+  { days: 1825, label: '5年' },
+  { days: 0, label: '全部' },
+] as const
+const rangeDays = ref<number>(0)
+const rangeLabel = computed(
+  () => SNAPSHOT_RANGES.find((item) => item.days === rangeDays.value)?.label ?? '全部',
+)
+
 async function loadSnapshots(): Promise<void> {
   if (!planId.value) return
   snapshotLoading.value = true
   try {
-    const res = await listGridSnapshots(planId.value, 180)
+    const res = await listGridSnapshots(planId.value, rangeDays.value)
     if (res.code === 0) snapshots.value = res.data ?? []
   } catch {
     // 曲线属于辅助信息，失败不打断主流程
@@ -81,6 +98,10 @@ async function loadSnapshots(): Promise<void> {
     snapshotLoading.value = false
   }
 }
+
+watch(rangeDays, () => {
+  void loadSnapshots()
+})
 
 const chartPoints = computed<LinePoint[]>(() =>
   snapshots.value.map((s) => ({
@@ -105,6 +126,9 @@ const snapshotStale = computed(() => {
   const days = Math.floor((Date.now() - new Date(`${last.snapshot_date}T00:00:00`).getTime()) / 86_400_000)
   return days >= 7
 })
+
+// 记录净值走后端汇总已保存的数据，本地改动没保存就记会把旧值写进曲线
+const recordBlocked = computed(() => planState.dirty || planState.saving)
 
 const DONUT_COLORS = ['#4f46e5', '#0ea5e9', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316']
 
@@ -248,8 +272,9 @@ const snapshotting = ref(false)
 
 async function onRecordSnapshot(): Promise<void> {
   if (!metrics.value) return
-  if (metrics.value.marketValueFilled < metrics.value.assets.length) {
-    const missing = metrics.value.assets.length - metrics.value.marketValueFilled
+  const enabledCount = metrics.value.enabledAssets.length
+  if (metrics.value.marketValueFilled < enabledCount) {
+    const missing = enabledCount - metrics.value.marketValueFilled
     const ok = await new Promise<boolean>((resolve) => {
       dialog.warning({
         title: '有标的还没填市值',
@@ -863,7 +888,10 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
               {{ metrics.marketValueFilled ? formatPlanMoney(metrics.marketValue, plan) : '未填' }}
             </div>
             <div class="text-xs text-slate-500 mt-1">
-              {{ metrics.marketValueFilled }} / {{ metrics.assets.length }} 个标的已填
+              {{ metrics.marketValueFilled }} / {{ metrics.enabledAssets.length }} 个标的已填
+            </div>
+            <div v-if="metrics.assets.length > metrics.enabledAssets.length" class="text-xs text-slate-400 mt-0.5">
+              另有 {{ metrics.assets.length - metrics.enabledAssets.length }} 个已停用，不计入账目
             </div>
           </NCard>
           <NCard size="small">
@@ -893,17 +921,58 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
         </div>
 
         <div class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-4 items-start">
-          <NCard size="small" title="资产占比" class="xl:col-start-1 xl:row-start-1">
-            <DonutChart
-              :slices="donutSlices"
-              :center-value="donutCenter.value"
-              :center-label="donutCenter.label"
-              :size="180"
-            />
-            <div v-if="!donutSlices.length" class="text-xs text-slate-400 mt-3">
-              填入标的「当前市值」后，这里会显示各标的的占比。
-            </div>
-          </NCard>
+          <div class="grid grid-cols-1 md:grid-cols-[280px_minmax(0,1fr)] gap-4 xl:col-start-1 xl:row-start-1">
+            <NCard size="small" title="资产占比">
+              <DonutChart
+                :slices="donutSlices"
+                :center-value="donutCenter.value"
+                :center-label="donutCenter.label"
+                :size="180"
+              />
+              <div v-if="!donutSlices.length" class="text-xs text-slate-400 mt-3">
+                填入标的「当前市值」后，这里会显示各标的的占比。
+              </div>
+            </NCard>
+
+            <NCard size="small" title="收益变化曲线">
+              <template #header-extra>
+                <div class="flex flex-wrap items-center gap-2">
+                  <span class="text-xs" :class="snapshotStale ? 'text-amber-600' : 'text-slate-400'">
+                    {{ lastSnapshotLabel }}
+                  </span>
+                  <NDatePicker v-model:formatted-value="snapshotDate" type="date" value-format="yyyy-MM-dd"
+                    size="small" style="width:150px" />
+                  <NTooltip :disabled="!recordBlocked">
+                    <template #trigger>
+                      <span>
+                        <NButton size="small" type="primary" :loading="snapshotting" :disabled="recordBlocked"
+                          @click="onRecordSnapshot">记录当日净值</NButton>
+                      </span>
+                    </template>
+                    请先保存计划，再记录净值
+                  </NTooltip>
+                </div>
+              </template>
+              <div class="flex flex-wrap items-center gap-1.5 mb-2">
+                <NButton
+                  v-for="opt in SNAPSHOT_RANGES"
+                  :key="opt.days"
+                  size="tiny"
+                  :type="rangeDays === opt.days ? 'primary' : 'default'"
+                  :ghost="rangeDays !== opt.days"
+                  @click="rangeDays = opt.days"
+                >{{ opt.label }}</NButton>
+                <span class="text-xs text-slate-400 ml-1">{{ snapshots.length }} 个记录点</span>
+              </div>
+              <NSpin :show="snapshotLoading">
+                <LineChart :points="chartPoints" :height="260" empty-hint="点右上角「记录当日净值」，这里才会画出投入与市值曲线" />
+              </NSpin>
+              <div class="text-xs text-slate-400 mt-2">
+                曲线只在你点「记录当日净值」时留点；同一天重复记录只保存最后一次。
+                当前显示：{{ rangeLabel }}。
+              </div>
+            </NCard>
+          </div>
 
           <NCard size="small" title="计划参数" class="xl:col-start-2 xl:row-start-1 xl:row-span-2">
             <NFormItem label="计划名称" size="small">
@@ -982,13 +1051,6 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
               <div class="flex flex-wrap gap-2">
                 <NButton v-for="tpl in PLAN_TEMPLATES" :key="tpl.key" size="small"
                   @click="onApplyTemplate(tpl.key)">{{ tpl.label }}</NButton>
-              </div>
-            </div>
-            <div class="mt-4 pt-3 border-t border-slate-100">
-              <div class="text-xs text-slate-500 mb-2">记录当日净值（同一天多次只保留最后一次）</div>
-              <div class="flex gap-2">
-                <NDatePicker v-model:formatted-value="snapshotDate" type="date" value-format="yyyy-MM-dd" size="small" style="flex:1" />
-                <NButton size="small" :loading="snapshotting" @click="onRecordSnapshot">记录</NButton>
               </div>
             </div>
           </NCard>
@@ -1082,7 +1144,7 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                     <NTag size="tiny">{{ row.rows.length }} 层</NTag>
                   </div>
                 </template>
-                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2">
+                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-2 items-start">
                   <NFormItem label="标的" size="small">
                     <NSelect
                       :value="assetSelectValue(row.asset.id)"
@@ -1139,12 +1201,19 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                         先填计划总预算，才能按金额反推权重
                       </p>
                       <p v-else class="text-xs text-slate-400 mt-1">
-                        改金额会反算权重（6 位小数）；填超过上限时按剩余额度取最大值
+                        改金额会反算权重（6 位小数），超上限按剩余额度取最大值
                       </p>
                     </div>
                   </NFormItem>
                   <NFormItem label="参与计算" size="small">
-                    <NSwitch :value="row.asset.enabled" @update:value="(v) => updateAssetEnabled(row.asset.id, v)" />
+                    <div class="flex items-center gap-2 h-7">
+                      <NSwitch size="small" :value="row.asset.enabled"
+                        :theme-overrides="{ railColor: '#94a3b8' }"
+                        @update:value="(v) => updateAssetEnabled(row.asset.id, v)" />
+                      <span class="text-xs" :class="row.asset.enabled ? 'text-slate-500' : 'text-slate-400'">
+                        {{ row.asset.enabled ? '计入' : '已停用' }}
+                      </span>
+                    </div>
                   </NFormItem>
                 </div>
 
@@ -1214,21 +1283,6 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
             </NCard>
           </div>
         </div>
-
-        <NCard size="small" class="mt-4" title="收益变化曲线">
-          <template #header-extra>
-            <span class="text-xs" :class="snapshotStale ? 'text-amber-600' : 'text-slate-400'">
-              {{ lastSnapshotLabel }}
-            </span>
-          </template>
-          <NSpin :show="snapshotLoading">
-            <LineChart :points="chartPoints" :height="260" />
-          </NSpin>
-          <div class="text-xs text-slate-400 mt-2">
-            曲线只在你点「记录当日净值」时留点；同一天重复记录只保存最后一次。
-            最近 180 天的数据显示在这里。
-          </div>
-        </NCard>
       </template>
       </div>
     </NSpin>

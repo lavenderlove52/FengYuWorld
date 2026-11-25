@@ -47,9 +47,9 @@ func (r *GridPlanRepository) Summaries(ownerID int64, viewerID *int64) ([]domain
 		        grid_plans.total_budget,
 		        grid_plans.sort_order,
 		        grid_plans.updated_at,
-		        COALESCE(SUM(grid_assets.invested), 0)     AS invested,
-		        COALESCE(SUM(grid_assets.market_value), 0) AS market_value,
-		        COALESCE(SUM(grid_assets.market_value - grid_assets.invested), 0) AS pnl,
+		        COALESCE(SUM(CASE WHEN grid_assets.enabled THEN grid_assets.invested ELSE 0 END), 0) AS invested,
+		        COALESCE(SUM(CASE WHEN grid_assets.enabled THEN grid_assets.market_value ELSE 0 END), 0) AS market_value,
+		        COALESCE(SUM(CASE WHEN grid_assets.enabled THEN grid_assets.market_value - grid_assets.invested ELSE 0 END), 0) AS pnl,
 		        COUNT(grid_assets.id) AS asset_count`).
 		Joins("LEFT JOIN grid_assets ON grid_assets.plan_id = grid_plans.id").
 		Where("grid_plans.user_id = ?", ownerID)

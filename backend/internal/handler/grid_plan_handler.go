@@ -111,9 +111,9 @@ func (h *GridPlanHandler) ListSnapshots(c *gin.Context) {
 	if !ok {
 		return
 	}
-	// 解析失败时 days 会是 0，会被当成「全部历史」，所以这里显式回退到默认值
+	// days=0 表示全部历史；参数缺失或非法时才回退到默认 180 天
 	days, err := strconv.Atoi(c.DefaultQuery("days", "180"))
-	if err != nil || days <= 0 {
+	if err != nil || days < 0 {
 		days = 180
 	}
 	items, err := h.plans.Snapshots(userID, planID, days)
@@ -280,8 +280,9 @@ func (h *GridPlanHandler) PublicSnapshots(c *gin.Context) {
 	if !ok {
 		return
 	}
+	// days=0 表示全部历史；参数缺失或非法时才回退到默认 180 天
 	days, err := strconv.Atoi(c.DefaultQuery("days", "180"))
-	if err != nil || days <= 0 {
+	if err != nil || days < 0 {
 		days = 180
 	}
 	// 一次拿回详情和曲线，可见性只判定一次
