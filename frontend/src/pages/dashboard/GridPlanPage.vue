@@ -30,6 +30,9 @@ import {
   MIN_LAYERS, optimizeGrid, suggestLayerCount, VOLATILITY_LABEL, volatilityOf, type GridOptimizeResult,
 } from '@/core/gridplan/gridOptimizer'
 import { ensurePresets, presetsFor, refreshPresets, removePreset } from '@/core/gridplan/presetStore'
+import { useAuthStore } from '@/stores/auth'
+import { appBase } from '@/config/app'
+import { copyToClipboard } from '@/utils/clipboard'
 import type { Frequency, GateMode, GridAssetDTO, GridExecution, GridLayerDTO, GridSnapshot, PlanVisibility, WeightMethod } from '@/types/gridPlan'
 
 const route = useRoute()
@@ -50,6 +53,29 @@ const statusMeta: Record<PlanAssetStatus, { label: string; type: 'success' | 'wa
 
 const plan = computed(() => planState.plan)
 const metrics = computed(() => planMetrics.value)
+
+const auth = useAuthStore()
+
+/** 分享链接指向公开直达页；计划必须在本地已加载。 */
+const shareLink = computed(() => {
+  const username = auth.user?.username
+  if (!username || !plan.value) return ''
+  return `${window.location.origin}${appBase}u/${encodeURIComponent(username)}/plans/${plan.value.id}`
+})
+
+async function onCopyShareLink(): Promise<void> {
+  if (!shareLink.value) return
+  try {
+    await copyToClipboard(shareLink.value)
+    if (plan.value?.visibility === 'private') {
+      toast('链接已复制，但计划是「仅自己」可见，别人打开会被拒绝')
+    } else {
+      toast('分享链接已复制')
+    }
+  } catch {
+    toast('复制失败，请手动复制链接', true)
+  }
+}
 
 const VISIBILITY_OPTIONS = [
   { value: 'private', label: '仅自己' },
@@ -943,6 +969,7 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
         </p>
       </div>
       <div class="flex gap-2">
+        <NButton size="small" ghost :disabled="!shareLink" @click="onCopyShareLink">复制分享链接</NButton>
         <NButton size="small" :disabled="!planState.dirty || planState.saving" @click="onDiscard">放弃改动</NButton>
         <NButton size="small" type="primary" :loading="planState.saving" :disabled="!planState.dirty" @click="onSave">
           保存

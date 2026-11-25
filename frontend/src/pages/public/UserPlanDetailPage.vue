@@ -14,11 +14,16 @@ import { useUserTheme } from '@/composables/useUserTheme'
 const route = useRoute()
 const router = useRouter()
 const containerRef = ref<HTMLElement | null>(null)
-const { load: loadTheme } = useUserTheme(containerRef)
+const { theme, load: loadTheme } = useUserTheme(containerRef)
 
 const username = computed(() => String(route.params.username ?? ''))
 const planId = computed(() => Number(route.params.id))
 const validPlanId = computed(() => Number.isInteger(planId.value) && planId.value > 0)
+
+/** 与个人主页同一个宽度口径，两个公开入口看起来才是同一个页面。 */
+const contentStyle = computed(() => ({
+  maxWidth: `${Math.min(1800, Math.max(600, theme.value.hero_config.page_width_px))}px`,
+}))
 
 function backToUserHome(): void {
   router.push({ name: 'user-home', params: { username: username.value } })
@@ -40,7 +45,7 @@ watch(username, loadThemeForUser)
     class="relative isolate min-h-screen"
     style="color: var(--theme-text)"
   >
-    <div class="mx-auto w-full max-w-5xl px-4 sm:px-6 py-6 sm:py-8">
+    <div class="mx-auto w-[calc(100%-2rem)] sm:w-[calc(100%-3rem)] pt-8 pb-12 sm:pt-10" :style="contentStyle">
       <EmptyState v-if="!validPlanId" message="计划地址不正确" />
       <PublicPlanDetail
         v-else

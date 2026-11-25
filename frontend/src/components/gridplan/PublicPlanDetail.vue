@@ -8,6 +8,7 @@ import { formatPlanMoney, formatSignedMoney } from '@/core/gridplan/planFormat'
 import { formatNumber, formatPercent, formatPlainPercent, FREQUENCY_LABEL } from '@/core/gridplan/format'
 import LineChart, { type LinePoint } from '@/components/chart/LineChart.vue'
 import DonutChart, { type DonutSlice } from '@/components/chart/DonutChart.vue'
+import { copyToClipboard } from '@/utils/clipboard'
 import type { GridPlanDetail, GridSnapshot } from '@/types/gridPlan'
 
 /**
@@ -36,21 +37,7 @@ let copiedTimer: ReturnType<typeof setTimeout> | null = null
 
 async function copyShareLink(): Promise<void> {
   try {
-    if (window.isSecureContext && navigator.clipboard) {
-      await navigator.clipboard.writeText(shareUrl.value)
-    } else {
-      // http 站点（如内网 IP）不是安全上下文，clipboard API 不可用
-      const ta = document.createElement('textarea')
-      ta.value = shareUrl.value
-      ta.setAttribute('readonly', '')
-      ta.style.position = 'fixed'
-      ta.style.opacity = '0'
-      document.body.appendChild(ta)
-      ta.select()
-      const ok = document.execCommand('copy')
-      document.body.removeChild(ta)
-      if (!ok) throw new Error('copy failed')
-    }
+    await copyToClipboard(shareUrl.value)
     linkCopied.value = true
     if (copiedTimer) clearTimeout(copiedTimer)
     copiedTimer = setTimeout(() => {
@@ -155,6 +142,13 @@ function pnlStyle(value: number): Record<string, string> {
   return { color: 'var(--theme-text, #64748b)', opacity: '0.7' }
 }
 
+/** 权重偏离：超配红、低配绿，和主人页口径一致。 */
+function deviationStyle(value: number): Record<string, string> {
+  if (value > 0) return { color: '#ef4444' }
+  if (value < 0) return { color: '#10b981' }
+  return { color: 'var(--theme-text, #64748b)', opacity: '0.7' }
+}
+
 async function load(): Promise<void> {
   loading.value = true
   error.value = ''
@@ -207,7 +201,7 @@ onMounted(load)
           {{ FREQUENCY_LABEL[plan.frequency] ?? plan.frequency }}
         </p>
 
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
           <div class="rounded-xl p-4" :style="SURFACE">
             <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">总预算</div>
             <div class="text-lg font-semibold mt-1" style="color: var(--theme-text, #0f172a)">
@@ -239,6 +233,15 @@ onMounted(load)
             </div>
             <div class="text-xs mt-1" style="color: var(--theme-text, #64748b); opacity: 0.65">
               闸门 {{ plan.gate_threshold }}%
+            </div>
+          </div>
+          <div class="rounded-xl p-4" :style="SURFACE">
+            <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">本期建议合计</div>
+            <div class="text-lg font-semibold mt-1" style="color: var(--theme-text, #0f172a)">
+              {{ formatPlanMoney(metrics.suggestionTotal, plan) }}
+            </div>
+            <div class="text-xs mt-1" style="color: var(--theme-text, #64748b); opacity: 0.65">
+              理论 {{ formatPlanMoney(metrics.theoreticalTotal, plan) }}
             </div>
           </div>
         </div>
@@ -293,9 +296,9 @@ onMounted(load)
 
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
               <div>
-                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">目标权重</div>
+                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">当前 / 参考高点</div>
                 <div class="text-sm font-medium mt-0.5" style="color: var(--theme-text, #0f172a)">
-                  {{ row.asset.weight }}%
+                  {{ formatNumber(row.asset.current_point) }} / {{ formatNumber(row.asset.high_point) }}
                 </div>
               </div>
               <div>
@@ -305,9 +308,29 @@ onMounted(load)
                 </div>
               </div>
               <div>
-                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">已投入</div>
+                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">目标权重</div>
                 <div class="text-sm font-medium mt-0.5" style="color: var(--theme-text, #0f172a)">
-                  {{ formatPlanMoney(row.asset.invested, plan) }}
+                  {{ formatPlainPercent(row.asset.weight) }}
+                </div>
+                <div class="text-xs mt-0.5" style="color: var(--theme-text, #64748b); opacity: 0.6">
+                  应投 {{ formatPlanMoney(row.targetBudget, plan) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">已投入占比</div>
+                <div class="text-sm font-medium mt-0.5" style="color: var(--theme-text, #0f172a)">
+                  {{ formatPlainPercent(row.actualWeight) }}
+                </div>
+                <div v-if="row.weightDeviation !== null" class="text-xs mt-0.5" :style="deviationStyle(row.weightDeviation)">
+                  {{ row.weightDeviation > 0 ? '超配' : row.weightDeviation < 0 ? '低配' : '持平' }}
+                  {{ formatPlainPercent(Math.abs(row.weightDeviation)) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">已投入 / 市值</div>
+                <div class="text-sm font-medium mt-0.5" style="color: var(--theme-text, #0f172a)">
+                  {{ formatPlanMoney(row.asset.invested, plan) }} /
+                  {{ row.hasMarketValue ? formatPlanMoney(row.asset.market_value, plan) : '—' }}
                 </div>
                 <div v-if="row.asset.realized_out > 0" class="text-xs mt-0.5"
                   style="color: var(--theme-text, #64748b); opacity: 0.6">
@@ -315,11 +338,32 @@ onMounted(load)
                 </div>
               </div>
               <div>
-                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">当前市值</div>
+                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">盈亏</div>
                 <div class="text-sm font-medium mt-0.5"
-                  :style="row.hasValueOrRealized ? pnlStyle(row.pnl) : { color: 'var(--theme-text)', opacity: '0.6' }">
-                  {{ row.hasValueOrRealized ? formatPlanMoney(row.asset.market_value, plan) : '未填' }}
+                  :style="row.hasValueOrRealized ? pnlStyle(row.pnl) : { color: 'var(--theme-text, #64748b)', opacity: '0.7' }">
+                  {{ row.hasValueOrRealized ? formatSignedMoney(row.pnl, plan) : '未填市值' }}
                 </div>
+                <div v-if="row.hasValueOrRealized" class="text-xs mt-0.5" :style="pnlStyle(row.pnl)">
+                  {{ formatPercent(row.returnRate) }}
+                </div>
+              </div>
+              <div>
+                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">目标预算余量</div>
+                <div class="text-sm font-medium mt-0.5" style="color: var(--theme-text, #0f172a)">
+                  {{ formatPlanMoney(row.remainingIndex, plan) }}
+                </div>
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+              <div>
+                <div class="text-xs" style="color: var(--theme-text, #64748b); opacity: 0.65">当前建议投入</div>
+                <div class="text-lg font-semibold mt-0.5" style="color: var(--theme-accent, #6366f1)">
+                  {{ formatPlanMoney(row.suggestion, plan) }}
+                </div>
+              </div>
+              <div class="text-xs max-w-[420px]" style="color: var(--theme-text, #64748b); opacity: 0.75; line-height: 1.6">
+                {{ row.reason }}
               </div>
             </div>
 
