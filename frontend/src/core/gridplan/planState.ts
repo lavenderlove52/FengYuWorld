@@ -526,7 +526,7 @@ export function setLayerAmount(assetId: number, layerKey: string, amount: number
   layer.allocation = roundAllocation(Math.min(100, Math.max(0, (nextAmount / targetBudget) * 100)))
 
   const others = asset.grid.filter((l) => l !== layer && !l.voided)
-  const remaining = Math.max(0, Math.round((100 - layer.allocation) * 100) / 100)
+  const remaining = Math.max(0, roundAllocation(100 - layer.allocation))
   if (others.length > 0) {
     const othersSum = others.reduce((sum, l) => sum + (Number(l.allocation) || 0), 0)
     if (othersSum > 0) {
@@ -536,12 +536,12 @@ export function setLayerAmount(assetId: number, layerKey: string, amount: number
       // 其它层都是 0 时平均分配，避免合计只剩改动的这一层。
       others.forEach((l) => { l.allocation = remaining / others.length })
     }
-    // 先四舍五入再补尾差：把剩下的零头加到最后一行非作废层上，
-    // 否则每层独立取整会让合计出现 100.01 这种值，后端直接拒绝整份保存。
-    others.forEach((l) => { l.allocation = Math.floor(l.allocation * 100) / 100 })
+    // 先向下取整再补尾差：把剩下的零头加到最后一行非作废层上，
+    // 否则每层独立取整会让合计出现 100.000001 这种值，后端会拒绝整份保存。
+    others.forEach((l) => { l.allocation = Math.floor(l.allocation * RATIO_SCALE) / RATIO_SCALE })
     const used = others.reduce((sum, l) => sum + l.allocation, 0)
-    const stub = Math.round((remaining - used) * 100) / 100
-    others[others.length - 1]!.allocation = Math.round((others[others.length - 1]!.allocation + stub) * 100) / 100
+    const stub = roundAllocation(remaining - used)
+    others[others.length - 1]!.allocation = roundAllocation(others[others.length - 1]!.allocation + stub)
   } else {
     layer.allocation = 100
   }
@@ -549,9 +549,14 @@ export function setLayerAmount(assetId: number, layerKey: string, amount: number
   touch()
 }
 
-/** 比例保留两位小数。 */
+/**
+ * 比例保留 6 位小数：网格金额由「目标预算 × 比例」反算，
+ * 只保留 2 位时小数金额会被量化到整元，6 位才能精确到分。
+ */
+const RATIO_SCALE = 1_000_000
+
 function roundAllocation(value: number): number {
-  return Math.round(value * 100) / 100
+  return Math.round(value * RATIO_SCALE) / RATIO_SCALE
 }
 
 export function updateLayer(
@@ -563,7 +568,8 @@ export function updateLayer(
   const asset = findAsset(assetId)
   const layer = asset?.grid.find((l) => l.key === layerKey)
   if (!layer) return
-  layer[field] = Math.max(0, Number(value) || 0)
+  const next = Math.max(0, Number(value) || 0)
+  layer[field] = field === 'allocation' ? roundAllocation(next) : next
   touch()
 }
 

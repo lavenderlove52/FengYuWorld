@@ -228,6 +228,11 @@ function toast(text: string, error = false): void {
   else message.success(text)
 }
 
+/** 金额按分取整：后端 numeric(18,2) 只存两位小数，前端不要提前吃掉小数。 */
+function roundMoney(value: number): number {
+  return Math.round((Number(value) || 0) * 100) / 100
+}
+
 function describeError(err: unknown): string {
   return err instanceof Error ? err.message : '操作失败'
 }
@@ -356,7 +361,7 @@ async function onRecordSnapshot(): Promise<void> {
 }
 
 async function executeAsset(row: PlanAssetMetrics): Promise<void> {
-  const amount = Math.round(row.suggestion)
+  const amount = roundMoney(row.suggestion)
   if (amount <= 0) {
     toast('当前建议金额为 0，无法记录执行', true)
     return
@@ -737,7 +742,7 @@ function buildGridColumns(assetId: number): DataTableColumns<PlanAssetMetrics['r
         h(NButton, {
           size: 'tiny', quaternary: true, type: 'success',
           disabled: r.voided || r.executed,
-          onClick: () => onInvestLayer(assetId, r),
+          onClick: () => openInvestLayer(assetId, r),
         }, { default: () => '已投' }),
         h(NButton, {
           size: 'tiny', quaternary: true, type: 'error',
@@ -795,7 +800,19 @@ async function onRemoveLayer(assetId: number, layerRow: PlanGridRow): Promise<vo
   if (ok && !removeGridLayer(assetId, layerRow.layer.key)) toast('该层已投，不能删除', true)
 }
 
-async function onInvestLayer(assetId: number, layerRow: PlanGridRow): Promise<void> {
+interface InvestTarget {
+  assetId: number
+  assetName: string
+  layerKey: string
+  planAmountLabel: string
+}
+
+const investTarget = ref<InvestTarget | null>(null)
+const investAmount = ref<number | null>(null)
+const investPoint = ref<number | null>(null)
+const investing = ref(false)
+
+function openInvestLayer(assetId: number, layerRow: PlanGridRow): void {
   const asset = assetMetricsById.value.get(assetId)?.asset
   if (!asset) return
   if (planState.dirty) {
@@ -806,51 +823,42 @@ async function onInvestLayer(assetId: number, layerRow: PlanGridRow): Promise<vo
     toast('标的还没保存，请先保存计划', true)
     return
   }
-  const suggested = Math.round(layerRow.amount * 100) / 100
-  const amountInput = ref<number | null>(suggested)
-  const ok = await new Promise<boolean>((resolve) => {
-    dialog.warning({
-      title: `确认已买入 ${asset.name} · ${layerRow.layer.key}`,
-      content: () =>
-        h('div', { style: 'display:flex;flex-direction:column;gap:8px' }, [
-          h('div', { style: 'font-size:13px;color:#64748b' }, [
-            `这一层的计划金额是 ${plan.value ? formatPlanMoney(suggested, plan.value) : suggested}。`,
-            '请确认这次买入真的成交了再点确定；确认后会写一条执行记录并累加到已投入。',
-          ]),
-          h(NInputNumber, {
-            value: amountInput.value,
-            min: 0,
-            style: 'width:100%',
-            onUpdateValue: (v) => { amountInput.value = Number(v ?? 0) },
-          }),
-        ]),
-      positiveText: '确认已买入',
-      negativeText: '取消',
-      onPositiveClick: () => resolve(true),
-      onNegativeClick: () => resolve(false),
-      onClose: () => resolve(false),
-      onMaskClick: () => resolve(false),
-    })
-  })
-  if (!ok) return
-  const amount = Math.round(Number(amountInput.value) || 0)
+  const suggested = roundMoney(layerRow.amount)
+  investTarget.value = {
+    assetId,
+    assetName: asset.name,
+    layerKey: layerRow.layer.key,
+    planAmountLabel: plan.value ? formatPlanMoney(suggested, plan.value) : String(suggested),
+  }
+  investAmount.value = suggested
+  investPoint.value = asset.current_point ?? null
+}
+
+async function submitInvest(): Promise<void> {
+  const target = investTarget.value
+  if (!target || investing.value) return
+  const amount = roundMoney(investAmount.value ?? 0)
   if (amount <= 0) {
     toast('买入金额必须大于 0', true)
     return
   }
+  investing.value = true
   try {
     await recordExecution({
-      assetId,
+      assetId: target.assetId,
       amount,
-      layerKeys: [layerRow.layer.key],
+      layerKeys: [target.layerKey],
       wasRegular: false,
-      point: asset.current_point,
-      note: `网格层 ${layerRow.layer.key} 已投`,
+      point: investPoint.value ?? null,
+      note: `网格层 ${target.layerKey} 已投`,
     })
     await Promise.all([loadSnapshots(), loadExecutions()])
-    toast(`已记录 ${asset.name} ${plan.value ? formatPlanMoney(amount, plan.value) : amount}`)
+    toast(`已记录 ${target.assetName} ${plan.value ? formatPlanMoney(amount, plan.value) : amount}`)
+    investTarget.value = null
   } catch (err) {
     toast(describeError(err), true)
+  } finally {
+    investing.value = false
   }
 }
 
@@ -1343,7 +1351,7 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
                     已作废 {{ row.voidedCount }} 层（保留历史阈值，不参与触发与合计，可点「生效」恢复）
                   </span>
                   <span v-if="!row.gridRatioValid" class="text-red-600">比例超过 100%，需调整</span>
-                  <span v-else-if="row.gridRatioTotal < 100">保留 {{ formatPlainPercent(100 - row.gridRatioTotal) }} 未分配</span>
+                  <span v-else-if="row.gridRatioTotal < 100 - 1e-6">保留 {{ formatPlainPercent(100 - row.gridRatioTotal) }} 未分配</span>
                   <span v-else>资金比例完整</span>
                   <span v-if="!row.strictPyramid" class="text-amber-600">当前不是严格倒金字塔</span>
                 </div>
@@ -1438,6 +1446,37 @@ async function onOptimizeGrid(row: PlanAssetMetrics): Promise<void> {
             </NCard>
           </div>
         </div>
+
+        <NModal :show="investTarget !== null" preset="card" style="width: 460px" title="确认已买入"
+          :mask-closable="!investing" @update:show="(v: boolean) => { if (!v && !investing) investTarget = null }">
+          <div v-if="investTarget" class="flex flex-col gap-3">
+            <div class="text-sm">
+              <b>{{ investTarget.assetName }}</b>
+              <span class="text-xs text-slate-400 ml-2">
+                {{ investTarget.layerKey }} · 计划金额 {{ investTarget.planAmountLabel }}
+              </span>
+            </div>
+            <NFormItem label="成交金额" size="small" required>
+              <NInputNumber v-model:value="investAmount" :min="0" :precision="2" style="width:100%" />
+            </NFormItem>
+            <NFormItem label="成交点位" size="small">
+              <NInputNumber v-model:value="investPoint" :min="0" :show-button="false" style="width:100%"
+                placeholder="可留空，留空则不在点图上显示" />
+            </NFormItem>
+            <div class="text-xs text-slate-400">
+              请确认这次买入真的成交了；确认后会写一条执行记录并累加到已投入。
+            </div>
+            <div v-if="recordBlocked" class="text-xs text-amber-600">请先保存计划，再记录已投。</div>
+          </div>
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <NButton size="small" :disabled="investing" @click="investTarget = null">取消</NButton>
+              <NButton size="small" type="primary" :loading="investing" :disabled="recordBlocked" @click="submitInvest">
+                确认已买入
+              </NButton>
+            </div>
+          </template>
+        </NModal>
 
         <NModal :show="sellTarget !== null" preset="card" style="width: 460px" title="记录卖出"
           :mask-closable="!selling" @update:show="(v: boolean) => { if (!v && !selling) sellTarget = null }">

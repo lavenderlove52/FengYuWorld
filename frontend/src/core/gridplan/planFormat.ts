@@ -1,12 +1,14 @@
 import type { GridPlanDetail } from '@/types/gridPlan'
 
-/** 计划金额：A 股按整数，其它市场保留两位。 */
+/**
+ * 计划金额：最多两位小数（后端 numeric(18,2) 的口径）。
+ * 整数不带 .00，有分/厘的金额（基金净值、小数买入）也能显示出来。
+ */
 export function formatPlanMoney(value: number, plan: Pick<GridPlanDetail, 'currency' | 'market'>): string {
-  const decimals = plan.market === 'cn' ? 0 : 2
   const safe = Number.isFinite(value) ? value : 0
   return `${plan.currency}${safe.toLocaleString('zh-CN', {
     minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
+    maximumFractionDigits: 2,
   })}`
 }
 

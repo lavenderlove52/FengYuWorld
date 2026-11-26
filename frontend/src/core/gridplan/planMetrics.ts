@@ -186,7 +186,8 @@ export function gridRatioTotal(asset: Pick<GridAssetDTO, 'grid'>): number {
 }
 
 export function gridRatioValid(asset: Pick<GridAssetDTO, 'grid'>): boolean {
-  return gridRatioTotal(asset) <= 100 + EPS && asset.grid.every((layer) => (Number(layer.allocation) || 0) >= 0)
+  // 与后端 gridEpsilon 保持一致：比例保留 6 位小数，合计的浮点尾差不能造成误判
+  return gridRatioTotal(asset) <= 100 + 1e-6 && asset.grid.every((layer) => (Number(layer.allocation) || 0) >= 0)
 }
 
 export function thresholdOrderValid(asset: Pick<GridAssetDTO, 'grid'>): boolean {
